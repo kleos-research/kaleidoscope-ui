@@ -1,0 +1,1151 @@
+/*
+ * One stylesheet, no framework.
+ *
+ * This is a tool for reading a lot of text that somebody else's agent wrote about their work, so
+ * every decision here is made for a reader rather than for a visitor: dense chrome, generous body
+ * text, a real typographic hierarchy instead of a wall of one size, and monospace reserved for the
+ * things a person actually compares character by character.
+ *
+ * Colour follows the system preference and there is no theme switch, because a local tool that
+ * disagrees with the desktop it is sitting on is a tool the user has to configure before reading.
+ *
+ * The only motion is a short fade when a panel arrives. Nothing slides, nothing bounces, nothing
+ * moves while it is being read.
+ */
+
+:root {
+	color-scheme: light dark;
+
+	--bg: #faf9f7;
+	--surface: #ffffff;
+	--raised: #f2f0ec;
+	--text: #1a1917;
+	--muted: #6a6660;
+	--faint: #94908a;
+	--line: #e6e2db;
+	--line-strong: #d4cfc6;
+	--accent: #2f5d8a;
+	--accent-soft: #eaf1f8;
+	--warn: #8a4a17;
+	--warn-soft: #fbf1e5;
+
+	--font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+	--rail: 17rem;
+	--radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #121211;
+		--surface: #191918;
+		--raised: #212020;
+		--text: #e8e5df;
+		--muted: #9a958d;
+		--faint: #6e6a63;
+		--line: #2a2926;
+		--line-strong: #3b3934;
+		--accent: #8ab4de;
+		--accent-soft: #1a2530;
+		--warn: #d9a066;
+		--warn-soft: #241d14;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-ui);
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.app {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	height: 100dvh;
+}
+
+.topbar {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.5rem 1rem;
+	border-bottom: 1px solid var(--line);
+	background: var(--surface);
+}
+
+.brand {
+	font-weight: 620;
+	letter-spacing: -0.01em;
+	color: var(--text);
+	text-decoration: none;
+}
+
+.topbar-vault {
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 0.78rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.topbar-right {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-left: auto;
+}
+
+.main {
+	display: grid;
+	grid-template-columns: var(--rail) minmax(0, 1fr);
+	min-height: 0;
+}
+
+.main > .state {
+	grid-column: 1 / -1;
+}
+
+.rail {
+	min-height: 0;
+	overflow-y: auto;
+	padding: 1rem 0.9rem 4rem;
+	border-right: 1px solid var(--line);
+	background: var(--bg);
+}
+
+.content {
+	min-height: 0;
+	overflow-y: auto;
+	animation: fade 140ms ease-out;
+}
+
+/*
+ * A screen with no facet rail beside it.
+ *
+ * The main area is a two-column grid whose first column is the rail, so a page rendered without one
+ * does not widen — it renders inside the rail's width, against the left edge, with the rest of the
+ * window blank. Spanning both columns is what "no rail" actually means in this layout.
+ */
+.content-wide {
+	grid-column: 1 / -1;
+}
+
+@keyframes fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.content {
+		animation: none;
+	}
+}
+
+.footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.4rem 1rem;
+	border-top: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--faint);
+	font-size: 0.72rem;
+}
+
+.footer strong {
+	color: var(--muted);
+	font-weight: 560;
+}
+
+.footer-path {
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 26rem;
+}
+
+.footer-claim {
+	margin-left: auto;
+	font-style: italic;
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.button {
+	padding: 0.3rem 0.7rem;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+	background: var(--raised);
+}
+
+.button:disabled {
+	color: var(--faint);
+	cursor: default;
+}
+
+.link-button {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent);
+	font-size: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+
+.link-button:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.link-button:disabled {
+	color: var(--faint);
+	cursor: default;
+}
+
+.link-button.inline {
+	display: inline;
+}
+
+.badge {
+	padding: 0.25rem 0.6rem;
+	border: 1px solid var(--accent);
+	border-radius: 999px;
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: 0.76rem;
+	cursor: pointer;
+	animation: fade 200ms ease-out;
+}
+
+.select {
+	padding: 0.25rem 0.4rem;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+	font-size: 0.8rem;
+}
+
+/* ---------------------------------------------------------------- the rail */
+
+.facet {
+	margin-bottom: 1.4rem;
+}
+
+.facet-title {
+	margin: 0 0 0.4rem;
+	color: var(--faint);
+	font-size: 0.69rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.facet-note,
+.facet-empty {
+	margin: 0.3rem 0 0;
+	color: var(--muted);
+	font-size: 0.74rem;
+	line-height: 1.5;
+}
+
+.facet-empty {
+	padding-left: 0.6rem;
+	border-left: 2px solid var(--line-strong);
+}
+
+.option-list {
+	display: flex;
+	flex-direction: column;
+}
+
+.option {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	gap: 0.45rem;
+	align-items: baseline;
+	padding: 0.12rem 0.25rem;
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.option:hover {
+	background: var(--raised);
+}
+
+.option input {
+	margin: 0;
+	accent-color: var(--accent);
+}
+
+.option-label {
+	font-size: 0.8rem;
+	overflow-wrap: anywhere;
+}
+
+.option-hint {
+	display: block;
+	color: var(--faint);
+	font-size: 0.7rem;
+}
+
+.option-count {
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: 0.7rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.option-divider {
+	margin: 0.55rem 0 0.2rem;
+	padding-top: 0.4rem;
+	border-top: 1px solid var(--line);
+	color: var(--faint);
+	font-size: 0.7rem;
+}
+
+.range {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+
+.range-ends {
+	display: flex;
+	gap: 0.4rem;
+	color: var(--muted);
+	font-size: 0.76rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.range-arrow {
+	color: var(--faint);
+}
+
+.range input[type='range'] {
+	width: 100%;
+	accent-color: var(--accent);
+}
+
+.range-note {
+	margin: 0.15rem 0 0;
+	color: var(--faint);
+	font-size: 0.7rem;
+}
+
+.range-presets {
+	display: flex;
+	gap: 0.9rem;
+	margin-top: 0.4rem;
+	font-size: 0.76rem;
+}
+
+.range-presets .option-count {
+	margin-left: 0.3rem;
+}
+
+/* ---------------------------------------------------------------- the list */
+
+.list {
+	padding: 1rem 1.25rem 4rem;
+	max-width: 78rem;
+}
+
+.list-controls {
+	display: flex;
+	gap: 1.5rem;
+	align-items: flex-start;
+}
+
+.filter-box {
+	flex: 1;
+	min-width: 0;
+}
+
+.filter-input {
+	width: 100%;
+	padding: 0.45rem 0.6rem;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+	font-size: 0.92rem;
+}
+
+.filter-input::placeholder {
+	color: var(--faint);
+}
+
+.filter-note {
+	margin: 0.3rem 0 0;
+	color: var(--faint);
+	font-size: 0.73rem;
+	max-width: 52ch;
+}
+
+.sort-box {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	color: var(--faint);
+	font-size: 0.76rem;
+}
+
+.list-count {
+	margin: 1rem 0 0.35rem;
+	color: var(--muted);
+	font-size: 0.76rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.rows {
+	border-top: 1px solid var(--line);
+}
+
+.row {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) 9rem minmax(0, 2.1fr) 3.5rem 9.5rem;
+	gap: 0.9rem;
+	align-items: baseline;
+	padding: 0.5rem 0.5rem;
+	border-bottom: 1px solid var(--line);
+}
+
+.row-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--bg);
+	border-bottom: 1px solid var(--line-strong);
+	color: var(--faint);
+	font-size: 0.66rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	padding-top: 0.35rem;
+	padding-bottom: 0.35rem;
+}
+
+.row-memory {
+	cursor: pointer;
+}
+
+.row-memory:hover {
+	background: var(--raised);
+}
+
+.cell {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.cell-title {
+	font-size: 0.92rem;
+	line-height: 1.45;
+}
+
+.cell-type,
+.cell-scope,
+.cell-written {
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+
+.cell-type {
+	overflow-wrap: anywhere;
+}
+
+.num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.cell-facts {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+.written-order {
+	display: block;
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: 0.68rem;
+}
+
+.row-warning,
+.row-note {
+	display: block;
+	margin-top: 0.15rem;
+	font-size: 0.72rem;
+}
+
+.row-warning {
+	color: var(--warn);
+}
+
+.row-note {
+	color: var(--faint);
+}
+
+.list-more {
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+	margin-top: 1rem;
+}
+
+.banner {
+	margin: 1rem 1.25rem 0;
+	padding: 0.5rem 0.7rem;
+	border-left: 3px solid var(--line-strong);
+	background: var(--raised);
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+/* ---------------------------------------------------------------- shared bits */
+
+/* Two lines at most. A long artifact path is the widest thing on a row and it must not push the
+   dates out of alignment; the full value is on the element's title. */
+.scope-line {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+
+.detail .scope-line {
+	display: inline;
+	overflow: visible;
+}
+
+.scope-every {
+	color: var(--faint);
+	font-style: italic;
+}
+
+.scope-axis {
+	color: var(--faint);
+}
+
+.scope-sep {
+	color: var(--line-strong);
+}
+
+.not-recorded {
+	color: var(--faint);
+	font-style: italic;
+}
+
+.identifier {
+	font-family: var(--font-mono);
+	font-size: 0.78em;
+	overflow-wrap: anywhere;
+	user-select: all;
+}
+
+.chip {
+	display: inline-block;
+	padding: 0.1rem 0.45rem;
+	border: 1px solid var(--line-strong);
+	border-radius: 999px;
+	background: var(--raised);
+	font-size: 0.74rem;
+	color: var(--muted);
+}
+
+.muted {
+	color: var(--faint);
+}
+
+.neutral {
+	color: var(--muted);
+	font-size: 0.84rem;
+}
+
+.warning {
+	color: var(--warn);
+	background: var(--warn-soft);
+	padding: 0.35rem 0.6rem;
+	border-radius: var(--radius);
+	font-size: 0.8rem;
+}
+
+.key {
+	color: var(--faint);
+	font-size: 0.72rem;
+	letter-spacing: 0.02em;
+	text-transform: lowercase;
+}
+
+/* ---------------------------------------------------------------- the detail page */
+
+.detail {
+	padding: 1rem 1.25rem 6rem;
+	/* A reading measure, not a window width. The body of a memory is prose and a line that runs the
+	   width of a wide display is a line nobody finishes. */
+	max-width: 58rem;
+	/* Centred, because this page has no rail holding it to the left. Pinned left in a wide window it
+	   reads as a layout that failed to load rather than as a column that was chosen. */
+	margin-inline: auto;
+}
+
+.detail-nav {
+	margin-bottom: 1rem;
+}
+
+.detail-head h1 {
+	margin: 0 0 0.35rem;
+	font-size: 1.55rem;
+	font-weight: 600;
+	line-height: 1.25;
+	letter-spacing: -0.015em;
+}
+
+.detail-type {
+	margin-bottom: 0.9rem;
+}
+
+.detail-meta {
+	display: grid;
+	grid-template-columns: 8.5rem minmax(0, 1fr);
+	gap: 0.18rem 1rem;
+	margin: 0;
+	font-size: 0.82rem;
+}
+
+.detail-meta dt {
+	color: var(--faint);
+	font-size: 0.72rem;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	padding-top: 0.12rem;
+}
+
+.detail-meta dd {
+	margin: 0;
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
+.panel {
+	margin-top: 2rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--line);
+}
+
+/* Direct child only: the note's own headings live inside this panel and must not inherit the
+   panel label's small-caps treatment. */
+.panel > h2 {
+	margin: 0 0 0.7rem;
+	color: var(--faint);
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+}
+
+.panel-count {
+	color: var(--line-strong);
+	font-family: var(--font-mono);
+	margin-left: 0.3rem;
+}
+
+/* The one place with real prose in it, set for reading rather than for scanning. */
+.md {
+	max-width: 68ch;
+	font-size: 1rem;
+	line-height: 1.72;
+	color: var(--text);
+}
+
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+	margin: 1.6em 0 0.5em;
+	font-weight: 600;
+	line-height: 1.3;
+	letter-spacing: -0.01em;
+}
+
+.md h2 {
+	font-size: 1.18rem;
+}
+.md h3 {
+	font-size: 1.03rem;
+}
+.md h4,
+.md h5,
+.md h6 {
+	font-size: 0.95rem;
+	color: var(--muted);
+}
+
+.md > *:first-child {
+	margin-top: 0;
+}
+
+.md p {
+	margin: 0 0 1em;
+}
+
+.md ul,
+.md ol {
+	margin: 0 0 1em;
+	padding-left: 1.4em;
+}
+
+.md li {
+	margin-bottom: 0.35em;
+}
+
+.md a {
+	color: var(--accent);
+	text-underline-offset: 2px;
+}
+
+.md code {
+	font-family: var(--font-mono);
+	font-size: 0.86em;
+	background: var(--raised);
+	padding: 0.08em 0.3em;
+	border-radius: 3px;
+}
+
+.md-code {
+	margin: 0 0 1em;
+	padding: 0.7rem 0.9rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--raised);
+	overflow-x: auto;
+	line-height: 1.55;
+}
+
+.md-code code {
+	background: none;
+	padding: 0;
+	font-size: 0.82em;
+}
+
+.md blockquote {
+	margin: 0 0 1em;
+	padding-left: 0.9rem;
+	border-left: 2px solid var(--line-strong);
+	color: var(--muted);
+}
+
+.md hr {
+	border: 0;
+	border-top: 1px solid var(--line);
+	margin: 1.6em 0;
+}
+
+/* A link this app will not turn into an href still shows what it said it was. */
+.md-unsafe-link {
+	color: var(--muted);
+	text-decoration: underline dotted;
+}
+
+.md-unsafe-href {
+	font-family: var(--font-mono);
+	font-size: 0.8em;
+	color: var(--faint);
+}
+
+.facts {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.fact {
+	padding: 0.55rem 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.fact:last-child {
+	border-bottom: 0;
+}
+
+.statement {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.45rem;
+	margin: 0;
+	font-size: 0.95rem;
+	line-height: 1.5;
+}
+
+.subject {
+	font-weight: 560;
+}
+
+/* The relation is the middle term, and it is the value a reader is most likely to be comparing
+   across memories — so it is set apart rather than blended into the sentence. */
+.predicate {
+	color: var(--accent);
+	font-family: var(--font-mono);
+	font-size: 0.82em;
+}
+
+.predicate::before {
+	content: '— ';
+	color: var(--line-strong);
+}
+
+.predicate::after {
+	content: ' →';
+	color: var(--line-strong);
+}
+
+.object {
+	overflow-wrap: anywhere;
+}
+
+.fact-qualifiers,
+.fact-extra {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.15rem 1rem;
+	margin: 0.3rem 0 0;
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+
+.qualifier .key {
+	margin-right: 0.2rem;
+}
+
+.qualifier-derived {
+	color: var(--faint);
+}
+
+.entities {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.entities li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 2fr);
+	gap: 0.9rem;
+	padding: 0.32rem 0;
+	border-bottom: 1px solid var(--line);
+	font-size: 0.85rem;
+}
+
+.entities li:last-child {
+	border-bottom: 0;
+}
+
+.entity-name {
+	font-weight: 560;
+	overflow-wrap: anywhere;
+}
+
+.entity-kind {
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+
+.entity-is {
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
+.disclosure {
+	border-top: 1px solid var(--line);
+}
+
+.disclosure h3 {
+	margin: 0;
+}
+
+.disclosure-toggle {
+	display: flex;
+	align-items: baseline;
+	gap: 0.45rem;
+	width: 100%;
+	padding: 0.55rem 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+	text-align: left;
+}
+
+.disclosure-marker {
+	color: var(--faint);
+	font-size: 0.7rem;
+	width: 0.7rem;
+}
+
+.disclosure-title {
+	color: var(--muted);
+	font-size: 0.8rem;
+	font-weight: 560;
+}
+
+.disclosure-count {
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: 0.72rem;
+}
+
+.disclosure-body {
+	padding: 0 0 1rem 1.15rem;
+	animation: fade 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.disclosure-body,
+	.badge {
+		animation: none;
+	}
+}
+
+.plain {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	font-size: 0.85rem;
+}
+
+.plain li {
+	padding: 0.18rem 0;
+	overflow-wrap: anywhere;
+}
+
+.evidence-ref {
+	font-family: var(--font-mono);
+	font-size: 0.82em;
+}
+
+.direction {
+	margin-bottom: 0.9rem;
+}
+
+.direction h4 {
+	margin: 0 0 0.25rem;
+	color: var(--faint);
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.says,
+.proposal-means {
+	color: var(--muted);
+}
+
+.handle {
+	font-style: italic;
+}
+
+/* The sentence whose whole job is to stop the next contributor inventing a "created by" column. */
+.fixed-sentence {
+	margin: 0.7rem 0 0;
+	padding: 0.5rem 0.7rem;
+	border-left: 2px solid var(--line-strong);
+	background: var(--raised);
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.verbatim {
+	margin: 0.5rem 0 0;
+	padding: 0.7rem 0.9rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--raised);
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 0.74rem;
+	line-height: 1.55;
+	max-height: 32rem;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- states */
+
+.state {
+	max-width: 46rem;
+	margin: 3.5rem auto;
+	padding: 0 1.5rem;
+	animation: fade 160ms ease-out;
+}
+
+.state h2 {
+	margin: 0 0 0.6rem;
+	font-size: 1.1rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.state p {
+	margin: 0 0 0.8rem;
+	color: var(--muted);
+	font-size: 0.9rem;
+	line-height: 1.65;
+	max-width: 60ch;
+}
+
+.state-error h2 {
+	color: var(--warn);
+}
+
+.state-detail {
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--raised);
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 0.74rem;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/*
+ * The loading state is a shape, not a spinner: seven rows at decreasing opacity, so the reader sees
+ * where the list will be rather than a widget that says only "wait".
+ */
+.skeleton {
+	list-style: none;
+	margin: 1.5rem 0 0;
+	padding: 0;
+	border-top: 1px solid var(--line);
+}
+
+.skeleton li {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.6rem 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.skeleton-title,
+.skeleton-meta {
+	display: block;
+	height: 0.6rem;
+	border-radius: 2px;
+	background: var(--raised);
+}
+
+.skeleton-title {
+	width: 42%;
+}
+
+.skeleton-meta {
+	width: 22%;
+	height: 0.45rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.state {
+		animation: none;
+	}
+}
+
+/* ---------------------------------------------------------------- narrow windows */
+
+@media (max-width: 60rem) {
+	.main {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+
+	.rail {
+		max-height: 14rem;
+		border-right: 0;
+		border-bottom: 1px solid var(--line);
+	}
+
+	.row {
+		grid-template-columns: minmax(0, 1fr) 7rem;
+		grid-template-areas:
+			'title type'
+			'scope written';
+		row-gap: 0.25rem;
+	}
+
+	.cell-title {
+		grid-area: title;
+	}
+	.cell-type {
+		grid-area: type;
+		text-align: right;
+	}
+	.cell-scope {
+		grid-area: scope;
+	}
+	.cell-written {
+		grid-area: written;
+		text-align: right;
+	}
+	.cell-facts {
+		display: none;
+	}
+}

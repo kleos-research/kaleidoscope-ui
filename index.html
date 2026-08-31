@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Kaleidoscope</title>
+		<!--
+			No font link, no CDN, no analytics tag, and nothing here that reaches the network. The
+			claim that this product makes no network call is enforced by the sidecar's
+			Content-Security-Policy rather than by this comment; the comment is here so the next
+			person adding a web font knows the header will refuse it.
+
+			There is no token carrier in this document. The per-launch token arrives in the URL
+			fragment, which the browser never puts on the wire, and the app erases it from the
+			address bar before it renders. A carrier here would have to be an inline <script> or a
+			meta tag the server rewrites; the first is blocked by our own `script-src 'self'`, and
+			the second was removed because nothing wrote it — an unwired carrier reads as a working
+			one to the next person maintaining this.
+		-->
+		<meta name="color-scheme" content="light dark" />
+	</head>
+	<body>
+		<div id="root"></div>
+		<noscript>
+			This page is the browser half of a local tool and needs JavaScript. Nothing it does leaves
+			your machine.
+		</noscript>
+		<script type="module" src="/src/app/main.jsx"></script>
+	</body>
+</html>

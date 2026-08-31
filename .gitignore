@@ -12,3 +12,7 @@ vault/
 scratch/
 tmp/
 fixtures/generated/
+
+# Screenshots are taken against a real vault, so they contain real memory content.
+# They are useful locally and must never be published from this repository.
+docs/screenshots/
