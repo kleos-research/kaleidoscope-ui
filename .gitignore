@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# Local vaults and scratch space. A vault in this tree is the one leak no text scanner catches,
+# so it is ignored by name and by shape before anyone has the chance to add one.
+.kaleidoscope/
+*-vault/
+vault/
+scratch/
+tmp/
+fixtures/generated/

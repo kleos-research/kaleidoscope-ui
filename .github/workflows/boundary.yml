@@ -1,0 +1,17 @@
+# The push is the irreversible moment, so this runs on push to every branch and not only on
+# pull requests. A gate that runs after the history is public protects nothing.
+name: boundary
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: node scripts/check-boundary.mjs
