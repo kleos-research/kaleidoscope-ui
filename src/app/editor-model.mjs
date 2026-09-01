@@ -74,7 +74,7 @@ export function bufferFromRecord(record) {
 		title: text(delta.title),
 		memory_type: text(delta.memory_type),
 		scope: { ...(delta.scope ?? {}) },
-		body: text(record?.content_md),
+		body: withoutRepeatedHeading(record?.content_md, delta.title),
 		facts: (delta.facts ?? []).map((fact) => factRow(fact)),
 		entities: (delta.entities ?? []).map((entity) => ({
 			id: newRowId(),
@@ -138,6 +138,29 @@ export const emptyBuffer = (axes = []) => ({
 
 /** What the engine requires a body to begin with. Read off its own refusal, not invented here. */
 const LEADING_HEADING = /^#\s+\S/;
+
+/**
+ * Take the heading off the words WHEN IT IS THE TITLE AGAIN, and only then.
+ *
+ * The editor draws the title as an H1 across the top of both panes, so a body that opens with the
+ * same sentence shows it twice — once as the memory's title and once as `# ` and the same words, in
+ * the pane that is supposed to hold the prose. The approved design draws paragraphs there.
+ *
+ * IT IS EXACT, IN BOTH DIRECTIONS, OR IT DOES NOT HAPPEN. Only the two shapes `composeBody`
+ * produces are removed — `# title\n\nrest` and a heading-only `# title\n` — so putting the heading
+ * back reproduces the loaded bytes character for character. A body whose heading is authored prose
+ * that DIFFERS from the title is left completely alone, because in a meaningful share of real
+ * memories that difference is deliberate, and an editor that quietly rewrote it would be changing
+ * something the user never touched.
+ */
+export function withoutRepeatedHeading(body, title) {
+	const words = text(body);
+	const heading = trimmed(title);
+	if (heading.length === 0) return words;
+	if (words === `# ${heading}\n`) return '';
+	const prefix = `# ${heading}\n\n`;
+	return words.startsWith(prefix) ? words.slice(prefix.length) : words;
+}
 
 /**
  * Compose the body the write actually carries, and guarantee its leading heading.
@@ -265,6 +288,101 @@ export function duplicateFactRows(facts) {
 		}
 	}
 	return duplicates;
+}
+
+/**
+ * Facts the prose USED TO support and no longer does — the editor's drift warning.
+ *
+ * A save replaces the body and the structure together, so the two halves of one memory can be
+ * edited apart with nothing in the engine noticing: a rewritten paragraph changes what the memory
+ * is found by while the facts an agent reasons on still say the old thing. Adjacency is the main
+ * mitigation and this is the second one.
+ *
+ * IT IS A DRIFT DETECTOR, NOT A COVERAGE CHECK, and the difference is the whole reason it is
+ * usable. "This endpoint is nowhere in the prose" is true of a large share of perfectly good
+ * memories — an agent writes three sentences and six facts, and the facts are the structured part
+ * precisely because they are not spelled out in the paragraph. Flagging those would put a warning
+ * on most rows of most memories, which is a warning nobody reads.
+ *
+ * So a row is only flagged when the endpoint was in the words THIS SESSION LOADED and is not in
+ * the words now. That makes the drawn sentence — "No longer in the words" — literally true, and it
+ * fires exactly when the user has just deleted the sentence a fact rests on.
+ *
+ * @param body          what the note says now
+ * @param baselineBody  what it said when this editor opened, or after the last save
+ * @returns {Map<string, string[]>} row id -> the endpoints that left, in the order they appear
+ */
+export function driftingFactRows({ body, baselineBody, facts }) {
+	const now = text(body).toLowerCase();
+	const before = text(baselineBody).toLowerCase();
+	const drifted = new Map();
+	if (before.length === 0) return drifted;
+
+	for (const row of facts ?? []) {
+		if (!TRIPLE_KEYS.every((key) => trimmed(row[key]).length > 0)) continue;
+		const gone = [];
+		for (const key of ['subject', 'object']) {
+			const surface = trimmed(row[key]);
+			const needle = surface.toLowerCase();
+			if (needle.length === 0) continue;
+			if (before.includes(needle) && !now.includes(needle)) gone.push(surface);
+		}
+		if (gone.length > 0) drifted.set(row.id, gone);
+	}
+	return drifted;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The validity window
+// ---------------------------------------------------------------------------------------------
+//
+// `temporal` is one of the keys the editor CARRIES rather than owns — see `bufferFromRecord` — and
+// these two functions are the one exception: the editor sets `valid_until` and nothing else in it.
+// They are here rather than in the screen because the invariant they hold is the one the payload
+// test asserts: a memory whose record carried no `temporal` at all must still send none, so an
+// absent object stays absent until a date is actually chosen. Defaulting it to a pair of nulls
+// would make every prose-only save assert a validity window the memory never had.
+//
+// THE VALUE IS AN RFC 3339 TIMESTAMP. Measured against the engine on a clone rather than assumed:
+// `"2027-01-01"` is refused as `InvalidTimestamp` and `{t, grain}` is refused as the wrong type.
+// The date control is a date, so the day is composed up to a timestamp on the way in and read back
+// down to a date on the way out.
+
+/** The end date this memory carries, as a `yyyy-mm-dd` for a date control, or null. */
+export function validUntilDate(buffer) {
+	const value = buffer?.carried?.temporal?.valid_until ?? null;
+	if (typeof value !== 'string' || value.length === 0) return null;
+	return value.slice(0, 10);
+}
+
+/**
+ * Set or clear the end date.
+ *
+ * @param date `yyyy-mm-dd`, or null to go back to "still true".
+ */
+export function withValidUntil(buffer, date) {
+	const temporal = buffer?.carried?.temporal ?? null;
+
+	if (date === null) {
+		// Nothing to clear, and nothing to invent: a record that carried no window still carries none.
+		if (!temporal || temporal.valid_until === null || temporal.valid_until === undefined) {
+			return buffer;
+		}
+		return { ...buffer, carried: { ...buffer.carried, temporal: { ...temporal, valid_until: null } } };
+	}
+
+	return {
+		...buffer,
+		carried: {
+			...buffer.carried,
+			temporal: {
+				// `valid_from` is preserved exactly, including its absence: this control is about the
+				// end of a memory's life and has no business asserting when it began.
+				...(temporal ?? {}),
+				valid_until: `${date}T00:00:00Z`,
+			},
+		},
+	};
 }
 
 /** Every distinct surface this memory's facts name, in the order they first appear. */

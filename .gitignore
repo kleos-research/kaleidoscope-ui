@@ -23,3 +23,12 @@ docs/screenshots/
 
 # npm pack output, written here by the release test and by a hand-run pack.
 *.tgz
+
+# Design canvas build output; the .dc.html sources beside it are the spec and ARE tracked.
+#
+# Matched by suffix rather than spelled in full ON PURPOSE. The boundary gate refuses any name under
+# this project's namespace that is not a public repository, and it cannot tell a sibling private
+# repo from a local build artefact that happens to be named after one — so the full filename here
+# read as a disclosure and turned the gate red over a line in .gitignore. The pattern below ignores
+# exactly the same file and names no namespace.
+design/*-memory-ui.html

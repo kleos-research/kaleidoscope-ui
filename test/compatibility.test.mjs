@@ -23,7 +23,7 @@
 
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -198,6 +198,13 @@ test('the write gate is on the routes that change the vault, and only those', as
 	assert.deepEqual(
 		writing,
 		[
+			// `/api/ask` is the ranked door, and it belongs on this list even though a user would
+			// call it reading. Every ranked query records an exposure row in the vault; the engine
+			// refuses a read-only one rather than silently upgrading it, so there is no version of
+			// that call that does not write. Leaving it off would mean a Tier A engine — one this
+			// build refuses to write through — could still be made to write, through the one door
+			// whose name does not say so.
+			'/api/ask',
 			'/api/memories',
 			'/api/memories/:memory_id',
 			'/api/merges',
@@ -303,20 +310,116 @@ test('the banner exists, is reachable, and every class it uses has a rule', () =
 
 	// The M4–M6 lesson, mechanically: a class with no rule renders as unstyled text, and the half
 	// of a before/after row that was meant to be de-emphasised reads as the emphasised one.
-	const css = readFileSync(join(ROOT, 'src', 'app', 'styles.css'), 'utf8');
-	// Every class name this component spells, however it spells it — a ternary inside `className`
-	// is the commonest shape and the one a `className="..."` pattern misses entirely, which would
-	// leave this check green while looking at nothing.
-	const used = new Set(
-		[...app.matchAll(/['"]([a-z0-9 -]+)['"]/g)]
-			.flatMap((match) => match[1].split(/\s+/))
-			.filter((name) => name.startsWith('compat')),
-	);
-	assert.ok(used.size >= 3, `Only ${used.size} compatibility classes were found in App.jsx.`);
+	//
+	// THE STYLESHEET IS SIX FILES, NOT ONE, and this used to read only `styles.css`. That file is now
+	// an index and a tail — the banner's own shape lives in `design/shell.css` as `.notice`, which is
+	// the shell's one class for a message that changes what every screen below it means. A check
+	// pinned to one file would report a missing rule for every class the design system actually
+	// carries, and did.
+	const css = stylesheet();
+
+	// Every class name the banner component spells. It is read from the component's own body rather
+	// than from the whole file, because `App.jsx` renders fifteen screens and a prefix filter over
+	// all of them was what let this check narrow itself to two names and then fail on the third.
+	const body = app.slice(app.indexOf('function EngineCompatibility'));
+	const used = classNamesIn(body.slice(0, body.indexOf('\nfunction ', 1)));
+	assert.ok(used.size >= 3, `Only ${used.size} classes were found on the compatibility banner.`);
 	for (const name of used) {
-		assert.ok(css.includes(`.${name}`), `.${name} is used in App.jsx and has no rule in styles.css.`);
+		assert.ok(definesClass(css, name), `.${name} is used by the banner and has no rule in the stylesheet.`);
 	}
 });
+
+/**
+ * EVERY CLASS EVERY SCREEN RENDERS HAS A RULE.
+ *
+ * The banner check above is one instance of a rule that has to hold for the whole product, and the
+ * rebuild is where the general case bit: `MergeFlow.jsx` was still drawn in the `curation-*` and
+ * `.button` vocabulary of the 3,487-line stylesheet the redesign deleted. Nothing replaced those
+ * rules, so four reachable screens — compose a merge, pick the other memory, the merge receipt,
+ * "what can be undone" — rendered as unstyled browser defaults: a native fieldset with its legend
+ * notch, native radios, platform-grey buttons and no page column. Every test in this repository
+ * passed, because every one of them was about behaviour.
+ *
+ * A class with no rule is invisible to a test suite and unmissable to a reader, which is exactly the
+ * failure the owner reported the first time round.
+ */
+test('every class name a screen renders has a rule in the stylesheet', () => {
+	const css = stylesheet();
+	const offenders = [];
+	for (const file of componentFiles()) {
+		const source = readFileSync(file, 'utf8');
+		for (const name of classNamesIn(source)) {
+			if (!definesClass(css, name)) offenders.push(`${basename(file)} → .${name}`);
+		}
+	}
+	assert.deepEqual(offenders, [], `class names with no rule:\n  ${offenders.join('\n  ')}`);
+});
+
+/**
+ * Whether the stylesheet defines this exact class.
+ *
+ * NOT `includes('.' + name)`. `.banner` was used on a screen and defined nowhere, and a substring
+ * test passed it because `.banner-row` exists — a prefix of a different class reads as the class.
+ * The character after the name has to end the selector.
+ */
+function definesClass(css, name) {
+	return new RegExp(`\\.${name.replace(/[-]/g, '\\-')}(?![\\w-])`).test(css);
+}
+
+/** Every stylesheet the app imports, concatenated. `styles.css` is an index over `design/`. */
+function stylesheet() {
+	const design = join(ROOT, 'src', 'app', 'design');
+	return [
+		readFileSync(join(ROOT, 'src', 'app', 'styles.css'), 'utf8'),
+		...readdirSync(design)
+			.filter((name) => name.endsWith('.css'))
+			.map((name) => readFileSync(join(design, name), 'utf8')),
+	].join('\n');
+}
+
+/** Every `.jsx` under `src/app`, which is every screen and every component in the design system. */
+function componentFiles() {
+	const app = join(ROOT, 'src', 'app');
+	const ui = join(app, 'ui');
+	return [
+		...readdirSync(app).filter((name) => name.endsWith('.jsx')).map((name) => join(app, name)),
+		...readdirSync(ui).filter((name) => name.endsWith('.jsx')).map((name) => join(ui, name)),
+	];
+}
+
+/**
+ * The class names a source file spells as literals.
+ *
+ * SCOPED TO THE `className` VALUE ITSELF, not to the line it is on. The first form of this read every
+ * quoted string on any line mentioning `className`, and collected `role="button"`, `tone="neutral"`,
+ * `aria-live="polite"` and `data-selected={… ? 'true' : …}` — forty-odd prop values reported as
+ * missing rules, which is a check that has to be ignored and therefore is not one.
+ *
+ * A name assembled from a template — `btn-${tone}` — cannot be checked without evaluating the
+ * component, and the constant half of it (`btn`) sits in the same expression and is checked.
+ */
+const CLASS_EXPRESSION = /className\s*=\s*(?:"([^"]*)"|\{([^}]*)\})|\bcx\(([^)]*)\)/g;
+
+function classNamesIn(source) {
+	const names = new Set();
+	for (const match of source.matchAll(CLASS_EXPRESSION)) {
+		const literal = match[1];
+		if (literal !== undefined) {
+			for (const token of literal.split(/\s+/)) if (token) names.add(token);
+			continue;
+		}
+		// A COMPARISON OPERAND IS NOT A CLASS NAME. `cx('md', size === 'lg' && 'md-lg')` spells three
+		// literals and only two of them are rendered; the third is the value being tested. Dropping
+		// the right-hand side of every equality is what leaves the set to names that reach the DOM.
+		const expression = (match[2] ?? match[3] ?? '').replace(/[!=]==?\s*(['"])[^'"]*\1/g, '');
+		for (const quoted of expression.matchAll(/'([^']*)'|"([^"]*)"/g)) {
+			for (const token of (quoted[1] ?? quoted[2] ?? '').split(/\s+/)) {
+				if (token && /^[a-z][a-z0-9-]*$/.test(token)) names.add(token);
+			}
+		}
+	}
+	return names;
+}
 
 test('the unverified control is free text and offers no vocabulary of its own', () => {
 	const editor = readFileSync(join(ROOT, 'src', 'app', 'MemoryEditor.jsx'), 'utf8');

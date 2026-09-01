@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 
 import { hubIndex, hubWindow } from './hub-model.mjs';
+import { Button } from './ui/index.mjs';
 
 /**
  * The claims behind a collapsed hub, as a virtualized list.
@@ -44,14 +45,14 @@ export function HubList({ graph, surface, onOpen, onClose }) {
 			<div className="hub-list-head">
 				<h3>
 					Everything that names “{surface}”
-					<span className="graph-tag-count">{index.total.toLocaleString()}</span>
+					<span className="hub-count">{index.total.toLocaleString()}</span>
 				</h3>
-				<button type="button" className="button button-quiet" onClick={onClose}>
+				<Button tone="quiet" onClick={onClose}>
 					Close
-				</button>
+				</Button>
 			</div>
 
-			<p className="graph-note">
+			<p className="hub-note">
 				Grouped by relationship name, commonest first. This list holds every one of them — the
 				drawing does not, and the box on the canvas says so. Every row opens the memory that wrote
 				it.
@@ -60,9 +61,9 @@ export function HubList({ graph, surface, onOpen, onClose }) {
 			<ul className="hub-list-groups">
 				{index.byPredicate.slice(0, 12).map((group) => (
 					<li key={group.predicate ?? '(none)'}>
-						<button
-							type="button"
-							className="linklike"
+						<Button
+							tone="quiet"
+							size="sm"
 							onClick={() => {
 								// Jumping to a group is a scroll, not a filter. A filter would make the
 								// count on the box stop matching what the list is showing, which is the one
@@ -72,12 +73,12 @@ export function HubList({ graph, surface, onOpen, onClose }) {
 							}}
 						>
 							{group.predicate ?? 'no relationship name'}
-						</button>
-						<span className="graph-tag-count">{group.count.toLocaleString()}</span>
+						</Button>
+						<span className="hub-count">{group.count.toLocaleString()}</span>
 					</li>
 				))}
 				{index.byPredicate.length > 12 ? (
-					<li className="graph-note">…and {index.byPredicate.length - 12} more relationship names.</li>
+					<li className="hub-note">…and {index.byPredicate.length - 12} more relationship names.</li>
 				) : null}
 			</ul>
 
@@ -110,9 +111,9 @@ export function HubList({ graph, surface, onOpen, onClose }) {
 									)}
 								</span>
 								{row.edge.memory_id ? (
-									<button type="button" className="linklike" onClick={() => onOpen(row.edge.memory_id)}>
+									<Button tone="quiet" size="sm" onClick={() => onOpen(row.edge.memory_id)}>
 										{row.edge.memory_title ?? row.edge.memory_id}
-									</button>
+									</Button>
 								) : null}
 							</li>
 						))}
@@ -120,7 +121,7 @@ export function HubList({ graph, surface, onOpen, onClose }) {
 				</div>
 			</div>
 
-			<p className="graph-note">
+			<p className="hub-note">
 				Showing rows {(window.offset + 1).toLocaleString()}–
 				{(window.offset + window.rows.length).toLocaleString()} of {index.total.toLocaleString()}. The rest
 				are in the list, not hidden from it — scroll.

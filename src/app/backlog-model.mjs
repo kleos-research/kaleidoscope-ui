@@ -28,10 +28,14 @@
  *      the vault this was developed against is a disclosure no text scanner can see, because a
  *      scanner has no vault to compare a comment with.)
  *
- * NOTHING HERE MERGES ANYTHING, and nothing here writes to the vault. Every finding terminates in
- * the memories it came from, and the only verb on the screen is "open this memory in the editor".
- * Merge is M6 and it depends on the snapshot spine, which is why `dismissalKey` is a pure function
- * with its own tests: it is the thing M6 will key its "already decided" state on.
+ * NOTHING HERE WRITES TO THE VAULT, and nothing here decides anything. Four of the five findings
+ * terminate in the memories they came from, and the only verb the screen offers on them is "open
+ * this memory in the editor".
+ *
+ * The fifth has a screen: near-duplicate names are handed to `cluster-model.mjs`, which groups them
+ * for review and plans the rewrite. It takes them FROM HERE rather than from a second pass over the
+ * graph, so a dismissal answered on either screen is answered on both — `dismissalKey` is a pure
+ * function with its own tests because it is the thing that identity rests on.
  */
 
 import { isolatedFacts, kindConflicts, nearDuplicates, onceUsedPredicates } from './graph-model.mjs';
@@ -247,8 +251,76 @@ const factEntries = (edges, note = null) =>
 // The five detectors, each turned into findings of one shape
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * OVERLAPPING PROPOSALS ABOUT THE SAME NAMES ARE ONE QUESTION.
+ *
+ * The detector runs two rules. The strict one differs only in punctuation and case; the loose one
+ * also ignores word order, joining words and a trailing plural. Neither contains the other —
+ * `mirdel window` and `mirdelwindow` collide under the strict key and not the loose one, because
+ * the loose key keeps the word boundary — so a vault routinely produces two proposals whose
+ * surfaces overlap: `{a, b}` from one rule and `{a, b, c}` from the other.
+ *
+ * Presented as two rows they are a contradiction the reader cannot resolve: ticking both asks for
+ * `b` to survive in one and be retired in the other. So the surfaces are unioned transitively and
+ * each connected set becomes ONE finding. That is also the honest count — two proposals about the
+ * same three names are one decision, and reporting them as two inflates every number on the screen
+ * above them.
+ */
+function mergeOverlapping(groups) {
+	const home = new Map(); // surface → index of the group it has been folded into
+	const folded = [];
+
+	for (const group of groups) {
+		const surfaces = group.surfaces.map((entry) => entry.surface);
+		const targets = [...new Set(surfaces.map((surface) => home.get(surface)).filter((at) => at !== undefined))];
+
+		if (targets.length === 0) {
+			const at = folded.length;
+			folded.push({ rules: new Set([group.rule]), bySurface: new Map(group.surfaces.map((entry) => [entry.surface, entry])) });
+			for (const surface of surfaces) home.set(surface, at);
+			continue;
+		}
+
+		// Fold into the lowest-numbered existing set, and pull any others into it — a surface can
+		// bridge two sets that were previously unrelated, which is the transitive case.
+		const [keep, ...absorb] = targets.sort((a, b) => a - b);
+		const into = folded[keep];
+		for (const entry of group.surfaces) into.bySurface.set(entry.surface, entry);
+		into.rules.add(group.rule);
+		for (const surface of surfaces) home.set(surface, keep);
+		for (const at of absorb) {
+			for (const [surface, entry] of folded[at].bySurface) {
+				into.bySurface.set(surface, entry);
+				home.set(surface, keep);
+			}
+			for (const rule of folded[at].rules) into.rules.add(rule);
+			folded[at].bySurface = new Map();
+			folded[at].rules = new Set();
+		}
+	}
+
+	return folded
+		.filter((entry) => entry.bySurface.size > 1)
+		.map((entry) => ({
+			// The strict rule is reported only when it is the ONLY thing that matched, because the
+			// sentence the screen prints from it — "these differ only in punctuation or case" — is
+			// false the moment a looser proposal was folded in.
+			rule: entry.rules.size === 1 ? [...entry.rules][0] : 'same-words',
+			surfaces: [...entry.bySurface.values()].sort(
+				(a, b) => b.degree - a.degree || a.surface.localeCompare(b.surface),
+			),
+			sameComponent: new Set([...entry.bySurface.values()].map((one) => one.componentId)).size === 1,
+		}))
+		.sort(
+			(a, b) =>
+				b.surfaces.reduce((total, one) => total + one.degree, 0) -
+					a.surfaces.reduce((total, one) => total + one.degree, 0) ||
+				a.surfaces[0].surface.localeCompare(b.surfaces[0].surface),
+		);
+}
+
 function nearDuplicateFindings(graph) {
-	return nearDuplicates(graph).map((group) => {
+	return mergeOverlapping(nearDuplicates(graph)).map((group) => {
 		const names = group.surfaces.map((entry) => entry.surface);
 		const edges = edgesTouching(graph, names);
 		return {
@@ -310,7 +382,7 @@ function kindConflictFindings(graph) {
 					title: declaration.memory_title,
 					memory_type: null,
 					facts: 0,
-					note: `declares it a ${declaration.kind}`,
+					note: `declared here as ${declaration.kind}`,
 				})),
 			),
 		};
@@ -378,7 +450,7 @@ function declaredNeverUsedFindings(graph) {
 				title: declaration.memory_title,
 				memory_type: null,
 				facts: 0,
-				note: declaration.kind ? `declares it a ${declaration.kind}` : 'declares it',
+				note: declaration.kind ? `declared here as ${declaration.kind}` : 'declared here',
 			})),
 		),
 	}));

@@ -74,7 +74,7 @@ Four rules follow from that line, and every PRD is downstream of them:
 | [0002](0002-browsing-memory.md) | Browsing memory | the list, the filters, the detail page, refresh | any write |
 | [0003](0003-the-memory-editor.md) | The memory editor | the single-memory write path and every guard on it | multi-memory writes |
 | [0004](0004-removing-a-memory.md) | Removing a memory | removal, its copy, the escalation, the snapshot store | erasure, which does not exist |
-| [0005](0005-the-graph-view.md) | The graph view | the canvas, the reconstruction, the encoding | the curation rail (moved to 0006) |
+| [0005](0005-the-graph-view.md) | The names in a vault | the names table, the selection panel, the two drawings, the reconstruction | the curation rail (moved to 0006); a path between two names, which is refused |
 | [0006](0006-curation.md) | Curation | the backlog rail and every multi-memory transaction | the canvas |
 | [0007](0007-packaging-and-distribution.md) | Packaging and distribution | the package, engine discovery, compatibility, the boundary gate | the runtime security posture |
 
@@ -102,10 +102,12 @@ erase it. It owns the escalation screen for a leaked secret, the rule that the a
 vault-destruction command and never runs it, and (per §3.3 below) **the snapshot store**, which is the
 only undo in the product and is itself a plaintext copy outside the vault.
 
-**0005 — the graph view.** Owns the canvas: one client-side model, three lenses, the default that is a
-restriction rather than a zoom control, the encoding rules that survive open vocabularies, the scale ladder
-and its refusal-as-control-panel, the hub treatment, and the fidelity strip that says permanently that this
-drawing is a reconstruction. After the move in §3.3 it does **not** own the curation rail.
+**0005 — the names in a vault.** Owns the names table and its four orders, the selection panel, the ego
+drawing and its node cap, the whole-vault overview and its element ceiling, the encoding rules that survive
+open vocabularies, and the reconstruction statement — which is now one line beside a drawing and a closed
+row on the panel rather than a resident strip. **Rewritten 2026-09-02** to describe what shipped: the three
+lenses, the hub treatment and the scale ladder were built and then removed, and the path between two names
+it used to specify is refused by a test. After the move in §3.3 it does **not** own the curation rail.
 
 **0006 — curation.** Owns everything that happens *between* memories, and leads with the finding that
 shapes it: there is no engine operation to wrap. Merge, rename, split and the honest meanings of "promote"
@@ -141,6 +143,32 @@ presupposes a dedicated route exists. **0001 is right for v1.** 0002 R2 should r
 and the lint rule land now; the module has no route and the runtime tripwire is an assertion that the
 route set contains none. The value of writing the chokepoint before a caller exists is exactly that it is
 a constraint rather than a refactor.
+
+> **Superseded on 2026-09-01 by the approved redesign, and this index is the newer decision.**
+>
+> The prohibition is now NARROWER rather than absolute. `0001 §3.7`'s "no search endpoint of any kind"
+> and `0002 R2`'s reading of it are both replaced by:
+>
+> > **A ranked search happens only on an explicit user action on the search screen. Never on load,
+> > never on a poll, never on a keystroke, never on a refresh, never from any other screen.**
+>
+> The reason for the original rule is unchanged and is why the replacement is still mechanical: there
+> is one retrieval door, it always records an exposure row, the row is permanent, it stores the query
+> text verbatim, and nothing published reads it back or removes one. What changed is that the approved
+> design has a screen — "Ask the way your agent does" — whose whole purpose is to show a person exactly
+> what their agent would have been handed for a question, which is the fastest way to find a memory
+> worth fixing and which nothing else in the product can do.
+>
+> **What lands:** one route, `POST /api/ask`, in the same allowlist as everything else, gated by the
+> same compatibility ladder as the other writes because it does write. It is a POST rather than a GET
+> precisely so that arriving cannot ask: a GET is what a page load, a prefetch, a poll, a link and a
+> pasted address all perform.
+>
+> **What still holds:** every other flow named in this section — browsing, the editor, removal, the
+> graph, curation — keeps its assertion and its exposure count, unchanged. The harness in
+> `test/server.test.mjs` now walks the whole surface, asserts the count did not move, and THEN presses
+> the one door and asserts it moved by exactly one. The third step is the new half and it is what makes
+> the first two mean anything: a census that could not go up passes hardest when it is broken.
 
 **(b) Engine discovery is fully specified twice.**
 0001 §3.4 / R10–R14 · 0007 R9–R16.
@@ -323,13 +351,14 @@ number, and four of those descriptions name no existing document. **Every PRD ci
 Eight milestones. The rule that sets the order: **the first one proves the seam whose failure is silent
 and irreversible, and it has no user interface in it at all.** Everything visible comes after.
 
-> **What has landed (2026-09-01).** All eight milestones are built and passing: **264 tests across 18
-> files** against `kscope 0.0.5` and a clone of a 344-memory vault, a clean boundary check, a browser
-> bundle of 995.1 kB, and a 411.9 kB tarball that installs into a scratch directory and serves a page
-> from there. Each milestone below carries its status and the document that reports it. **A milestone
-> marked landed is not a milestone with no gaps** — every status document ends in an honest-gaps
-> section, and the requirements those sections name as unbuilt are listed under M8 rather than being
-> counted as delivered.
+> **What has landed (2026-09-02, after the design rebuild).** All eight milestones are built and
+> passing, and every screen has since been redrawn against the approved mockups in `design/`:
+> **282 tests across 20 files** against `kscope 0.0.5` and a clone of a 363-memory vault, a clean
+> boundary check, and a browser bundle of **674 kB of JS and CSS** — down from 883 kB — plus 339 kB
+> of bundled fonts. Each milestone below carries its status and the document that reports it.
+> **A milestone marked landed is not a milestone with no gaps** — every status document ends in an
+> honest-gaps section, and the requirements those sections name as unbuilt are listed under M8 and M9
+> rather than being counted as delivered.
 >
 > | milestone | status | reported in |
 > | --- | --- | --- |
@@ -340,7 +369,8 @@ and irreversible, and it has no user interface in it at all.** Everything visibl
 > | M5 The backlog | **landed** | `docs/M4-M6-STATUS.md` |
 > | M6 Curation transactions | **landed** | `docs/M4-M6-STATUS.md` |
 > | M7 The reconstructed graph | **landed**, and photographed in a browser | `docs/M7-HUB-STATUS.md`, `docs/M7-M8-STATUS.md` |
-> | M8 Ship it | **landed except three requirements**, named below | `docs/M7-M8-STATUS.md` |
+> | M8 Ship it | **landed except four requirements**, named below | `docs/M7-M8-STATUS.md` |
+> | M9 The design rebuild | **landed**, every screen photographed | `docs/REBUILD-STATUS.md` |
 
 ### M1 — The round trip · no browser, no framework · **landed**
 **0001** (the engine client and the call contract) · **0007** (discovery + the boundary gate only) ·
@@ -410,7 +440,7 @@ whose busiest name clears the threshold, so the collapse has also been driven th
 photographed. *Still open:* nothing renders in a test, so PRD 0005 R24 is argued rather than asserted;
 the singleton fraction is computed and no screen reads it.
 
-### M8 — Ship it · **landed, with three requirements outstanding**
+### M8 — Ship it · **landed, with four requirements outstanding**
 **0007's packaging half**: the tarball, the files allowlist, the offline launch, the third-party notices,
 provenance publication.
 
@@ -439,7 +469,53 @@ generated, and shut down on SIGTERM.
 
 A boundary control the packaging PRD did not ask for was added in its place: `test/boundary-vault.test.mjs`
 compares the vault against the tree and catches the leak no text scanner can — a real entity surface
-used as an illustration. It found four, in this repository's own source, fixtures and documents.
+used as an illustration. It found four, in this repository's own source, fixtures and documents. It
+found a fifth during M9, in a code comment written that same day.
+
+---
+
+### M9 — The design rebuild · **landed** · reported in `docs/REBUILD-STATUS.md`
+
+The owner walked a live instance of M1–M8 screen by screen and rejected the design — not the
+mechanisms, not the operations, not the copy honesty, all of which were explicitly agreed. The
+diagnosis is in `ui-design-harvest/OWNER-REVIEW-01.md` and its sharpest line is *"no thinking balance
+— I wanted to have these functions, so I just put everything together at one place"*. Every screen
+was an inventory of its own capabilities rather than a designed thing with a first, a second and a
+third.
+
+Ten approved mockups in `design/` are the specification for what replaced them. The 3,487-line
+hand-written stylesheet is deleted; `src/app/styles.css` is an index over six files in
+`src/app/design/`, every value in them lifted from a mockup, and `src/app/ui` is the one door screens
+compose through. The screens are photographed in `docs/screenshots/rebuild/`.
+
+**One invariant deliberately changed shape, and did not get weaker.** The old rule was "the whole
+HTTP surface records no ranked search". The approved design adds the ranked door back as one explicit
+action on one screen — *Ask the way your agent does* — because it answers the question nothing else
+in the product can: what would my agent actually have been given for this? The new rule is narrower
+and still mechanical: **a ranked search happens only on an explicit user action on the search screen
+— never on load, never on a poll, never on a keystroke, never on a refresh, never from any other
+screen.** `test/server.test.mjs` walks every route the sidecar publishes and asserts the exposure
+count and the vault fingerprint are unchanged, then presses the door once and asserts the count moved
+by exactly one.
+
+**Two decisions in this milestone are worth carrying forward, because both were made on evidence and
+both look like omissions from the outside:**
+
+- **Path-finding between two names was cut, on evidence.** `ui-design-harvest/GRAPH-AT-SCALE.md` §2
+  measures that two random names in this vault share a connected component about 2% of the time, and
+  that where a path exists the component is very nearly a tree — so the answer is a unique linear
+  chain, which is a breadcrumb rather than a drawing. It is the one task node-link diagrams are known
+  to win, and it is degenerate here. It is not scheduled.
+- **The whole-vault canvas was KEPT by owner decision**, against the same research, **as an overview
+  and a diagnostic rather than as a navigation tool.** §2 of that harvest is unambiguous that a
+  node-link view fails above 100 nodes and that the entire informational payload of this one is the
+  four numbers printed above it. It is drawn behind an explicit *Whole shape* control, it is never
+  the default surface, and nothing in the product navigates through it.
+
+*Outstanding, and not to be counted as delivered:* the top-bar navigation is this build's invention
+and appears in no mockup; the curation, merge and removal screens follow the design language and were
+never drawn or approved; the editor's left pane is a raw Markdown textarea where `EditB` draws prose.
+The full list is the "Still weak" section of `docs/REBUILD-STATUS.md`.
 
 ---
 

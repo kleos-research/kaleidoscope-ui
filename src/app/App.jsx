@@ -9,11 +9,25 @@ import {
 	resolvePendingMerge,
 } from './api.mjs';
 import { BacklogView } from './BacklogView.jsx';
-import { Filters } from './Filters.jsx';
-import { GraphView } from './GraphView.jsx';
+/*
+  THE BROWSE SCREEN IS ONE COMPONENT, and that is the point of it.
+
+  What stood here was two: a `Filters` rail this file placed, and a `MemoryList` it placed beside
+  it, each computing its own view of the same set from a different helper. That is how the counts in
+  the rail and the rows under them came to be able to disagree, and it is the shape the owner was
+  reading when he said the last build had "no thinking balance, I just put everything together at
+  one place". `BrowseView` owns the facets, the list and the preview together — one filter function,
+  one count, three regions — so the arithmetic behind the number in the rail is the arithmetic that
+  produced the rows. Both old files are deleted rather than left beside it.
+*/
+import { BrowseView } from './BrowseView.jsx';
+import { nameRoute, surfaceFromRoute } from './names-model.mjs';
+import { NameFocus } from './NameFocus.jsx';
+import { NamesView } from './NamesView.jsx';
 import { MemoryDetail } from './MemoryDetail.jsx';
 import { MemoryEditor } from './MemoryEditor.jsx';
-import { MemoryList } from './MemoryList.jsx';
+import { FocusActionsContext } from './focus-actions.mjs';
+import { EMPTY_FILTERS } from './browse-model.mjs';
 import {
 	HalfFinishedMerge,
 	MergeScreen,
@@ -21,18 +35,34 @@ import {
 	ReversibilityTable,
 } from './MergeFlow.jsx';
 import { RemovalConfirm, RemovalReport } from './RemovalFlow.jsx';
+import { SearchView } from './SearchView.jsx';
 import { RemovalLimits } from './RemovalLimits.jsx';
 import {
 	DEFAULT_SORT,
-	EMPTY_FILTERS,
-	SORTS,
-	applyFilters,
-	buildFacets,
-	isFiltered,
+	projectOptions,
 	relationIndex,
 	toRow,
+	withinProject,
 } from './records.mjs';
-import { EmptyState, ErrorState, LoadingState } from './ui.jsx';
+import {
+	AppShell,
+	Button,
+	EmptyState,
+	Note,
+	ErrorState,
+	FindOrAsk,
+	FocusBar,
+	LoadingState,
+	MenuItem,
+	MenuSeparator,
+	Nav,
+	OverflowMenu,
+	ProjectSwitcher,
+	RootBar,
+	ToastProvider,
+	TooltipProvider,
+	VaultName,
+} from './ui/index.mjs';
 
 /** How often the cheap liveness read runs. It fetches no memory and writes nothing. */
 const LIVENESS_INTERVAL_MS = 30_000;
@@ -73,7 +103,32 @@ function writeWatermark(value) {
 }
 
 /**
- * `#/`, `#/graph`, `#/backlog`, `#/new`, `#/limits`, `#/m/<memory id>`,
+ * Which project was last being read. Beside the watermark, and for the same reason: this is a
+ * reading preference about a local vault, the vault itself holds no read state, and neither of
+ * these is something to write into somebody's memory.
+ */
+const PROJECT_KEY = 'kaleidoscope-ui.project';
+
+function readProject() {
+	try {
+		// An absent key and a stored empty string are both "every project"; a stored value is one.
+		return window.localStorage.getItem(PROJECT_KEY) || null;
+	} catch {
+		return null;
+	}
+}
+
+function writeProject(value) {
+	try {
+		if (value === null) window.localStorage.removeItem(PROJECT_KEY);
+		else window.localStorage.setItem(PROJECT_KEY, value);
+	} catch {
+		/* a browser with storage disabled loses the preference and keeps everything else */
+	}
+}
+
+/**
+ * `#/`, `#/search`, `#/names`, `#/names/<name>`, `#/decide`, `#/new`, `#/limits`, `#/m/<memory id>`,
  * `#/m/<memory id>/edit`, `#/m/<memory id>/merge`, or `#/m/<memory id>/limits`.
  *
  * The hash is the route so Back works with no router. The suffixed patterns are tested BEFORE the
@@ -85,12 +140,25 @@ function writeWatermark(value) {
  * it, come back from it, and press Back out of it like anything else on this list.
  */
 function routeFromHash() {
-	// The graph carries its whole view in the fragment after a `?` — lens, scope, filters and
-	// selection — so a reload, a Back out of a memory and a pasted link all land on the same
-	// drawing. Split on the FIRST `?` only: a surface is vault content and may contain one.
-	const graph = window.location.hash.match(/^#\/graph(?:\?(.*))?$/);
-	if (graph) return { name: 'graph', view: graph[1] ?? '' };
-	if (window.location.hash === '#/backlog') return { name: 'backlog' };
+	/*
+	  THE NAMES SCREENS. `#/names` is the table and `#/names/<surface>` is one name.
+
+	  The surface is carried VERBATIM, percent-encoded, and is decoded straight back — never
+	  normalised, hashed, or reduced to a position in a list. The entire subject of these screens is
+	  that two spellings of one thing are two things, so a route key that folded them together would
+	  open one name's panel from the other's row, and a positional key would address a different name
+	  after the next write. It is tested BEFORE the bare `#/names` pattern, which would otherwise not
+	  match at all and drop the reader on the table.
+	*/
+	const named = surfaceFromRoute(window.location.hash);
+	if (named !== null) return { name: 'name', surface: named };
+	if (window.location.hash === '#/names') return { name: 'names' };
+	if (window.location.hash === '#/decide') return { name: 'backlog' };
+	// The search screen. It runs no query on arrival — it carries the words typed in the shell,
+	// runs "find these words" over the payload the browser already holds, and waits to be asked
+	// before it touches the ranked door. See the note on `FindOrAsk`.
+	const searching = window.location.hash.match(/^#\/search(?:\?q=(.*))?$/);
+	if (searching) return { name: 'search', query: decodeURIComponent(searching[1] ?? '') };
 	if (window.location.hash === '#/new') return { name: 'create' };
 	if (window.location.hash === '#/limits') return { name: 'limits', memoryId: null };
 	// What can and cannot be undone, per action. A screen rather than a banner: "this cannot be
@@ -126,6 +194,24 @@ export function App() {
 	const [filters, setFilters] = useState(EMPTY_FILTERS);
 	const [sort, setSort] = useState(DEFAULT_SORT);
 	const [route, setRoute] = useState(routeFromHash);
+	/*
+	  The controls at the right-hand end of the focus bar, handed up by whichever screen is open.
+
+	  It is state here and a node there because the bar is one object on every screen — the owner's
+	  diagnosis was that each screen assembled its own header — while what can be DONE to a thing
+	  belongs to the screen that owns the thing. See `focus-actions.mjs`.
+	*/
+	const [focusActions, setFocusActions] = useState(null);
+	/*
+	  WHICH PROJECT IS BEING READ. `null` is every project.
+
+	  Remembered per browser, like the watermark below and for the same reason: it is a reading
+	  preference, the vault holds no read state, and a person who came back to a project should not
+	  have to choose it again. It is NOT in the URL, because the project is who you are while you
+	  read rather than where you are — a link to a memory should open that memory whatever project
+	  the person following it happens to be in.
+	*/
+	const [project, setProject] = useState(readProject);
 	const [pending, setPending] = useState(null);
 	/** The engine's last health reading, whole. Read by the graph's fidelity strip. */
 	const [health, setHealth] = useState(null);
@@ -211,8 +297,16 @@ export function App() {
 			);
 			setLastLooked((current) => (current === null ? readWatermark() : current));
 			if (Number.isFinite(highest) && highest >= 0) writeWatermark(highest);
+
+			// THE RECORDS ARE RETURNED AS WELL AS STORED, and one caller needs them that way. A
+			// curation run writes N memories and then has to plan the next rename against what the
+			// vault holds NOW — the versions it started with have all moved. Waiting for this state
+			// to arrive as a prop would mean re-planning on the render after the one that asked, and
+			// a loop that has to yield to React between two writes is a loop with a race in it.
+			return body.memories ?? [];
 		} catch (error) {
 			setPayloadError(error);
+			return null;
 		} finally {
 			setLoading(false);
 		}
@@ -295,17 +389,41 @@ export function App() {
 		};
 	}, [payload]);
 
-	const rows = useMemo(() => (payload?.memories ?? []).map(toRow), [payload]);
-	const relations = useMemo(() => relationIndex(rows), [rows]);
-	const facets = useMemo(
-		() => buildFacets(rows, session?.vocabulary, relations),
-		[rows, session, relations],
-	);
+	const allRows = useMemo(() => (payload?.memories ?? []).map(toRow), [payload]);
 
-	const filtered = useMemo(() => {
-		const matched = applyFilters(rows, filters, relations);
-		return [...matched].sort(SORTS[sort].compare);
-	}, [rows, filters, relations, sort]);
+	/*
+	  THE PROJECT IS APPLIED BEFORE ANY FILTER, because it is not one.
+
+	  It is the axis every screen is read along, chosen once in the top bar, and it never appears as
+	  a removable chip in the filter column. `withinProject` also carries the honest part: a memory
+	  with no project applies EVERYWHERE, so it is included in every project's view rather than
+	  hidden by one — see the note in records.mjs.
+	*/
+	const projects = useMemo(() => projectOptions(allRows), [allRows]);
+	const rows = useMemo(() => withinProject(allRows, project), [allRows, project]);
+
+	/*
+	  Relations are indexed over the WHOLE payload, not over the project's slice. A memory in one
+	  project can correct a memory in another, and an index built on the slice would report that
+	  link as unresolved — which is a different claim, and a false one.
+	*/
+	const relations = useMemo(() => relationIndex(allRows), [allRows]);
+
+	/*
+	  THE FACETS, THE NARROWING AND THE SORT ARE NOT COMPUTED HERE ANY MORE.
+
+	  They were, in two `useMemo`s beside this one, and the rail and the list each read one of them.
+	  A facet's count and the rows it produced were therefore two answers to the same question with
+	  two chances to be different — and once "since I last looked" entered the rail, they were: the
+	  count resolved the watermark and the filter did not. `BrowseView` resolves it once and derives
+	  both from the same array. What this file still owns is what OUTLIVES the screen: which project
+	  is being read, what is ticked for a bulk run, and where the mark sits.
+	*/
+
+	const chooseProject = useCallback((next) => {
+		setProject(next);
+		writeProject(next);
+	}, []);
 
 	const openMemory = useCallback((memoryId) => {
 		savedScroll.current = listScroll.current?.scrollTop ?? 0;
@@ -436,15 +554,36 @@ export function App() {
 	}, [route]);
 
 	return (
-		<div className="app">
-			<Header
-				session={session}
-				pending={pending}
-				onRefresh={() => load({ refresh: true })}
-				busy={loading}
-			/>
+		<TooltipProvider>
+			<ToastProvider>
+				{/*
+				  THE BAR'S RIGHT-HAND END BELONGS TO THE SCREEN UNDER IT.
 
-			<main className="main">
+				  Details / Cancel / Save are the editor's controls and only the editor knows whether a
+				  save is in flight or what is stopping one. This file holds the node and draws it; it
+				  does not decide what is in it. A screen hands its controls up through
+				  `useFocusActions` and takes them back when it unmounts, so a Save button cannot
+				  outlive the screen that knew what it would write.
+				*/}
+				<FocusActionsContext.Provider value={setFocusActions}>
+				<AppShell
+					bar={
+						<AppBar
+							route={route}
+							session={session}
+							moved={Boolean(pending)}
+							refreshing={loading}
+							onRefresh={() => load({ refresh: true })}
+							project={project}
+							projects={projects.projects}
+							everywhereCount={projects.everywhere}
+							shown={rows.length}
+							total={allRows.length}
+							onProject={chooseProject}
+							focusActions={focusActions}
+						/>
+					}
+				>
 				{/*
 				  ABOVE EVERYTHING, ON EVERY SCREEN, until it is resolved. A half-finished merge means
 				  the survivor holds both memories' content and the duplicate is still being served, and
@@ -493,9 +632,7 @@ export function App() {
 								: 'This vault was not listed'
 						}
 						action={
-							<button type="button" className="button" onClick={() => load({ refresh: true })}>
-								Try again
-							</button>
+							<Button onClick={() => load({ refresh: true })}>Try again</Button>
 						}
 					>
 						{/*
@@ -524,9 +661,7 @@ export function App() {
 						heading="This vault could not be read"
 						error={payloadError}
 						action={
-							<button type="button" className="button" onClick={() => load({ refresh: true })}>
-								Try again
-							</button>
+							<Button onClick={() => load({ refresh: true })}>Try again</Button>
 						}
 					/>
 				) : loading && !payload ? (
@@ -540,8 +675,12 @@ export function App() {
 					  It is handed the listing for SUGGESTIONS ONLY. Everything a save is assembled from
 					  is loaded by the editor itself, through the door that carries the entity
 					  declarations this cached shape does not have.
+
+					  It is NOT wrapped in a page column. The editor is a two-pane screen that fills the
+					  region under the bar, and each of its panes scrolls on its own — which is what keeps
+					  the facts beside the words rather than under them however long the words get.
 					*/
-					<div className="content content-wide">
+					<>
 						{session ? (
 							<MemoryEditor
 								key={route.name === 'create' ? 'create' : route.memoryId}
@@ -550,7 +689,6 @@ export function App() {
 								rows={rows}
 								onSaved={afterSave}
 								onOpen={openMemory}
-								onReopen={editMemory}
 								onCancel={() =>
 									route.name === 'create'
 										? backToList()
@@ -560,9 +698,9 @@ export function App() {
 						) : (
 							<LoadingState what="Taking the readings the editor is built from" />
 						)}
-					</div>
+					</>
 				) : route.name === 'reversibility' ? (
-					<div className="content content-wide">
+					<div className="screen">
 						<ReversibilityTable />
 					</div>
 				) : route.name === 'merge' ? (
@@ -573,7 +711,7 @@ export function App() {
 					  the CHOOSER only — naming the other memory — and nothing a write is assembled from
 					  comes from it.
 					*/
-					<div className="content content-wide">
+					<div className="screen">
 						<MergeScreen
 							key={route.memoryId}
 							memoryId={route.memoryId}
@@ -596,7 +734,7 @@ export function App() {
 					  something — each labelled with the field it changes — and, first, the sentence that
 					  says there is no priority, importance or pin in this store at all.
 					*/
-					<div className="content content-wide">
+					<div className="screen">
 						<PromoteMenu memoryId={route.memoryId} onEdit={editMemory} />
 					</div>
 				) : route.name === 'limits' ? (
@@ -608,7 +746,7 @@ export function App() {
 					  receipt. Sending the user back to a memory page that no longer resolves would answer
 					  "did that work?" with "that memory is not in what was loaded".
 					*/
-					<div className="content content-wide">
+					<div className="screen">
 						{report ? (
 							<RemovalReport report={report} onBack={backToList} onOpen={openMemory} />
 						) : (
@@ -646,36 +784,112 @@ export function App() {
 							vault records something — this app shows them; it does not create them.
 						</p>
 					</EmptyState>
+				) : route.name === 'list' ? (
+					/*
+					  THE BROWSE SCREEN. It is a DIRECT CHILD OF `.main`, and that is load-bearing rather
+					  than tidy: `.browse` is `flex: 1; min-height: 0; overflow: hidden`, so it fills the
+					  height it is given and hands each of its three regions its own scrolling. Wrapped in
+					  the generic page container the way every other route is, the filter column and the
+					  list would size to their content and the whole screen would scroll as one — which is
+					  the version of this list that stops being readable somewhere around row two hundred.
+
+					  The removal flow still stands where the screen was, for the reason it always has:
+					  after a run the listing door no longer returns those memories, so a page that went
+					  straight back to normal would answer "what just happened?" with a row that is simply
+					  missing.
+					*/
+					report ? (
+						<div className="screen">
+							<RemovalReport
+								report={report}
+								onBack={backToList}
+								onOpen={openMemory}
+								onEscalate={() => showLimits(null)}
+							/>
+						</div>
+					) : confirm ? (
+						/*
+						  HELD TO THE PAGE'S OWN MEASURE. `.prompt` is 620px wide and has no margin of its
+						  own, so dropped straight into the scroll region it sat against the window's left
+						  edge while every screen it appears over is a centred column — which reads as a
+						  panel belonging to something else rather than to the thing being removed.
+						*/
+						<div className="screen">
+							<div className="page page-narrow">
+								{/*
+								  A run that never got an answer is NOT a run that did nothing, and this is the
+								  message that says so. Telling the user it failed would invite them to press
+								  it again, and the second run is refused for a stale version only in the good
+								  case.
+								*/}
+								{removalError ? (
+									<ErrorState heading="This removal did not finish" error={removalError} />
+								) : null}
+								<RemovalConfirm
+									selection={confirm.selection}
+									busy={removing}
+									onCancel={() => setConfirm(null)}
+									onConfirm={() => runRemoval(confirm.selection)}
+									onEscalate={() =>
+										showLimits(
+											confirm.selection.length === 1 ? confirm.selection[0].memory_id : null,
+										)
+									}
+								/>
+							</div>
+						</div>
+					) : (
+						<BrowseView
+							rows={rows}
+							relations={relations}
+							session={session}
+							filters={filters}
+							setFilters={setFilters}
+							sort={sort}
+							setSort={setSort}
+							lastLooked={lastLooked}
+							strippedFields={payload?.stripped_fields}
+							/*
+							  The list's own scrolling element, handed up so the restore below still has
+							  something to restore. The rows scroll inside `.mlist-rows`, not in a page
+							  container, so a ref left on a wrapper would read 0 on the way out and set 0 on
+							  the way back — a scroll restore that reports as wired and always lands at the
+							  top.
+							*/
+							scrollRef={listScroll}
+							selection={selection}
+							onToggle={toggleSelected}
+							onToggleMany={selectMany}
+							maxSelectable={session?.app?.removal?.max_items ?? null}
+							onRemoveSelected={() => askToRemove([...selection.values()])}
+							onOpen={openMemory}
+							onEdit={editMemory}
+							onMerge={(id) => {
+								window.location.hash = `#/m/${encodeURIComponent(id)}/merge`;
+							}}
+							onShowLimits={showLimits}
+						/>
+					)
 				) : (
 					<>
-						{/*
-						  The rail belongs to the list and to nothing else. A memory's own page is one
-						  record: there is no set on it to narrow, and a facet control beside it invites
-						  a click that silently changes the list behind the page rather than anything on
-						  it. The filter state survives the trip either way — it lives here, not in the
-						  rail — so coming back finds the list exactly as it was left.
-						*/}
-						{route.name === 'list' ? (
-							<Filters
-								facets={facets}
-								filters={filters}
-								setFilters={setFilters}
-								rows={rows}
-								lastLooked={lastLooked}
-							/>
-						) : null}
-
 						<div
-							// The layout is two columns and the rail is the first of them, so a page with
-							// no rail has to be told to span both or it renders inside the rail's width.
-							className={route.name === 'list' ? 'content' : 'content content-wide'}
-							ref={listScroll}
+							// AND IT HAS TO SCROLL. `.main` is a flex column that hides its overflow, so a
+							// child without `screen` is clipped at the fold — on the curation screen that
+							// was every finding past the first group, silently. `screen` is the design
+							// system's own answer to "a screen that scrolls as one column".
+							//
+							// It stood here as `content content-wide screen`, and the first two of those are
+							// the deleted stylesheet's names carrying no rules at all. The same pair, WITHOUT
+							// `screen`, was on four other routes — the merge composition, "what can be
+							// undone", the promote menu and "what removal cannot do" — every one of which was
+							// therefore cut off at the window's edge with nothing to scroll.
+							className="screen"
 						>
 							{rows.every((row) => row.fact_count === 0) ? (
-								<p className="banner">
+								<Note>
 									Every memory here is prose with no facts attached. They are still memories and
 									still served; nothing is wrong with them.
-								</p>
+								</Note>
 							) : null}
 
 							{/*
@@ -688,17 +902,20 @@ export function App() {
 							) : null}
 
 							{confirm ? (
-								<RemovalConfirm
-									selection={confirm.selection}
-									busy={removing}
-									onCancel={() => setConfirm(null)}
-									onConfirm={() => runRemoval(confirm.selection)}
-									onEscalate={() =>
-										showLimits(
-											confirm.selection.length === 1 ? confirm.selection[0].memory_id : null,
-										)
-									}
-								/>
+								/* See the note on the other render of this: the prompt is 620px and unmargined. */
+								<div className="page page-narrow">
+									<RemovalConfirm
+										selection={confirm.selection}
+										busy={removing}
+										onCancel={() => setConfirm(null)}
+										onConfirm={() => runRemoval(confirm.selection)}
+										onEscalate={() =>
+											showLimits(
+												confirm.selection.length === 1 ? confirm.selection[0].memory_id : null,
+											)
+										}
+									/>
+								</div>
 							) : null}
 
 							{/*
@@ -714,6 +931,37 @@ export function App() {
 									onOpen={openMemory}
 									onEscalate={() => showLimits(null)}
 								/>
+							) : route.name === 'search' ? (
+								/*
+								  THE SEARCH SCREEN, and the ONE place in this product that can reach the
+								  ranked door. It is handed the listing this browser already holds and the
+								  relation index built from it; it asks the engine for nothing on arrival.
+
+								  KEYED ON NOTHING, deliberately. A key that changed with the query would
+								  remount the screen every time the URL was written back, throwing away the
+								  answer the user just paid an exposure row for.
+								*/
+								<SearchView
+									initialQuery={route.query ?? ''}
+									rows={rows}
+									relations={relations}
+									project={project}
+									onOpen={openMemory}
+									/*
+									  The words go into the URL so a search survives a reload and can be
+									  linked. `replaceState` rather than a hash assignment: setting the hash
+									  fires `hashchange`, which re-reads the route and would remount this
+									  screen mid-press. And a link that carries a query still runs NOTHING on
+									  arrival — the screen opens on the free search every time.
+									*/
+									onQueryChange={(text) =>
+										window.history.replaceState(
+											null,
+											'',
+											text ? `#/search?q=${encodeURIComponent(text)}` : '#/search',
+										)
+									}
+								/>
 							) : route.name === 'backlog' ? (
 								/*
 								  The curation backlog. Built from the listing this browser already
@@ -726,29 +974,50 @@ export function App() {
 									onEdit={editMemory}
 									onOpen={openMemory}
 									onBack={backToList}
+									/*
+									  The re-read the merge needs, both DURING a run and after it. During:
+									  every rename after the first has to carry versions the writes before
+									  it have already moved. After: the clustering is recomputed, so the
+									  next pass is over the vault as it is now rather than over the one the
+									  page loaded — a review screen still showing pre-merge clusters invites
+									  the same merge twice.
+									*/
+									onReread={() => load({ refresh: true })}
 									onShowGraph={() => {
-										window.location.hash = '#/graph';
+										window.location.hash = '#/names';
 									}}
 								/>
-							) : route.name === 'graph' ? (
-								<GraphView
-									/*
-									  KEYED ON THE VIEW IN THE URL, and the key is the whole reason this
-									  works. The graph owns its own state and writes the fragment back with
-									  `replaceState`, which fires no `hashchange` — so this key does not
-									  change while the user drives the screen. It changes only when the
-									  fragment arrives from OUTSIDE: a pasted link, a Back into a graph view,
-									  a Forward out of one. Without it the view prop is read once at mount and
-									  every later arrival is silently ignored — a restore that reads as wired
-									  and is not.
-									*/
-									key={route.view ?? ''}
+							) : route.name === 'names' ? (
+								/*
+								  THE NAMES TABLE. It takes the listing this browser already holds and
+								  reaches nothing: every count, order and near-duplicate proposal on it is
+								  arithmetic over that payload. The one door that would make it convenient
+								  is a ranked query, and a ranked query writes a permanent exposure row
+								  into the vault it is inspecting.
+								*/
+								<NamesView
 									records={payload?.memories ?? []}
-									onOpen={openMemory}
-									onBack={backToList}
+									onOpenName={(surface) => {
+										window.location.hash = nameRoute(surface);
+									}}
+									/*
+									  The claim list behind a collapsed hub ends every row in the memory that
+									  wrote it. A list of a hundred thousand facts none of which can be
+									  opened is a place those facts go to be unreachable.
+									*/
+									onOpenMemory={openMemory}
+								/>
+							) : route.name === 'name' ? (
+								<NameFocus
+									key={route.surface}
+									surface={route.surface}
+									records={payload?.memories ?? []}
 									health={health}
 									model={session?.model ?? null}
-									view={route.view ?? ''}
+									onOpen={openMemory}
+									onOpenName={(surface) => {
+										window.location.hash = nameRoute(surface);
+									}}
 								/>
 							) : route.name === 'memory' ? (
 								<Detail
@@ -772,49 +1041,18 @@ export function App() {
 									}
 									onShowLimits={showLimits}
 								/>
-							) : filtered.length === 0 && isFiltered(filters) ? (
-								<EmptyState
-									heading="No memory matches these filters"
-									action={
-										<button
-											type="button"
-											className="button"
-											onClick={() => setFilters(EMPTY_FILTERS)}
-										>
-											Clear the filters
-										</button>
-									}
-								>
-									<p>
-										This filter finds the words you type. It does not rank, and it does not find
-										a memory that means the same thing in different words — that is a different
-										kind of question and this version does not ask it.
-									</p>
-								</EmptyState>
-							) : (
-								<MemoryList
-									rows={filtered}
-									total={rows.length}
-									filters={filters}
-									setFilters={setFilters}
-									sort={sort}
-									setSort={setSort}
-									relations={relations}
-									onOpen={openMemory}
-									selection={selection}
-									onToggle={toggleSelected}
-									onToggleMany={selectMany}
-									maxSelectable={session?.app?.removal?.max_items ?? null}
-									onRemoveSelected={() => askToRemove([...selection.values()])}
-								/>
-							)}
+							) : /*
+								  The narrowed-to-nothing and the list itself both moved into `BrowseView`,
+								  which owns the filter that produced the emptiness and can therefore say
+								  which narrowing to undo. Nothing else routes here.
+								*/ null}
 						</div>
 					</>
 				)}
-			</main>
-
-			<Footer session={session} payload={payload} />
-		</div>
+				</AppShell>
+				</FocusActionsContext.Provider>
+			</ToastProvider>
+		</TooltipProvider>
 	);
 }
 
@@ -835,9 +1073,7 @@ function Detail({
 			<EmptyState
 				heading="That memory is not in what was loaded"
 				action={
-					<button type="button" className="button" onClick={onBack}>
-						Back to the list
-					</button>
+					<Button onClick={onBack}>Back to the list</Button>
 				}
 			>
 				<p>
@@ -863,47 +1099,174 @@ function Detail({
 	);
 }
 
-function Header({ session, pending, onRefresh, busy }) {
-	return (
-		<header className="topbar">
-			<a className="brand" href="#/">
-				Kaleidoscope
-			</a>
-			<nav className="topbar-nav">
-				<a href="#/">Memories</a>
-				{/*
-				  In the main navigation rather than inside the graph, because it is the highest-value
-				  surface in this product and it was previously reachable only by opening a drawing
-				  and scrolling a rail beside it. There is deliberately NO COUNT BADGE here: every
-				  vault has hundreds of these, the number never reaches zero, and a permanent red
-				  number is a nag the reader learns to stop seeing within a day.
-				*/}
-				<a href="#/backlog">Needs a decision</a>
-				<a href="#/graph">Graph</a>
-				{/* The only entry point that creates. It is the same form the editor uses, empty. */}
-				<a href="#/new">New memory</a>
-			</nav>
-			<span className="topbar-vault" title={session?.vault?.root ?? undefined}>
-				{session?.vault?.root ?? 'resolving the vault…'}
-			</span>
+/**
+ * THE ONE BAR, IN ITS TWO MODES.
+ *
+ * Root on the list-level screens; focus on a memory, the editor and one name in the graph. It is
+ * one component because the alternative — each screen assembling its own header — is precisely the
+ * thing the owner named: "no thinking balance, I just put everything together at one place".
+ *
+ * Everything in it is reachable without scrolling, which fixes "I do see a Refresh, but I have to
+ * scroll" directly rather than by moving the Refresh somewhere else.
+ */
+function AppBar({
+	route,
+	session,
+	moved,
+	refreshing,
+	onRefresh,
+	project,
+	projects,
+	everywhereCount,
+	shown,
+	total,
+	onProject,
+	focusActions = null,
+}) {
+	/*
+	  THE FOCUS MODE. A screen that is about ONE thing replaces the root bar rather than adding a
+	  second row under it — a second row is exactly the chrome a reader has to scroll past before
+	  reaching what they opened.
 
-			<div className="topbar-right">
-				{/*
-				  The badge fetches nothing. It says the vault moved and waits to be asked — an
-				  accepted refresh is the only thing that re-reads the vault, and the reader decides
-				  when that happens.
-				*/}
-				{pending ? (
-					<button type="button" className="badge" onClick={onRefresh}>
-						This vault has moved — refresh
-					</button>
-				) : null}
-				<button type="button" className="button" onClick={onRefresh} disabled={busy}>
-					{busy ? 'Reading…' : 'Refresh'}
-				</button>
-			</div>
-		</header>
+	  The actions are deliberately NOT here: the screen that owns the thing owns what can be done to
+	  it, and it renders its own controls into `actions`. This file would otherwise have to know
+	  about editing, removal and merging, which is how a shell becomes an application.
+	*/
+	if (FOCUS_ROUTES[route.name]) {
+		const focus = FOCUS_ROUTES[route.name];
+		return (
+			<FocusBar
+				backTo={focus.backTo}
+				backLabel={focus.backLabel}
+				trail={focus.trail ? focus.trail(route) : []}
+				actions={focusActions}
+			/>
+		);
+	}
+
+	const vaultRoot = session?.vault?.root ?? null;
+
+	return (
+		<RootBar
+			vault={
+				<VaultName
+					name={shortVaultName(vaultRoot)}
+					readings={[
+						{ term: 'this vault', value: vaultRoot ?? 'resolving…', mono: true },
+						{ term: 'engine', value: session?.engine?.version ?? 'not recorded' },
+						{ term: 'engine binary', value: session?.engine?.path ?? 'not recorded', mono: true },
+						{ term: 'embedding model', value: session?.model?.status ?? 'not recorded' },
+						{
+							term: 'write contract',
+							value: `${(session?.contract?.digest ?? '').slice(0, 12) || 'not recorded'} · tier ${
+								session?.compatibility?.tier ?? '—'
+							}`,
+							mono: true,
+						},
+						{
+							term: 'copies kept before a write',
+							value: session?.snapshots?.directory ?? 'not recorded',
+							mono: true,
+						},
+						{ term: '', value: 'Nothing here leaves this machine.' },
+					]}
+				/>
+			}
+			project={
+				<ProjectSwitcher
+					projects={projects}
+					value={project}
+					onChange={onProject}
+					shown={shown}
+					everywhereCount={everywhereCount}
+				/>
+			}
+			context={
+				project === null || total === shown ? null : `of ${total} in this vault`
+			}
+			nav={<Nav current={route.name} />}
+			/*
+			  NOT ON THE SEARCH SCREEN. Search.dc.html draws that screen's top bar as the wordmark and
+			  the project chip and nothing else, because the screen's own box is the search box —
+			  two of them, one 220px wide in the chrome and one 940px wide six lines below it, is the
+			  same control twice and a reader has to work out which one is live.
+			*/
+			find={
+				route.name === 'search' ? null : (
+				<FindOrAsk
+					onSubmit={(text) => {
+						const typed = text.trim();
+						// A NAVIGATION, NOT A QUERY. Nothing here runs a search; the search screen
+						// decides what to do with the words, and it too waits to be asked before it
+						// touches the ranked door.
+						window.location.hash = typed ? `#/search?q=${encodeURIComponent(typed)}` : '#/search';
+					}}
+				/>
+				)
+			}
+			onRefresh={onRefresh}
+			refreshing={refreshing}
+			moved={moved}
+			menu={
+				<OverflowMenu>
+					<MenuItem onSelect={() => (window.location.hash = '#/new')}>Write a memory</MenuItem>
+					<MenuSeparator />
+					<MenuItem onSelect={() => (window.location.hash = '#/reversibility')}>
+						What can be undone
+					</MenuItem>
+					<MenuItem onSelect={() => (window.location.hash = '#/limits')}>
+						What removal cannot do
+					</MenuItem>
+				</OverflowMenu>
+			}
+		/>
 	);
+}
+
+/**
+ * Which routes wear the focus bar, and what "back" means on each.
+ *
+ * A table rather than a chain of conditions, so adding a screen is adding a row and a screen with
+ * no row gets the root bar — which is the safe default, because the root bar is the one that can
+ * navigate anywhere.
+ */
+const FOCUS_ROUTES = {
+	memory: { backTo: '#/', backLabel: 'Memories' },
+	edit: { backTo: '#/', backLabel: 'Memories' },
+	create: { backTo: '#/', backLabel: 'Memories' },
+	merge: { backTo: '#/', backLabel: 'Memories' },
+	promote: { backTo: '#/', backLabel: 'Memories' },
+	limits: { backTo: '#/', backLabel: 'Memories' },
+	reversibility: { backTo: '#/', backLabel: 'Memories' },
+	/*
+	  One name. Back goes to the table rather than to the memory list, because the table is where the
+	  reader chose this name — a Back that leaves the section is a Back that loses the search they
+	  typed to get here.
+	*/
+	name: {
+		backTo: '#/names',
+		backLabel: 'Things your memories talk about',
+		trail: (route) => [route.surface],
+	},
+};
+
+/**
+ * THE VAULT AS A SHORT NAME.
+ *
+ * "I don't know why we need to enter the entire folder path. It's too long."
+ *
+ * The last segment of the resolved root, which is what a person calls the place their work lives.
+ * The full path is one click away in the popover this feeds, so nothing was hidden — a fingerprint
+ * stopped being a headline. A root that ends in a dot-directory takes the segment above it, because
+ * ".kaleidoscope" names every vault on the machine and therefore names none of them.
+ */
+export function shortVaultName(root) {
+	if (!root) return null;
+	const parts = String(root).split('/').filter(Boolean);
+	if (parts.length === 0) return String(root);
+	const last = parts[parts.length - 1];
+	if (last.startsWith('.') && parts.length > 1) return parts[parts.length - 2];
+	return last;
 }
 
 /**
@@ -921,7 +1284,7 @@ function EngineCompatibility({ compatibility }) {
 	if (!compatibility || compatibility.tier === 'C') return null;
 	const blocked = !compatibility.writes_permitted;
 	return (
-		<section className={blocked ? 'compat compat-stop' : 'compat'}>
+		<section className={blocked ? 'notice notice-warn' : 'notice'}>
 			<h2>
 				{blocked
 					? 'This app will not write to this engine'
@@ -972,45 +1335,5 @@ function EngineCompatibility({ compatibility }) {
 					: 'Reading your memory is unaffected. Writes are still allowed: the engine refuses what it cannot accept and names the field to fix, which is a better answer than a menu this app is guessing at.'}
 			</p>
 		</section>
-	);
-}
-
-/**
- * The readings, permanently on screen.
- *
- * Which binary answered, from where, which vault it resolved, and whether the model is actually in
- * it. A tool that reports on a store should say which store, and a reading displayed beside the
- * result is the difference between a number and a number you can check.
- */
-function Footer({ session, payload }) {
-	return (
-		<footer className="footer">
-			<span>
-				engine <strong>{session?.engine?.version ?? '—'}</strong>
-			</span>
-			<span className="footer-path">{session?.engine?.path ?? '—'}</span>
-			<span>
-				model <strong>{session?.model?.status ?? '—'}</strong>
-			</span>
-			{/*
-			  The digest and the TIER, together. The digest alone is a fingerprint nobody can act on;
-			  the tier is what it means for this session, and the pair is what makes the footer's
-			  claim checkable rather than decorative. The engine's VERSION is beside it and gates
-			  nothing — two builds one patch apart can print this contract differently.
-			*/}
-			<span title={session?.compatibility?.headline ?? undefined}>
-				contract <code className="identifier">{(session?.contract?.digest ?? '').slice(0, 12)}</code>{' '}
-				<strong>tier {session?.compatibility?.tier ?? '—'}</strong>
-			</span>
-			{payload?.fetched_at ? (
-				<span>read at {new Date(payload.fetched_at).toLocaleTimeString()}</span>
-			) : null}
-			{/*
-			  Reachable from every screen, because the question "can I undo this?" is asked after the
-			  thing has been done. The answer is per action and it is not the same answer twice.
-			*/}
-			<a href="#/reversibility">what can be undone</a>
-			<span className="footer-claim">nothing here leaves this machine</span>
-		</footer>
 	);
 }

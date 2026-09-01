@@ -1,0 +1,270 @@
+/*
+ * The ground everything else stands on: the reset, the two type families in their two jobs, the
+ * focus ring, and the handful of text roles every screen re-uses.
+ *
+ * There is nothing here that decides a layout. If a rule needs to know what screen it is on, it
+ * belongs in that screen's file, not in this one.
+ */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-ui);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	/*
+	 * Tabular figures everywhere in the chrome. Counts sit in columns all over this app — 47 above a
+	 * list, 612 in a switcher, 9 in a degree bar — and proportional digits make a column of them
+	 * ripple as it updates, which reads as the number changing when only its width did.
+	 */
+	font-variant-numeric: tabular-nums;
+	/*
+	 * A SAFETY NET FOR VAULT-AUTHORED STRINGS. The mockups are written with names like "build cache";
+	 * a real vault carries `is_written_per_mint_and_read_only_by_its_own_collision_probability`, and
+	 * a token with no break opportunity runs straight out of the panel it is in. `break-word` only
+	 * acts when the word would otherwise overflow, so ordinary copy is unaffected.
+	 */
+	overflow-wrap: break-word;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+	margin: 0;
+}
+
+/*
+ * NO FLOW ELEMENT CARRIES A MARGIN THIS DESIGN DID NOT DECIDE.
+ *
+ * A browser's default `p` margin is `1em` — so a paragraph inside a 13.5px card contributed 27px of
+ * vertical space that no token named and no mockup drew, and the same paragraph inside an 11.5px
+ * caption contributed 23px. The components in `src/app/ui` render 110 paragraphs, 15 headings and
+ * 62 list items; every one of them was spaced by the user agent rather than by `--space-*`, on top
+ * of the `gap` its container had actually chosen. That is the mechanism behind the sentence this
+ * rebuild exists to answer — "I don't think that's aligned correctly, I don't think there's enough
+ * padding" — reintroduced at the level below the one anybody was reading.
+ *
+ * Spacing is the container's job here: every stack in this system is a flex column with a `gap`.
+ * A memory's own words are the deliberate exception and set their own rhythm under `.md` in
+ * `prose.css`, which is scoped and therefore unaffected by this reset.
+ */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+ul,
+ol,
+li,
+dl,
+dt,
+dd,
+figure,
+blockquote,
+pre {
+	margin: 0;
+}
+
+ul,
+ol {
+	padding-left: 0;
+	list-style: none;
+}
+
+/*
+ * ONE focus ring, on every focusable thing, and it is never removed.
+ *
+ * `:focus-visible` rather than `:focus` so a mouse click on a button does not paint a ring the
+ * clicker did not ask for, while every keyboard arrival paints one. Radix moves focus for us in
+ * dialogs, menus and popovers; this is what makes that movement visible.
+ */
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+::selection {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+
+/*
+ * A scrollbar that does not repaint the panel it is in. Firefox and WebKit disagree about how to
+ * ask, so both are asked.
+ */
+* {
+	scrollbar-color: var(--line-strong) transparent;
+	scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: var(--line-strong);
+	border: 3px solid transparent;
+	border-radius: 6px;
+	background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* ------------------------------------------------------------------ text roles */
+
+/*
+ * THE EYEBROW. "WHAT YOUR AGENT ACTS ON", "NAMED THINGS", "WHERE THIS CAME FROM".
+ *
+ * It is a section label, not a heading, and it is the same object in nine mockups. It exists as one
+ * class because the previous design had four spellings of it and the inconsistency was visible.
+ */
+.eyebrow {
+	font-size: var(--text-eyebrow);
+	font-weight: var(--weight-medium);
+	letter-spacing: var(--tracking-eyebrow);
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+/* The serif. A memory's own words, and the headings over them — never a label or a control. */
+.prose {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-prose);
+	font-size: var(--prose-md);
+	line-height: var(--leading-prose);
+	color: var(--text);
+}
+
+.prose-lg {
+	font-size: var(--prose-lg);
+}
+
+.prose-sm {
+	font-size: var(--prose-sm);
+	line-height: var(--leading-body);
+}
+
+/*
+ * A display heading. Serif, and set at a display optical size so the strokes hold at 26px and up.
+ * `--display-*` chooses the size; this chooses everything else about it.
+ */
+.display {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-weight: var(--weight-normal);
+	line-height: var(--leading-display);
+	letter-spacing: 0;
+	color: var(--text);
+	margin: 0;
+}
+
+.meta {
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--faint);
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.faint {
+	color: var(--faint);
+}
+
+.warn-text {
+	color: var(--warn);
+}
+
+.accent-text {
+	color: var(--accent);
+}
+
+/* A hairline. The mockups draw this as a 1px filled div; here it is one class. */
+.rule {
+	height: 1px;
+	background: var(--line);
+	border: 0;
+	margin: 0;
+}
+
+/*
+ * An identifier or a path, in monospace and selectable.
+ *
+ * DELIBERATELY NOT TRUNCATED IN THE DOM. These are what a save conflict quotes back, and a user
+ * comparing two of them is comparing character by character — an ellipsis in the middle of one is
+ * the difference between a comparison and a guess. CSS may wrap it; nothing shortens it.
+ */
+.identifier {
+	font-family: var(--font-mono);
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/*
+ * WIDE CONTENT SCROLLS INSIDE ITSELF. A table of entity names, a fact whose endpoints are long, a
+ * path from a piece of evidence — each can exceed its column, and the page body must never be what
+ * scrolls sideways.
+ */
+.scroll-x {
+	overflow-x: auto;
+	max-width: 100%;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+a:hover {
+	color: var(--accent-ink);
+	text-decoration: underline;
+}

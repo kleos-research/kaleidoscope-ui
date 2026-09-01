@@ -26,16 +26,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import {
-	DRAW_CAP,
-	buildGraph,
-	defaultView,
-	projectLens,
-	scopeSurfaces,
-} from '../src/app/graph-model.mjs';
+import { buildGraph, neighbourhood, subgraph } from '../src/app/graph-model.mjs';
 import {
 	COLLAPSE_FLOOR,
 	COLLAPSE_MULTIPLE,
+	DRAW_CAP,
 	applyUndo,
 	collapseThreshold,
 	degreeStats,
@@ -47,7 +42,9 @@ import {
 	hubWindow,
 	planView,
 	reductionOptions,
+	regimeLine,
 } from '../src/app/hub-model.mjs';
+import { OVERVIEW_CEILING, overviewElements } from '../src/app/names-model.mjs';
 import { hubVault, overCapVault, workingVault } from './helpers/synthetic.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,10 +65,21 @@ const OVER_CAP = (() => {
 	return { vault, graph: buildGraph(vault.records) };
 })();
 
-/** The projection a hub regime seeds on, in one lens. */
-function hubProjection(graph, hub, lens = 'E') {
-	return projectLens(graph, { lens, surfaces: scopeSurfaces(graph, hubScope(hub)) });
+/**
+ * The projection a hub regime seeds on.
+ *
+ * THE LENS ARGUMENT IS GONE BECAUSE THE LENSES ARE. The rebuild replaced three projections of one
+ * graph with one — names joined by the facts that name them — so `projectLens` is `subgraph` and
+ * `scopeSurfaces` for an ego scope is `neighbourhood`. `hubScope` still decides the depth, and it is
+ * still called here rather than inlined, so the rule the collapse seeds on stays under test.
+ */
+function hubProjection(graph, hub) {
+	const scope = hubScope(hub);
+	return subgraph(graph, neighbourhood(graph, scope.seed, scope.depth));
 }
+
+/** The state of having asked for nothing, which is the state the overview opens in. */
+const nothingReduced = () => ({ collapsed: new Set(), absorbed: new Set(), expanded: new Map() });
 
 // ================================================================================================
 // THE FIXTURES
@@ -85,7 +93,7 @@ test('the fixtures are the three shapes they claim to be', () => {
 	assert.equal(hubDegree, 100_000, 'the hub fixture must carry one node with exactly 100,000 edges');
 	assert.ok(HUB.graph.counts.edgeCount > 100_000, 'and a tail around it, so the collapse has something to keep');
 
-	// The over-cap fixture has to be genuinely over the cap in the entity lens, or the ladder above
+	// The over-cap fixture has to be genuinely over the cap as it is drawn, or the ladder above
 	// it is being tested against a graph that fits — which is the state M3 was already in.
 	const largest = OVER_CAP.graph.components[0];
 	assert.ok(
@@ -229,36 +237,38 @@ test('the threshold does not fire on a working vault, and that is the correct an
 // THE COLLAPSE
 // ================================================================================================
 
-test('a hub above the threshold collapses, in every lens, and the drawing fits', () => {
+test('a hub above the threshold collapses, and the drawing fits', () => {
 	const regime = detectRegime(HUB.graph);
 	const hub = regime.hubs[0];
 
-	for (const lens of ['C', 'E']) {
-		const projection = hubProjection(HUB.graph, hub, lens);
-		const plain = planView(projection, {});
-		const collapsed = planView(projection, { collapsed: new Set([hubNodeId(hub)]) });
+	const projection = hubProjection(HUB.graph, hub);
+	const plain = planView(projection, {});
+	const collapsed = planView(projection, { collapsed: new Set([hubNodeId(hub)]) });
 
-		assert.ok(plain.elementCount > DRAW_CAP, `lens ${lens}: the unreduced view has to be over the cap`);
-		assert.ok(
-			collapsed.elementCount <= DRAW_CAP,
-			`lens ${lens}: the collapse drew ${collapsed.elementCount} against a cap of ${DRAW_CAP}`,
-		);
+	assert.ok(plain.elementCount > DRAW_CAP, 'the unreduced view has to be over the cap');
+	assert.ok(
+		collapsed.elementCount <= DRAW_CAP,
+		`the collapse drew ${collapsed.elementCount} against a cap of ${DRAW_CAP}`,
+	);
 
-		// A REAL graph element, not a drawing trick. The meta-node has its own id and the hub is a
-		// child of it, which is what keeps selection, layout and the click-into-the-editor path
-		// working through a collapse — the reason compound nodes were chosen over a library that
-		// only draws.
-		assert.equal(collapsed.metaNodes.length, 1);
-		const meta = collapsed.metaNodes[0];
-		assert.equal(meta.childId, hubNodeId(hub));
-		const drawnHub = collapsed.nodes.find((node) => node.id === hubNodeId(hub));
-		assert.ok(drawnHub, 'the hub itself is still drawn — a collapse is not a deletion');
-		assert.equal(drawnHub.parent, meta.id, 'and it sits inside its own box');
+	// The hub becomes a COLLAPSED ELEMENT rather than a deleted one: the meta-node has its own id,
+	// the hub is its first child, and it is still on the canvas to be clicked. That is what keeps
+	// selection, layout and the click-into-a-name path working through a collapse.
+	assert.equal(collapsed.metaNodes.length, 1);
+	const meta = collapsed.metaNodes[0];
+	assert.equal(meta.childId, hubNodeId(hub));
+	const drawnHub = collapsed.nodes.find((node) => node.id === hubNodeId(hub));
+	assert.ok(drawnHub, 'the hub itself is still drawn — a collapse is not a deletion');
+	assert.equal(drawnHub.parent, meta.id, 'and it sits inside its own box');
 
-		// The neighbours that carry topology stayed. A collapse that absorbed everything would be a
-		// picture of one box, which is legible and says nothing.
-		assert.ok(meta.keptNeighbours > 0, `lens ${lens}: the collapse kept nothing, so it kept no topology`);
-	}
+	// The neighbours that carry topology stayed. A collapse that absorbed everything would be a
+	// picture of one box, which is legible and says nothing.
+	assert.ok(meta.keptNeighbours > 0, 'the collapse kept nothing, so it kept no topology');
+
+	// The number ON the box is the number the list has to keep, and it is the FACT degree rather
+	// than the drawn one — a box saying 1,700 over a list of 100,000 is the collapse lying about
+	// how much it is holding.
+	assert.equal(meta.listTotal, hub.degree);
 });
 
 test('the collapse is reversible and the count of what was hidden is exact', () => {
@@ -311,23 +321,21 @@ test('with nothing asked for, nothing is reduced — on all three fixtures', () 
 	// The property that makes "no silent narrowing" checkable rather than promised, and the same
 	// assertion doubles as the proof that there is no built-in stop list: if any surface were
 	// suppressed by a rule of this module's own, one of these would come back short.
-	for (const [name, graph] of [
-		['working', WORKING.graph],
-		['over-cap', OVER_CAP.graph],
-		['hub', HUB.graph],
+	//
+	// It runs on the projection the OVERVIEW builds, not on one assembled here, because that is the
+	// projection the screen hands to `planView` on every draw. The hub fixture is also checked on
+	// the ego projection a collapse seeds on, so both doors into the plan are covered.
+	for (const [name, projection] of [
+		['working/whole-vault', overviewElements(WORKING.graph)],
+		['over-cap/whole-vault', overviewElements(OVER_CAP.graph)],
+		['hub/around the hub', hubProjection(HUB.graph, { surface: HUB.vault.hub })],
 	]) {
-		for (const lens of ['C', 'M', 'E']) {
-			const scope = name === 'hub' ? hubScope({ surface: HUB.vault.hub }) : { kind: 'all' };
-			const projection = projectLens(graph, { lens, surfaces: scopeSurfaces(graph, scope) });
-			// The M lens refuses a projection whose pairing work is over its own ceiling; that is its
-			// own control panel and there is nothing for this plan to reduce.
-			if (projection.refusal) continue;
-			const plan = planView(projection, {});
-			assert.equal(plan.nodes.length, projection.nodes.length, `${name}/${lens} lost nodes`);
-			assert.equal(plan.edges.length, projection.edges.length, `${name}/${lens} lost edges`);
-			assert.deepEqual(plan.ledger, [], `${name}/${lens} reduced something nobody asked for`);
-			assert.deepEqual(plan.hidden, { nodes: 0, edges: 0 });
-		}
+		const plan = planView(projection, { ...nothingReduced(), cap: OVERVIEW_CEILING });
+		assert.equal(plan.nodes.length, projection.nodes.length, `${name} lost nodes`);
+		assert.equal(plan.edges.length, projection.edges.length, `${name} lost edges`);
+		assert.deepEqual(plan.ledger, [], `${name} reduced something nobody asked for`);
+		assert.deepEqual(plan.hidden, { nodes: 0, edges: 0 });
+		assert.equal(plan.metaNodes.length, 0, `${name} drew a box around something nobody collapsed`);
 	}
 });
 
@@ -454,35 +462,36 @@ test('the collapsed hub opens a list that holds every one of its 100,000 claims'
 // THE REDUCTION LADDER — the part that had never fired
 // ================================================================================================
 
-test('the reduction ladder fires on the over-cap fixture, and names the rung it stopped at', () => {
-	// On the development vault this ladder had never run: 343 elements against a cap of 2,000, so
-	// every rung was arithmetic nobody had seen a result from. From there an inert knob and a robust
-	// result look identical.
-	for (const lens of ['C', 'E']) {
-		const view = defaultView(OVER_CAP.graph, { lens });
-		assert.equal(view.rule, 'ego', `lens ${lens} did not have to reduce, so this fixture is not over the cap in it`);
-		assert.ok(view.elements <= DRAW_CAP);
-		assert.equal(view.scope.kind, 'ego');
-		assert.equal(view.scope.depth, 2);
-		// The banner has to name which rule fired. A reduction the user was not told about is a
-		// truncation, and a truncation is a refusal spelled as an answer.
-		assert.match(view.reason, /past what this view draws/);
-	}
+test('the reduction ladder still descends, and the rung that helps is not the same one at both densities', () => {
+	// `defaultView` — the automatic ladder this test used to drive — belonged to the lens screen the
+	// rebuild replaced, and it is gone. `reductionOptions` is the same rungs as a pure function and
+	// it is what survived, so the ladder is checked through it.
+	//
+	// The property that matters is that the rungs are ORDERED BY HOW MUCH THEY GIVE UP and that a
+	// denser graph has to descend further. A ladder whose first rung is always enough is a single
+	// step, and from the outside those two look identical.
+	const ego = (options, depth) => options.find((option) => option.key === `ego-${depth}`);
 
-	// The rung BELOW that one fires too, on a fixture dense enough to need it — which is what tells a
-	// ladder from a single step that happens to be enough.
+	const sparse = reductionOptions(OVER_CAP.graph, {});
+	assert.ok(ego(sparse, 2).elements <= DRAW_CAP, 'the depth-2 rung should fit on this fixture');
+	assert.ok(
+		ego(sparse, 2).elements > ego(sparse, 1).elements,
+		'two steps out has to draw more than one, or the rungs are not a ladder',
+	);
+
+	// A fixture dense enough that the rung above no longer fits — which is what puts the one below
+	// it in play. Without this the depth-1 rung is arithmetic nobody has ever seen a result from.
 	const dense = buildGraph(overCapVault({ communitySize: 400, intraDegree: 20, communities: 3 }).records);
-	const deep = defaultView(dense, { lens: 'E' });
-	assert.equal(deep.rule, 'ego');
-	assert.equal(deep.scope.depth, 1, 'the depth-2 rung was enough, so the depth-1 rung still has never run');
-	assert.ok(deep.elements <= DRAW_CAP);
+	const deep = reductionOptions(dense, {});
+	assert.equal(ego(deep, 2).fits, false, 'the depth-2 rung was still enough, so the rung below it never runs');
+	assert.equal(ego(deep, 1).fits, true, 'and the rung below it has to be the one that fits');
 });
 
 test('every rung of the reduction panel carries its own element count, including the ones that do not help', () => {
 	const memoryTypes = [...new Set(OVER_CAP.graph.edges.map((edge) => edge.memory_type))]
 		.filter(Boolean)
 		.map((value) => ({ value }));
-	const options = reductionOptions(OVER_CAP.graph, { lens: 'E', memoryTypes });
+	const options = reductionOptions(OVER_CAP.graph, { memoryTypes });
 
 	assert.ok(options.length >= 4);
 	for (const option of options) {
@@ -500,7 +509,7 @@ test('every rung of the reduction panel carries its own element count, including
 
 	// In a hub regime the panel gains the one rung that helps: every other rung returns the star.
 	const hubs = detectRegime(HUB.graph).hubs;
-	const hubOptions = reductionOptions(HUB.graph, { lens: 'E', hubs });
+	const hubOptions = reductionOptions(HUB.graph, { hubs });
 	const collapseRung = hubOptions.find((option) => option.collapse);
 	assert.ok(collapseRung, 'the hub regime offers no collapse rung');
 	assert.ok(collapseRung.fits, 'and the collapse rung has to be the one that fits');
@@ -526,7 +535,7 @@ test('the whole hub path runs on the 100,000-edge fixture inside its stated budg
 	const graph = buildGraph(vault.records);
 	const regime = detectRegime(graph);
 	const hub = regime.hubs[0];
-	const projection = projectLens(graph, { lens: 'E', surfaces: scopeSurfaces(graph, hubScope(hub)) });
+	const projection = hubProjection(graph, hub);
 	const plan = planView(projection, { collapsed: new Set([hubNodeId(hub)]) });
 	const index = hubIndex(graph, hub.surface);
 	const elapsed = performance.now() - started;
@@ -549,92 +558,77 @@ test('the whole hub path runs on the 100,000-edge fixture inside its stated budg
 	);
 });
 
+
 // ================================================================================================
-// THE COMPOUND NODE, THROUGH THE LIBRARY THAT HAS TO HONOUR IT
+// THE RENDERER THE PLAN IS ACTUALLY HANDED TO
 // ================================================================================================
 
-test('the plan forms a real compound node in Cytoscape, not a plan that looks like one', async () => {
-	// Every other assertion in this file is over the plan. The plan can be perfectly self-consistent
-	// and still not produce a compound: Cytoscape reads `data.parent`, and a child whose parent is
-	// not in the graph is added with NO PARENT AT ALL — no error, no warning, a plausible picture
-	// with the boxes silently missing. That failure is invisible to arithmetic, so it is checked
-	// here by building the graph and asking Cytoscape what it made.
-	//
-	// What this does NOT prove: that the screen builds its elements this way. The mapping is
-	// rebuilt here, so this certifies the plan is compound-able rather than that `GraphView` maps it
-	// correctly — which is why the ordering hazard is also checked statically, below.
-	const { default: cytoscape } = await import('cytoscape');
+test('the plan a collapse produces is one the overview layout can place, whole', async () => {
+	// Every other assertion in this file is over the plan, and the plan can be perfectly
+	// self-consistent and still not draw. This canvas places nodes by id and then draws each edge
+	// between two looked-up positions, skipping any endpoint it cannot find — no error, no warning,
+	// a plausible picture with lines silently missing from it. That failure is invisible to
+	// arithmetic, so it is checked here by running the real layout over a real collapsed plan.
+	const { overviewLayout } = await import('../src/app/overview-layout.mjs');
 
-	const hub = detectRegime(HUB.graph).hubs[0];
-	const projection = hubProjection(HUB.graph, hub);
-	const plan = planView(projection, {
+	const small = buildGraph(hubVault({ hubDegree: 400, connectors: 30, tail: 200 }).records);
+	const hub = detectRegime(small).hubs[0];
+	const overview = overviewElements(small);
+	const plan = planView(overview, {
+		...nothingReduced(),
 		collapsed: new Set([hubNodeId(hub)]),
-		expanded: new Map([[hubNodeId(hub), 20]]),
+		cap: OVERVIEW_CEILING,
 	});
 
-	const cy = cytoscape({
-		headless: true,
-		elements: {
-			nodes: [
-				...plan.metaNodes.map((meta) => ({ data: { id: meta.id } })),
-				...plan.nodes.map((node) => ({ data: { id: node.id, parent: node.parent ?? undefined } })),
-			],
-			edges: plan.edges.map((edge) => ({ data: { id: edge.id, source: edge.source, target: edge.target } })),
-		},
-	});
+	assert.ok(plan.ledger.length === 1 && plan.hidden.nodes > 0, 'this fixture has to actually collapse');
 
-	const parent = cy.$id(plan.metaNodes[0].id);
-	assert.equal(parent.length, 1, 'the meta-node is not in the graph');
-	assert.equal(parent.isParent(), true, 'the meta-node is a plain node, so the collapse is a drawing trick');
-	assert.equal(parent.children().length, 21, 'the hub and its twenty revealed neighbours are inside it');
-	assert.equal(cy.$id(hubNodeId(hub)).parent().id(), plan.metaNodes[0].id);
-	// And what Cytoscape holds is what the plan counted. A drawn set that differed from the number
-	// on the strip would make every count on this screen a claim about a different picture.
-	assert.equal(cy.elements().length, plan.elementCount);
-	cy.destroy();
+	// No dangling edge. A collapse that hid a node and kept an edge to it would draw a line to
+	// nowhere, which the canvas renders as no line at all.
+	const drawn = new Set(plan.nodes.map((node) => node.id));
+	const dangling = plan.edges.filter((edge) => !drawn.has(edge.source) || !drawn.has(edge.target));
+	assert.deepEqual(dangling, [], `${dangling.length} edges point at a node the collapse hid`);
+
+	// And every node the plan kept gets a position, so nothing the ledger did NOT account for
+	// disappears between the plan and the picture.
+	const placed = overviewLayout(plan.nodes, plan.edges).positions;
+	assert.equal(placed.size, plan.nodes.length);
+	assert.ok(placed.has(hubNodeId(hub)), 'the collapsed hub itself has to be on the canvas');
 });
 
-test('the graph screen emits meta-nodes before the children that name them', () => {
-	// The ordering hazard the test above cannot see, checked where it lives. Cytoscape adds a
-	// collection in order, so a parent later in the array than its children produces a graph with no
-	// compounds in it — and the arithmetic, the ledger and the counts would all still be right.
-	const source = readFileSync(join(ROOT, 'src', 'app', 'GraphView.jsx'), 'utf8');
-	const metas = source.indexOf('plan.metaNodes.map');
-	const children = source.indexOf('plan.nodes.map');
-	assert.ok(metas > 0 && children > 0, 'the graph screen no longer maps the plan; this check is stale');
-	assert.ok(metas < children, 'the meta-nodes are emitted after their children, so no box will be drawn');
-});
-
-test('the counts on the screen are the plan’s, not the projection’s', () => {
-	// THE JOIN DEFECT, pinned where it lived.
+test('the overview draws the plan, not the projection the plan reduced', () => {
+	// THE JOIN DEFECT, pinned where it now lives.
 	//
-	// Two agents built this screen. The lens half computes `drawn` — the projection after the facet
-	// filters — and wrote the header and the fidelity strip against it. The hub half computes
-	// `plan`, which is `drawn` after the reductions, and draws the canvas from that. Wired that way
-	// a collapse produced three numbers about one picture: the canvas held the plan's, the ledger
-	// said "this view draws N of M", and the header above them both said M. The wrong one was the
-	// LARGER, which is the exact reading the hub programme exists to prevent — a reduced view that
-	// reads as a complete one.
+	// It is a defect in the wiring between two files that are individually correct. The overview
+	// half computes `overview` — every name and every fact — and the hub half computes `plan`, which
+	// is `overview` after the reductions. Wired the wrong way round, a collapse produces two numbers
+	// about one picture: the ledger says "this picture draws N of M" while the canvas is still
+	// holding M. The wrong one is the LARGER, which is the exact reading this programme exists to
+	// prevent — a reduced view that reads as a complete one.
 	//
-	// No test over `planView` could see it: every number involved was correct in the function that
-	// produced it. It is a join, so it is checked as one, on the source, in the direction that
-	// matters — the header and the strip must be fed the reduced view.
-	const source = readFileSync(join(ROOT, 'src', 'app', 'GraphView.jsx'), 'utf8');
+	// No test over `planView` can see it: every number involved is correct in the function that
+	// produced it. It is a join, so it is checked as one, on the source.
+	const source = readFileSync(join(ROOT, 'src', 'app', 'NamesView.jsx'), 'utf8');
 
-	for (const component of ['GraphHeader', 'Fidelity']) {
-		const at = source.indexOf(`<${component}`);
-		assert.ok(at > 0, `${component} is no longer rendered; this check is stale.`);
-		const props = source.slice(at, source.indexOf('/>', at));
-		assert.match(
-			props,
-			/drawn=\{plan\}/,
-			`${component} is handed the unreduced projection, so it will report elements a collapse has ` +
-				`already taken off the canvas.`,
+	const at = source.indexOf('<VaultCanvas');
+	assert.ok(at > 0, 'the overview no longer renders VaultCanvas; this check is stale.');
+	const props = source.slice(at, source.indexOf('/>', at));
+	for (const fed of ['nodes={plan.nodes}', 'edges={plan.edges}']) {
+		assert.ok(
+			props.includes(fed),
+			`the canvas is handed the unreduced projection, so it will draw elements a collapse has ` +
+				`already taken off it — expected ${fed}`,
 		);
 	}
+	// And the layout with it: a layout built from the projection would place the hidden nodes too,
+	// and the canvas would then find a position for everything and draw the whole star anyway.
+	assert.match(
+		source,
+		/overviewLayout\(plan\.nodes, plan\.edges\)/,
+		'the layout is built from the projection rather than from the plan',
+	);
 
-	// And the arithmetic behind the sentence those two render: on an unreduced view the plan and the
-	// projection agree exactly, so the clause naming the reduction cannot appear when there is none.
+	// The arithmetic behind the sentence the receipt renders: on an unreduced view the plan and the
+	// projection agree exactly, so the clause naming a reduction cannot appear when there is none.
 	const hub = detectRegime(HUB.graph).hubs[0];
 	const projection = hubProjection(HUB.graph, hub);
 	const quiet = planView(projection, {});
@@ -644,4 +638,81 @@ test('the counts on the screen are the plan’s, not the projection’s', () => 
 	const reduced = planView(projection, { collapsed: new Set([hubNodeId(hub)]) });
 	assert.ok(reduced.elementCount < reduced.unreduced.elementCount);
 	assert.ok(reduced.hidden.nodes + reduced.hidden.edges > 0);
+});
+
+// ================================================================================================
+// THE SILENCE — the assertion the old suite did not have
+// ================================================================================================
+
+test('on a real-shaped vault the regime reads no hub, nothing collapses, and the line says so', () => {
+	// THIS IS THE ASSERTION THE WHOLE PROGRAMME RESTS ON, and until now it was the one thing the
+	// suite did not check: that on a vault of the shape a person actually has — a few hundred names
+	// and a busiest one in single digits — the collapse correctly does not fire, and does not fire
+	// BECAUSE A NUMBER SAID SO.
+	//
+	// The distinction is the whole argument for keeping this code. "Nothing was collapsed" is also
+	// what a broken detector produces, what an unwired detector produces, and what no detector at
+	// all produces; all four look identical from the outside. So the test asserts the reading and
+	// not merely the outcome — the bar, where the bar came from, and the busiest name it was
+	// measured against — and then shows the same code path saying the opposite the moment a vault
+	// has a real hub, because a probe that cannot succeed has a null that means nothing.
+	const graph = WORKING.graph;
+	const stats = degreeStats(graph);
+
+	assert.ok(stats.max <= 12, `this fixture is meant to be real-shaped; its busiest name has ${stats.max}`);
+
+	// Driven through the door the overview uses, with the budget the overview enforces — not the
+	// module's own default. A reading taken under a cap nobody draws under is a number about a
+	// mechanism that did not run.
+	const overview = overviewElements(graph);
+	const regime = detectRegime(graph, { cap: OVERVIEW_CEILING });
+
+	assert.equal(regime.regime, 'working', 'a real-shaped vault must read as no hub');
+	assert.deepEqual(regime.hubs, [], 'and nothing in it may qualify as one');
+	assert.equal(regime.treatment, 'draw');
+	assert.equal(regime.forced, false);
+
+	// COMPUTED, not defaulted. If the threshold here were the floor, "nothing qualified" would be
+	// true of a constant rather than of this vault, and the sentence about deriving it from the
+	// distribution would be decoration.
+	assert.ok(
+		regime.threshold > COLLAPSE_FLOOR,
+		`the threshold fell back to the floor (${regime.threshold}), so it is not this vault's own`,
+	);
+	assert.equal(regime.threshold, stats.p99 * COLLAPSE_MULTIPLE);
+	assert.ok(stats.max < regime.threshold, 'the busiest name has to be under the bar, or it is a hub');
+
+	// NOTHING IS COLLAPSED, through the same call the screen makes on every draw.
+	const plan = planView(overview, { ...nothingReduced(), cap: OVERVIEW_CEILING });
+	assert.equal(plan.nodes.length, overview.nodes.length);
+	assert.equal(plan.edges.length, overview.edges.length);
+	assert.deepEqual(plan.ledger, []);
+	assert.equal(plan.metaNodes.length, 0);
+	assert.deepEqual(plan.hidden, { nodes: 0, edges: 0 });
+
+	// AND THE READER CAN SEE THAT. This is the exact line the overview's caption renders, and it has
+	// to carry all three of the things that make the silence checkable rather than absent: which
+	// name is the busiest, what the bar is, and the verdict that follows from the two.
+	const line = regimeLine(regime);
+	assert.ok(line.includes(stats.busiest), `the line does not name the busiest name: ${line}`);
+	assert.ok(line.includes(String(stats.max)), `the line does not carry its degree: ${line}`);
+	assert.ok(line.includes(regime.threshold.toLocaleString()), `the line does not carry the bar: ${line}`);
+	assert.match(line, /nothing here is big enough to need hiding/);
+
+	// THE INSTRUMENT IS CAPABLE OF THE OTHER ANSWER. Everything above is a null result, and a null
+	// from a probe that cannot succeed is not evidence. So the same three calls run again on a vault
+	// that does have a hub, and all three have to come back different.
+	const starred = buildGraph(hubVault({ hubDegree: 400, connectors: 30, tail: 200 }).records);
+	const starredRegime = detectRegime(starred, { cap: OVERVIEW_CEILING });
+	assert.equal(starredRegime.regime, 'hub');
+	assert.equal(starredRegime.hubs.length, 1);
+	assert.doesNotMatch(regimeLine(starredRegime), /nothing here is big enough to need hiding/);
+
+	const collapsed = planView(overviewElements(starred), {
+		...nothingReduced(),
+		collapsed: new Set([hubNodeId(starredRegime.hubs[0])]),
+		cap: OVERVIEW_CEILING,
+	});
+	assert.equal(collapsed.ledger.length, 1);
+	assert.ok(collapsed.hidden.nodes > 0, 'the collapse hid nothing, so this control proves nothing');
 });

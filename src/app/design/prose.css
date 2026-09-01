@@ -1,0 +1,198 @@
+/*
+ * A MEMORY'S OWN WORDS.
+ *
+ * "The one visual addition is a serif for memory prose — a memory is a document, and it should read
+ * like one." That is the only typographic change in the redesign, and this file is where it lands.
+ *
+ * `.md` is what the Markdown renderer emits. It is shared by every screen that shows a memory — the
+ * preview beside a list, the memory's own page, a quoted memory inside a merge — so the reading
+ * experience is decided once here rather than per screen.
+ *
+ * THE RENDERER IS NOT A MARKDOWN LIBRARY AND THIS FILE MUST NOT MAKE IT LOOK LIKE ONE. The prose in
+ * a vault was written by somebody else's agent; it is hostile input. The renderer emits a small,
+ * closed set of elements and neutralises links rather than following them, and the styles below
+ * cover exactly that set. An element with no rule here is an element the renderer does not emit.
+ */
+
+.md {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-prose);
+	font-size: var(--prose-md);
+	line-height: var(--leading-prose);
+	color: var(--text);
+	/* A measure. Past about 78 characters the eye loses the line return, which is the whole job. */
+	max-width: 68ch;
+}
+
+.md-lg {
+	font-size: var(--prose-lg);
+}
+
+.md > * {
+	margin: 0;
+}
+
+.md > * + * {
+	margin-top: var(--space-11);
+}
+
+.md h1,
+.md h2,
+.md h3 {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-weight: var(--weight-medium);
+	line-height: var(--leading-display);
+	color: var(--text);
+}
+
+.md h1 {
+	font-size: var(--display-sm);
+}
+
+.md h2 {
+	font-size: var(--display-xs);
+}
+
+.md h3 {
+	font-size: var(--prose-lg);
+}
+
+.md > h1 + *,
+.md > h2 + *,
+.md > h3 + * {
+	margin-top: var(--space-6);
+}
+
+/*
+ * The one place in the app where a list is a LIST and wants its markers back. `base.css` strips
+ * them everywhere, because every other `ul` in this product is a semantic grouping of rows that a
+ * bullet would only add noise to; a memory's own words are the exception, and the exception is
+ * named here rather than left to the user agent.
+ */
+.md ul,
+.md ol {
+	padding-left: var(--space-14);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+.md ul {
+	list-style: disc;
+}
+
+.md ol {
+	list-style: decimal;
+}
+
+.md li {
+	margin: 0;
+}
+
+/*
+ * Code inside prose stays in the mono face at the SIZE OF THE PROSE AROUND IT, minus a hair.
+ * IBM Plex Mono runs large against Newsreader at the same nominal size; 0.88em is what puts their
+ * x-heights on the same line.
+ */
+.md code {
+	font-family: var(--font-mono);
+	font-size: 0.88em;
+	background: var(--raised);
+	border-radius: 3px;
+	padding: 0.1em 0.32em;
+	overflow-wrap: anywhere;
+}
+
+.md-code {
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	background: var(--raised);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: var(--space-8) var(--space-10);
+	overflow-x: auto;
+}
+
+.md-code code {
+	background: none;
+	padding: 0;
+	font-size: inherit;
+}
+
+.md blockquote {
+	border-left: var(--border-marker) solid var(--line-strong);
+	padding-left: var(--space-11);
+	color: var(--muted);
+}
+
+.md hr {
+	border: 0;
+	height: 1px;
+	background: var(--line);
+}
+
+/*
+ * A LINK IN A MEMORY IS NOT FOLLOWED. The renderer emits the label and the target side by side
+ * rather than an anchor, because the prose came from an agent and a clickable target in it is a
+ * navigation somebody else chose for this reader. The styling has to make that legible rather than
+ * look like a broken link: the label reads normally and the target reads as what it is, a string.
+ */
+.md-unsafe-link {
+	color: var(--text);
+}
+
+.md-unsafe-href {
+	font-family: var(--font-mono);
+	font-size: var(--text-caption);
+	color: var(--faint);
+	overflow-wrap: anywhere;
+}
+
+/*
+ * A FACT, drawn as a sentence.
+ *
+ * "build cache — is keyed on — lockfile hash." Three screens draw this and it must be the same
+ * object on all three, because it is the thing an agent will actually act on and recognising one at
+ * a glance is what the reading screens are for. The endpoints are the page's ink; the relation is
+ * the accent chip in the middle.
+ */
+.facts {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+	font-size: var(--text-row);
+	line-height: var(--leading-snug);
+	color: var(--text);
+}
+
+.fact {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+}
+
+/* The editor's version: a bordered row, with the two endpoints pushed apart by the relation. */
+.fact-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: var(--space-10) var(--space-11);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+	background: var(--bg);
+	font-size: var(--text-ui-lg);
+}
+
+.fact-row-stale {
+	border-color: var(--warn-line);
+	background: var(--warn-soft);
+}
+
+.fact-note {
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--warn);
+}

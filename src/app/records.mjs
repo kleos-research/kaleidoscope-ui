@@ -116,21 +116,56 @@ export function toRow(record) {
  */
 const byId = (a, b) => String(a.memory_id).localeCompare(String(b.memory_id));
 
+/**
+ * THE DATE SORTS FIRST, AND THIS IS WHAT MAKES THE TIME HEADINGS TRUE.
+ *
+ * It sorted on `sequence` alone, for a good reason stated above: write order is monotonic where a
+ * day-granular date ties heavily. But `sequence` is the JOURNAL POSITION and `created_on` is a date
+ * the WRITER supplied, and on a real vault the two disagree constantly — a memory written this
+ * afternoon can carry an August date. BrowseScale groups the list under time headings, `groupRows`
+ * builds a group as a contiguous run of one bucket, and so a list ordered by one quantity and
+ * headed by another produced this, live, on 363 real memories:
+ *
+ *     TODAY 3 · YESTERDAY 50 · AUGUST 14 · AUGUST 1 · YESTERDAY 1 · AUGUST 1 · YESTERDAY 1 …
+ *
+ * — a heading emitted at every oscillation, most of them with nothing under them. `groupRows`
+ * already carries the rule this broke: "a heading over rows the sort does not order that way is a
+ * claim about them the sort does not make."
+ *
+ * So the displayed date is the primary key and the write order is the tie-break. The date's day
+ * granularity is no longer a problem, because `sequence` resolves every tie inside a day and the id
+ * resolves the rest: the order stays total and stable, and the ladder is now monotone by
+ * construction.
+ */
+/** Below any date a vault can hold, and finite. See `dateKey`. */
+const UNDATED = -8.64e15;
+
+const dateKey = (row) => {
+	const value = typeof row.created_on === 'string' ? Date.parse(row.created_on) : Number.NaN;
+	// An unreadable date sorts oldest rather than being dropped, which matches `timeBucket`'s
+	// "No date recorded" bucket sitting at the foot of the ladder. The sentinel is FINITE: with
+	// `-Infinity`, two undated rows subtract to `NaN` and the comparator returns it, which is
+	// undefined behaviour for `Array.prototype.sort` rather than a fall-through to the tie-break.
+	return Number.isNaN(value) ? UNDATED : value;
+};
+
 export const SORTS = {
 	written: {
-		label: 'Written',
-		compare: (a, b) => (b.sequence ?? -1) - (a.sequence ?? -1) || byId(a, b),
+		label: 'Newest first',
+		compare: (a, b) =>
+			dateKey(b) - dateKey(a) || (b.sequence ?? -1) - (a.sequence ?? -1) || byId(a, b),
 	},
 	written_asc: {
-		label: 'Written, oldest first',
-		compare: (a, b) => (a.sequence ?? -1) - (b.sequence ?? -1) || byId(a, b),
+		label: 'Oldest first',
+		compare: (a, b) =>
+			dateKey(a) - dateKey(b) || (a.sequence ?? -1) - (b.sequence ?? -1) || byId(a, b),
 	},
 	title: {
-		label: 'Title',
+		label: 'Title A–Z',
 		compare: (a, b) => String(a.title ?? '').localeCompare(String(b.title ?? '')) || byId(a, b),
 	},
 	facts: {
-		label: 'Fact count',
+		label: 'Most facts',
 		compare: (a, b) => b.fact_count - a.fact_count || byId(a, b),
 	},
 };
@@ -212,165 +247,81 @@ export function validityOf(semantic, now = Date.now()) {
 	return 'serving';
 }
 
-export const VALIDITY_LABELS = {
-	serving: 'Currently serving',
-	not_yet: 'Not yet',
-	no_longer: 'No longer',
-};
+/* ---------------------------------------------------------------------------------------------
+ * THE FACETS AND THE FILTER USED TO BE HERE, AND THEY ARE GONE RATHER THAN KEPT BESIDE THE NEW ONES.
+ *
+ * What stood in this space was `buildFacets`, `applyFilters`, `EMPTY_FILTERS`, `isFiltered` and the
+ * two label maps they read: the arithmetic behind a rail of always-open value lists that the owner
+ * could not use. "Also present in this vault \u2014 defect. I don't know this filter." \u00b7 "Applies to
+ * branch. I don't know why we have it, and I don't even know how this works." \u00b7 "I had to scroll
+ * for ten minutes for each."
+ *
+ * Its replacement is `browse-model.mjs`, which answers the same questions with five named facets and
+ * a time grouping. THE OLD ONE IS DELETED AND NOT DEPRECATED, for one specific reason: two modules
+ * exporting `EMPTY_FILTERS` and `isFiltered` under the same names with DIFFERENT SHAPES is not dead
+ * code, it is a loaded gun. An import resolved to the wrong one type-checks in a language with no
+ * types, renders, and silently narrows nothing \u2014 which looks exactly like a vault with one memory
+ * in it.
+ *
+ * What survives here is what is not about filtering: `validityOf` above, which `browse-model.mjs`
+ * reads for its "Still true" facet, and the project axis below, which is a switcher rather than a
+ * narrowing.
+ * ------------------------------------------------------------------------------------------- */
 
-export const RELATION_LABELS = {
-	corrects: 'Declares a correction',
-	contradicts: 'Declares a contradiction',
-	corrected_by: 'Corrected by another memory',
-	contradicted_by: 'Contradicted by another memory',
-};
+/* ---------------------------------------------------------------------------------------------
+ * THE PROJECT AXIS.
+ *
+ * "Project management should be a totally different thing. You can select which projects to display
+ * together, or you can have a general global view. And projects should be on the top. All of this
+ * comes under a project at the end of the day."
+ *
+ * So the project is not a facet and it does not go through `applyFilters`: it is a switcher at the
+ * top of the shell that decides WHICH ROWS THE SCREENS BELOW ARE ABOUT, before any filter runs. It
+ * never appears as a removable chip, because it is not one of several narrowings — it is the axis
+ * the rest of them are read along.
+ * ------------------------------------------------------------------------------------------- */
 
-/** Count how many loaded rows fall in each bucket of a facet, so an option can carry its own size. */
-function tally(rows, pick) {
-	const counts = new Map();
-	for (const row of rows) {
-		for (const value of pick(row)) counts.set(value, (counts.get(value) ?? 0) + 1);
-	}
-	return counts;
-}
+/** The field the scope object carries a project in. A field name, not a value. */
+export const PROJECT_AXIS = 'project';
 
 /**
- * Every facet's option list, computed from the loaded records — except the memory types, which come
- * from the engine's own vocabulary and are merely COUNTED here.
+ * The projects the loaded records actually mention, with how many memories each holds, plus the
+ * count of memories that carry no project at all.
  *
- * The difference matters and it is the reason the type control has a divider in it. The engine
- * returns two lists that are not the same: what a writer may declare, and what this workspace
- * already holds. A control built only from the loaded records cannot offer a declarable type that
- * nothing has used yet; a control built only from the declarable list hides a type that is in the
- * vault and cannot be written any more.
+ * The second number is not a project. It is reported separately because it means something
+ * different, and `withinProject` is where that difference is enforced.
  */
-export function buildFacets(rows, vocabulary, relations, now = Date.now()) {
-	const typeCounts = tally(rows, (row) => (row.memory_type ? [row.memory_type] : []));
-
-	const declarable = vocabulary?.declarable_memory_types ?? null;
-	const present = vocabulary?.memory_types ?? null;
-	const known = declarable ?? [];
-	const alsoPresent = (present ?? []).filter((value) => !known.includes(value));
-	// A type sitting on a record that neither list mentions is still a thing the user can see, so it
-	// is offered rather than dropped — the engine's lists describe the workspace, not this payload.
-	const unlisted = [...typeCounts.keys()].filter(
-		(value) => !known.includes(value) && !alsoPresent.includes(value),
-	);
-
-	const asOption = (value) => ({ value, count: typeCounts.get(value) ?? 0 });
-
-	const axes = scopeAxes(rows.map((row) => row.record));
-	const scope = axes.map((axis) => {
-		const counts = tally(rows, (row) => [row.scope?.[axis] ?? null]);
-		const options = [...counts.entries()]
-			.filter(([value]) => value !== null)
-			.map(([value, count]) => ({ value, count }))
-			.sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value)));
-		return {
-			axis,
-			copy: axisCopy(axis),
-			// The "every …" bucket is listed FIRST because it is usually the largest and it is the
-			// one whose meaning is inverted.
-			every: { value: null, count: counts.get(null) ?? 0 },
-			options,
-		};
-	});
-
-	const validityCounts = tally(rows, (row) => {
-		const bucket = validityOf(row.record?.semantic, now);
-		return bucket ? [bucket] : [];
-	});
-
-	const relationCounts = new Map();
-	for (const key of Object.keys(RELATION_LABELS)) {
-		let count = 0;
-		for (const row of rows) if ((relations.get(row.memory_id)?.[key] ?? []).length > 0) count += 1;
-		relationCounts.set(key, count);
+export function projectOptions(rows) {
+	const counts = new Map();
+	let everywhere = 0;
+	for (const row of rows) {
+		const value = row.scope?.[PROJECT_AXIS] ?? null;
+		if (value === null) everywhere += 1;
+		else counts.set(value, (counts.get(value) ?? 0) + 1);
 	}
-
 	return {
-		types: {
-			declarable: known.map(asOption),
-			also_present: alsoPresent.map(asOption),
-			unlisted: unlisted.map(asOption),
-			// True when the engine told us nothing — a control with no values invites a user to
-			// conclude the vault has no types, so the screen says which is the case.
-			vocabulary_missing: declarable === null && present === null,
-		},
-		scope,
-		validity: [...Object.keys(VALIDITY_LABELS)].map((value) => ({
-			value,
-			count: validityCounts.get(value) ?? 0,
-		})),
-		relations: [...Object.keys(RELATION_LABELS)].map((value) => ({
-			value,
-			count: relationCounts.get(value) ?? 0,
-		})),
+		projects: [...counts.entries()]
+			.map(([value, count]) => ({ value, label: value, count }))
+			.sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value))),
+		everywhere,
 	};
 }
 
-export const EMPTY_FILTERS = {
-	text: '',
-	types: [],
-	scope: {}, // axis -> array of values; the string ' every' stands for the null bucket
-	validity: [],
-	relations: [],
-	from_sequence: null,
-	to_sequence: null,
-};
-
-/** The sentinel for "this axis was left out", which is a real bucket and not a missing value. */
-export const EVERY = ' every';
-
-export function isFiltered(filters) {
-	return (
-		filters.text.trim().length > 0 ||
-		filters.types.length > 0 ||
-		filters.validity.length > 0 ||
-		filters.relations.length > 0 ||
-		filters.from_sequence !== null ||
-		filters.to_sequence !== null ||
-		Object.values(filters.scope).some((values) => values?.length > 0)
-	);
-}
-
 /**
- * Apply every filter, in the browser, over rows already in memory.
+ * The rows a chosen project is about — AND THIS IS THE HONEST PART.
  *
- * NOTHING IN THIS FUNCTION MAY BECOME A REQUEST. It is the honest answer to a type-ahead: exact,
- * instant, and it writes nothing. The ranked door that a "real" search would use records every
- * distinct query string it is given, permanently, in a store nothing published reads back — so a
- * filter box wired to it turns browsing into a keystroke log inside the vault. If this ever feels
- * too weak, the fix is a better index HERE, not a call from here.
+ * A memory written with no project APPLIES EVERYWHERE: the engine offers it to an agent working on
+ * anything, because an omitted scope axis matches every request. So choosing a project must INCLUDE
+ * those memories rather than exclude them. Treating "no project" as a project called none would
+ * hide, from the project view, exactly the memories that are most certainly in force there — and
+ * the screen would be quietly asserting the opposite of what the store does.
+ *
+ * `null` means every project, which is every row.
  */
-export function applyFilters(rows, filters, relations) {
-	const needle = filters.text.trim().toLowerCase();
-
+export function withinProject(rows, project) {
+	if (project === null || project === undefined) return rows;
 	return rows.filter((row) => {
-		if (needle && !row.haystack.includes(needle)) return false;
-		if (filters.types.length > 0 && !filters.types.includes(row.memory_type)) return false;
-
-		for (const [axis, values] of Object.entries(filters.scope)) {
-			if (!values || values.length === 0) continue;
-			const actual = row.scope?.[axis] ?? null;
-			const key = actual === null ? EVERY : actual;
-			if (!values.includes(key)) return false;
-		}
-
-		if (filters.validity.length > 0) {
-			const bucket = validityOf(row.record?.semantic);
-			if (!bucket || !filters.validity.includes(bucket)) return false;
-		}
-
-		if (filters.relations.length > 0) {
-			const entry = relations.get(row.memory_id);
-			const matches = filters.relations.some((key) => (entry?.[key] ?? []).length > 0);
-			if (!matches) return false;
-		}
-
-		if (filters.from_sequence !== null && (row.sequence ?? -1) < filters.from_sequence) return false;
-		if (filters.to_sequence !== null && (row.sequence ?? -1) > filters.to_sequence) return false;
-
-		return true;
+		const value = row.scope?.[PROJECT_AXIS] ?? null;
+		return value === null || value === project;
 	});
 }

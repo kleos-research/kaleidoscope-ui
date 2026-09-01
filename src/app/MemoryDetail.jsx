@@ -1,35 +1,81 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { fetchLineage } from './api.mjs';
+import { useFocusActions } from './focus-actions.mjs';
 import { Markdown } from './markdown.jsx';
-import { scopeAxes } from './records.mjs';
+import { axisCopy, scopeAxes } from './records.mjs';
 import { ESCALATION_TITLE, REMOVE_LABEL } from './removal-model.mjs';
-import { Chip, Disclosure, Identifier, NotRecorded, ScopeLine } from './ui.jsx';
+import { exact, written } from './when.mjs';
+import {
+	Badge,
+	Button,
+	Card,
+	DetailRow,
+	DetailRows,
+	Display,
+	DropdownMenu,
+	Evidence,
+	FactList,
+	FactSentence,
+	Icon,
+	IconButton,
+	Identifier,
+	LinkCard,
+	MenuItem,
+	MenuSeparator,
+	NamedThing,
+	Note,
+	NotRecorded,
+	NoteQuote,
+	Reading,
+	ReadingPair,
+	Readings,
+	ScopeLine,
+	Section,
+	Verbatim,
+} from './ui/index.mjs';
 
 /**
- * One memory, in full.
+ * ONE MEMORY, READ — `ReadB` and `ReadEvidence`, which are one screen drawn twice.
  *
- * It renders from THE SAME CACHED RECORD AS THE ROW. There is exactly one path to a memory's
- * content in this app, so the list and this page cannot disagree about what a memory says. The one
- * call this page can make is the lineage read behind the corrections panel, it happens only when a
- * reader expands that panel, it writes nothing, and it is cached against the memory's version.
+ * THE SHAPE IS THE FIX. The owner's complaint about the old page was positional, not aesthetic:
+ * "there's a huge note, which I understand; I have to scroll quite a lot below to facts, named
+ * things, then some evidence". So the words are a column and the things an agent acts on are a
+ * rail beside them that does not scroll away, and everything that is neither becomes a closed row
+ * with its count showing.
+ *
+ * IT RENDERS FROM THE SAME CACHED RECORD AS THE ROW. There is exactly one path to a memory's
+ * content in this app, so the list and this page cannot disagree about what a memory says, and
+ * NOTHING IS FETCHED WHEN THIS SCREEN OPENS. The one call it can make is the lineage read behind a
+ * closed row, it happens only when a reader opens that row, it writes nothing, and it is cached
+ * against the memory's version.
+ *
+ * THE THREE KINDS OF LINK, WHICH ARE NOT THE SAME KIND OF THING, and this file's main job is to
+ * stop the screen pretending they are:
+ *
+ *   EVIDENCE is a pointer the writer left — a path, a command, a sentence somebody said. It is on
+ *   most memories and NOTHING WAS VERIFIED WHEN IT WAS WRITTEN, which the footnote says out loud.
+ *
+ *   A CORRECTION is `{handle, says}` — FREE TEXT, with no stored link to any memory at all. The
+ *   previous build resolved the handle against every title it happened to have loaded and rendered
+ *   a link "matched by title": a heuristic wearing a relationship's clothes. So this screen quotes
+ *   the writer's own sentence, marks it "a note, not a link", and offers a SEARCH for the handle —
+ *   which is the honest version of the same help.
+ *
+ *   CONTRADICTS is a real stored list of memory ids, and it is rare. It appears only when the
+ *   record carries one, it is marked "a real link", and it navigates.
  *
  * A note on labels. The KEYS on a record — `basis`, `mode`, `about`, `scope.project` — are the
  * structure of the write contract and are stable, so this file names them. The VALUES in them are
- * open registries and this file names none of them: types, kinds, relation names and qualifier keys
- * are rendered as whatever the record spells them. An `about` key this app has never seen is data,
- * not an error, and appears under its own name.
- *
- * The engine's contract also carries a one-line gloss for each field. They are deliberately NOT
- * used as the labels here: they are written for the agent doing the writing, and several of them
- * describe how the engine decides things, which is not what a person reading their own memory needs
- * on the screen.
+ * open registries and this file names none of them: types, kinds, relation names and qualifier
+ * keys are rendered as whatever the record spells them. An `about` key this app has never seen is
+ * data, not an error, and appears under its own name.
  */
 
-/** One call per memory version, ever. Re-expanding the panel is free; collapsing costs nothing. */
+/** One call per memory version, ever. Re-opening the row is free; closing it costs nothing. */
 const lineageCache = new Map();
 
-const has = (list) => Array.isArray(list) && list.length > 0;
+const listOf = (value) => (Array.isArray(value) ? value : []);
 
 export function MemoryDetail({
 	row,
@@ -37,7 +83,6 @@ export function MemoryDetail({
 	rows,
 	strippedFields,
 	onOpen,
-	onBack,
 	onEdit,
 	onRemove,
 	onShowLimits,
@@ -45,241 +90,393 @@ export function MemoryDetail({
 	const record = row.record;
 	const semantic = record?.semantic ?? {};
 	const axes = scopeAxes([record]);
+
+	const facts = listOf(semantic.facts);
+	const entities = listOf(semantic.entities);
+	const evidence = listOf(semantic.evidence);
+	const corrections = listOf(semantic.corrections);
+
 	const links = relations.get(row.memory_id) ?? {
 		corrects: [],
 		contradicts: [],
 		corrected_by: [],
 		contradicted_by: [],
 	};
-	const titleOf = (memoryId) => rows.find((r) => r.memory_id === memoryId)?.title ?? memoryId;
+	const rowOf = (memoryId) => rows.find((candidate) => candidate.memory_id === memoryId) ?? null;
+	const titleOf = (memoryId) => rowOf(memoryId)?.title ?? memoryId;
+
+	/*
+	  THE CONTROLS GO UP INTO THE ONE BAR. Every approved reading mockup draws Edit and an overflow
+	  in the 56px bar and nothing else above the title; a second row of chrome is exactly what a
+	  reader has to scroll past before reaching what they opened. The handlers are held in a ref so
+	  the bar is rebuilt when the MEMORY changes and not when this component re-renders for a row
+	  somebody opened.
+	*/
+	const actions = useRef(null);
+	actions.current = { onEdit, onRemove, onShowLimits };
+	useFocusActions(
+		() => (
+			<MemoryActions
+				row={row}
+				onEdit={actions.current.onEdit}
+				onRemove={actions.current.onRemove}
+				onShowLimits={actions.current.onShowLimits}
+			/>
+		),
+		[row.memory_id, row.version_id],
+	);
+
+	/*
+	  WHICH TWO CARDS THE RAIL CARRIES, and it is a rule rather than a fixed pair because the two
+	  mockups draw two different second cards. `ReadB` has one piece of evidence and three named
+	  things and puts NAMED THINGS in the rail; `ReadEvidence` has four pieces of evidence and three
+	  named things and puts EVIDENCE there. The property that separates them is which one is the
+	  bigger part of this particular memory — so that is what decides, and the loser becomes a closed
+	  row with its count showing rather than disappearing. Ties go to named things, because a name is
+	  what the graph screens are reached by and evidence is not.
+	*/
+	const evidenceLeads = evidence.length > entities.length;
 
 	return (
-		<article className="detail">
-			<nav className="detail-nav">
-				<button type="button" className="link-button" onClick={onBack}>
-					‹ Memories
-				</button>
-				{/*
-				  The way in to the editor, and the ONLY one. What is on this page came from the
-				  door that displays a memory, which does not carry its entity declarations — so
-				  nothing here is handed onwards as the thing a save is built from. The editor
-				  re-loads the memory through the door that does, on every open.
-				*/}
-				{onEdit ? (
-					<button type="button" className="button" onClick={() => onEdit(row.memory_id)}>
-						Edit
-					</button>
-				) : null}
-
-				{/*
-				  THE SAME LABEL AS EVERYWHERE ELSE, AND NO TRASH ICON.
-				
-				  A trash icon is a picture of incineration and this action is not one: it hides the
-				  memory from everything that reads, and the text stays on disk. The word is what
-				  carries that, so the word is what appears — here, in the overflow, in the bulk bar
-				  and in the report. Nothing is sent from this button; it opens the confirmation.
-				*/}
-				{onRemove ? (
-					<button
-						type="button"
-						className="button"
-						onClick={() => onRemove(row)}
-						title={REMOVE_LABEL}
-					>
-						{REMOVE_LABEL}
-					</button>
-				) : null}
-
-				{/*
-				  "Make this count for more" rather than "Promote". The word promote implies a rank,
-				  and the store has no field for one — no priority, no importance, no pin. What the
-				  screen behind this link offers is the four edits that DO change where and how long a
-				  memory applies, each named for the field it changes, and it says the negative half
-				  first.
-				*/}
-				<a className="button" href={`#/m/${encodeURIComponent(row.memory_id)}/promote`}>
-					Make this count for more…
-				</a>
-
-				{onShowLimits ? <OverflowMenu row={row} onShowLimits={onShowLimits} /> : null}
-			</nav>
-
-			<header className="detail-head">
-				<h1>{row.title ?? <NotRecorded what="title" />}</h1>
-				<div className="detail-type">
-					{row.memory_type ? <Chip>{row.memory_type}</Chip> : <NotRecorded what="type" />}
-				</div>
-
-				<dl className="detail-meta">
-					<dt>Applies to</dt>
-					<dd>
-						<ScopeLine scope={row.scope} axes={axes} />
-					</dd>
-
-					<dt>Written</dt>
-					<dd>
-						{row.created_on ?? <NotRecorded what="first written" />}
-						{row.sequence === null ? null : (
-							<span className="muted"> · write order {row.sequence}</span>
+		<Reading
+			rail={
+				<>
+					<Card title="What your agent acts on">
+						{facts.length === 0 ? (
+							/*
+							  A statement of fact, not a warning. A memory that is only prose is a legitimate
+							  and common regime: it is still served, and nothing about it is wrong.
+							*/
+							<Note>
+								This memory states no facts. Its words are still served; an agent reads them as
+								they are written.
+							</Note>
+						) : (
+							<FactList rail>
+								{facts.map((fact, index) => (
+									<FactSentence
+										key={index}
+										subject={fact?.subject}
+										predicate={fact?.predicate}
+										object={fact?.object}
+									/>
+								))}
+							</FactList>
 						)}
-					</dd>
+					</Card>
 
+					{evidenceLeads ? (
+						<EvidenceCard items={evidence} />
+					) : (
+						<NamedThingsCard entities={entities} undeclared={row.undeclared_endpoints} />
+					)}
+				</>
+			}
+		>
+			<header className="reading-head">
+				<Display level={1} size="2xl">
+					{row.title ?? <NotRecorded what="title" />}
+				</Display>
+				<div className="reading-meta">
+					{row.memory_type ? <Badge>{row.memory_type}</Badge> : <NotRecorded what="type" />}
+					<span title={exact(row.created_on) ?? undefined}>
+						{written(row.created_on) ?? 'written, date not recorded'}
+					</span>
 					{/*
-					  Visible on purpose, in full, and selectable. The version identity is what a save
-					  conflict quotes back, and a user comparing two of them is comparing character by
-					  character — so nothing here is shortened, in the text or in the DOM.
+					  The separator travels WITH the phrase it separates. As two flex siblings the line
+					  wrapped between them and left a bare "·" hanging at the end of the first row.
 					*/}
-					<dt>Version</dt>
-					<dd>
-						<Identifier value={row.version_id} label="version identity" />
-					</dd>
-
-					<dt>Memory</dt>
-					<dd>
-						<Identifier value={row.memory_id} label="memory id" />
-					</dd>
-				</dl>
+					<span className="reading-meta-scope">
+						<span aria-hidden="true">·</span>{' '}
+						<ScopeLine scope={row.scope} axes={axes} phrase={axisCopy} only="set" />
+					</span>
+				</div>
 			</header>
 
-			<section className="panel">
-				<h2>Note</h2>
-				{record?.content_md ? (
-					<Markdown source={record.content_md} />
+			{record?.content_md ? (
+				<Markdown source={record.content_md} size="lg" title={row.title} />
+			) : (
+				<p className="prose prose-lg">
+					<NotRecorded what="note body" />
+				</p>
+			)}
+
+			<Corrections corrections={corrections} />
+
+			<Disagreements links={links} rowOf={rowOf} titleOf={titleOf} onOpen={onOpen} />
+
+			<DetailRows>
+				{evidenceLeads ? (
+					<DetailRow label="Named things" count={entities.length}>
+						<NamedThingsList entities={entities} undeclared={row.undeclared_endpoints} />
+					</DetailRow>
 				) : (
-					<p>
-						<NotRecorded what="note body" />
-					</p>
+					<DetailRow label="Evidence" count={evidence.length}>
+						<EvidenceList items={evidence} />
+					</DetailRow>
 				)}
-			</section>
 
-			<Facts facts={semantic.facts ?? []} />
+				<DetailRow label="How long this applies">
+					<Timing semantic={semantic} row={row} axes={axes} />
+				</DetailRow>
 
-			<NamedThings entities={semantic.entities ?? []} undeclared={row.undeclared_endpoints} />
+				<DetailRow label="History and identifiers">
+					<Identity row={row} semantic={semantic} titleOf={titleOf} onOpen={onOpen} />
+				</DetailRow>
 
-			<Disclosure title="Evidence" count={(semantic.evidence ?? []).length}>
-				{has(semantic.evidence) ? (
-					<ul className="plain">
-						{semantic.evidence.map((item, index) => (
-							<li key={index}>
-								<span className="key">{item?.kind ?? 'evidence'}</span>{' '}
-								<span className="evidence-ref">{item?.reference}</span>
-								{item?.digest ? (
-									<>
-										{' '}
-										<Identifier value={item.digest} label="digest" />
-									</>
-								) : null}
-							</li>
-						))}
-					</ul>
-				) : (
-					<p className="neutral">This memory references no evidence.</p>
-				)}
-			</Disclosure>
+				{/*
+				  What the vault itself says points AT this memory, as opposed to what the memories on
+				  this screen imply. The two can differ and the difference is honest — the inversion
+				  above sees only the loaded set. It is a closed row because opening it is the only
+				  thing on this page that costs a call.
+				*/}
+				<LineageRow
+					memoryId={row.memory_id}
+					versionId={row.version_id}
+					titleOf={titleOf}
+					onOpen={onOpen}
+				/>
 
-			<Timing semantic={semantic} row={row} />
-
-			<Relations
-				memoryId={row.memory_id}
-				versionId={row.version_id}
-				links={links}
-				titleOf={titleOf}
-				onOpen={onOpen}
-			/>
-
-			<Admission admission={semantic.admission} titleOf={titleOf} onOpen={onOpen} />
-
-			{has(semantic.propose) ? (
-				<Disclosure title="Proposed relations" count={semantic.propose.length}>
-					<p className="neutral">
-						Relations the writer of this memory believed it was inventing, with the meaning it
-						supplied.
-					</p>
-					<ul className="plain">
-						{semantic.propose.map((proposal, index) => (
-							<li key={index}>
-								<span className="key">{proposal?.rel}</span>
-								{proposal?.means ? <span className="proposal-means"> — {proposal.means}</span> : null}
-								<span className="muted">
+				{listOf(semantic.propose).length > 0 ? (
+					<DetailRow label="Relations this memory proposed" count={semantic.propose.length}>
+						<Note>
+							Relations the writer believed it was inventing, with the meaning it supplied.
+						</Note>
+						<Readings>
+							{semantic.propose.map((proposal, index) => (
+								<ReadingPair key={index} term={proposal?.rel}>
+									{proposal?.means ?? <NotRecorded what="what the relation means" />}
 									{proposal?.inverse ? ` · inverse ${proposal.inverse}` : ''}
 									{proposal?.over_time ? ` · ${proposal.over_time}` : ''}
 									{proposal?.many === true ? ' · many' : ''}
-								</span>
-							</li>
-						))}
-					</ul>
-				</Disclosure>
-			) : null}
+								</ReadingPair>
+							))}
+						</Readings>
+					</DetailRow>
+				) : null}
 
-			{semantic.context ? (
-				<Disclosure title="Source text">
-					<p className="neutral">
-						The text this memory was extracted from, stored verbatim so a reader can check the
-						extraction against what was actually said.
-					</p>
-					<pre className="verbatim">{semantic.context}</pre>
-				</Disclosure>
-			) : null}
+				{semantic.context ? (
+					<DetailRow label="The text this was taken from">
+						<Note>
+							Stored word for word, so a reader can check the extraction against what was
+							actually said.
+						</Note>
+						<Verbatim scroll>{semantic.context}</Verbatim>
+					</DetailRow>
+				) : null}
 
-			<Provenance row={row} axes={axes} />
-
-			<RawRecord record={record} strippedFields={strippedFields} />
-		</article>
+				<DetailRow label="The record as it arrived">
+					<RawRecord record={record} strippedFields={strippedFields} />
+				</DetailRow>
+			</DetailRows>
+		</Reading>
 	);
 }
 
 /**
- * The overflow menu, which exists for exactly one entry.
+ * THE ACTIONS, WHICH LIVE IN THE ONE BAR AND NOT IN A SECOND ROW UNDER IT.
  *
- * "What removal cannot do" is reachable from here and from the removal confirmation, and from
- * nowhere else. It is NOT a checkbox on the confirmation: a checkbox would say the product has a
- * stronger removal to offer if you tick it, and it does not. This is a different activity with a
- * different outcome, so it is a different screen — and the menu is how a person who already knows
- * that gets to it without opening a dialog first.
+ * Every approved reading mockup draws exactly two controls up there: a filled `Edit` and an
+ * overflow. A second row of chrome is precisely the thing a reader has to scroll past before
+ * reaching what they opened, so this is handed to the shell's focus bar and the screen below it
+ * begins with the memory's own title.
  *
- * `<details>` rather than a popover: it closes on Escape, it is keyboard-reachable with nothing
- * bound here, and it needs no state that could get stuck open.
+ * Removal is in the OVERFLOW rather than beside Edit, and it is called the same thing here as in
+ * the list, the confirmation and the report — the word is what carries the difference between
+ * hiding a memory and ending it, so a second spelling is a second promise. There is no trash glyph
+ * anywhere in this product: that is a picture of incineration and this action is not one.
  */
-function OverflowMenu({ row, onShowLimits }) {
+export function MemoryActions({ row, onEdit, onRemove, onShowLimits }) {
+	const id = encodeURIComponent(row.memory_id);
 	return (
-		<details className="overflow">
-			<summary aria-label="More about this memory">⋯</summary>
-			<div className="overflow-body">
+		<>
+			{/*
+			  THE ONLY WAY IN TO THE EDITOR. What is on this page came from the door that displays a
+			  memory, which does not carry its entity declarations — so nothing here is handed onwards
+			  as the thing a save is built from. The editor re-loads the memory through the door that
+			  does, on every open.
+			*/}
+			{onEdit ? (
+				<Button tone="primary" onClick={() => onEdit(row.memory_id)}>
+					Edit
+				</Button>
+			) : null}
+
+			<DropdownMenu
+				trigger={
+					<IconButton label="More about this memory">
+						<Icon.More size={15} />
+					</IconButton>
+				}
+			>
+				{onRemove ? <MenuItem onSelect={() => onRemove(row)}>{REMOVE_LABEL}</MenuItem> : null}
+				<MenuSeparator />
 				{/*
-				  The way in to the merge composition, and it is in the overflow rather than in the nav
-				  for the same reason the escalation is: it is a two-memory action started from a
-				  one-memory page, and it opens a screen where the other memory is named before anything
-				  is composed. Nothing is written from this click.
+				  A two-memory action started from a one-memory page, so it opens a screen where the
+				  other memory is named before anything is composed. Nothing is written from this click.
 				*/}
-				<a className="link-button" href={`#/m/${encodeURIComponent(row.memory_id)}/merge`}>
+				<MenuItem onSelect={() => (window.location.hash = `#/m/${id}/merge`)}>
 					Merge this into another memory…
-				</a>
-				<button
-					type="button"
-					className="link-button"
-					onClick={() => onShowLimits(row.memory_id)}
-				>
-					{ESCALATION_TITLE}
-				</button>
-			</div>
-		</details>
+				</MenuItem>
+				{/*
+				  "Make this count for more" rather than "Promote". The word promote implies a rank and
+				  the store has no field for one — no priority, no importance, no pin. What the screen
+				  behind this offers is the edits that DO change where and how long a memory applies,
+				  each named for the field it changes, and it says the negative half first.
+				*/}
+				<MenuItem onSelect={() => (window.location.hash = `#/m/${id}/promote`)}>
+					Make this count for more…
+				</MenuItem>
+				{onShowLimits ? (
+					<>
+						<MenuSeparator />
+						<MenuItem onSelect={() => onShowLimits(row.memory_id)}>{ESCALATION_TITLE}</MenuItem>
+					</>
+				) : null}
+			</DropdownMenu>
+		</>
 	);
 }
 
-/** The keys this app renders in their own place. Everything else on a fact is shown as itself. */
-const HANDLED_FACT_KEYS = new Set([
-	'subject',
-	'predicate',
-	'object',
-	'basis',
-	'mode',
-	'from',
-	'until',
-	'about',
-	'evidence',
-	'because',
-	'confidence_millionths',
-]);
+/* ------------------------------------------------------------------------------- the evidence */
+
+/**
+ * The one sentence this app says about what evidence IS, and it is attached to every rendering of
+ * it. A list of paths under a heading reads as a citation list; these are pointers somebody left.
+ */
+const EVIDENCE_FOOTNOTE =
+	'Pointers the writer left so you can check the claim. Nothing here was verified when it was written.';
+
+function EvidenceList({ items }) {
+	if (items.length === 0) {
+		return <Note>This memory points at nothing outside itself.</Note>;
+	}
+	return <Evidence items={items} footnote={EVIDENCE_FOOTNOTE} />;
+}
+
+function EvidenceCard({ items }) {
+	return (
+		<Card title="Where this came from" aside={items.length}>
+			<EvidenceList items={items} />
+		</Card>
+	);
+}
+
+/* ---------------------------------------------------------------------------- the named things */
+
+function NamedThingsList({ entities, undeclared }) {
+	if (entities.length === 0) {
+		// Neutral, and deliberately so: a large share of agent-written memories declare nothing, and
+		// their facts still stand.
+		return (
+			<Note>
+				This memory declares no named things. Its facts still stand; nothing about it is wrong.
+			</Note>
+		);
+	}
+	return (
+		<>
+			{undeclared > 0 ? (
+				<Note tone="warn">
+					{undeclared} fact{undeclared === 1 ? '' : 's'} here name something this memory does not
+					declare.
+				</Note>
+			) : null}
+			{entities.map((entity, index) => (
+				<NamedThing key={index} name={entity?.n} kind={entity?.kind} gloss={entity?.is} />
+			))}
+		</>
+	);
+}
+
+function NamedThingsCard({ entities, undeclared }) {
+	return (
+		<Card title="Named things">
+			<NamedThingsList entities={entities} undeclared={undeclared} />
+		</Card>
+	);
+}
+
+/* ------------------------------------------------------------------ a note, and a real link */
+
+/**
+ * WHAT THE WRITER SAID THEY WERE FIXING. Prose, in their words, under the handle they chose.
+ *
+ * There is NO STORED LINK behind any of this. The field is free text and most handles in a real
+ * vault name nothing that exists, so the screen offers the search a reader would run anyway rather
+ * than a link that resolves by coincidence of title. The badge says which of the two this is
+ * before the reader has read a word of it.
+ */
+function Corrections({ corrections }) {
+	if (corrections.length === 0) return null;
+
+	return (
+		<Section title="What this was fixing" mark={<Badge tone="warn">a note, not a link</Badge>}>
+			{corrections.map((correction, index) => {
+				const handle = String(correction?.handle ?? '').trim();
+				return (
+					<NoteQuote key={index} handle={handle || 'no handle recorded'} says={correction?.says}>
+						The writer named what they were correcting in their own words. Nothing in the vault
+						ties that to a particular memory, so this app will not pretend it does —{' '}
+						{handle ? (
+							<a href={`#/search?q=${encodeURIComponent(handle)}`}>search for “{handle}”</a>
+						) : (
+							'and the handle they used was left empty'
+						)}{' '}
+						to find what they meant.
+					</NoteQuote>
+				);
+			})}
+		</Section>
+	);
+}
+
+/**
+ * THE STORED LINK, IN BOTH DIRECTIONS, and it appears only when there is one.
+ *
+ * `contradicts` carries memory ids, so a resolution `by_id` is the vault's own statement and
+ * nothing else counts here: a handle that merely matches some title is a guess, and a guess with a
+ * chevron on it is indistinguishable on screen from a fact. Rare by design — a few memories in a
+ * few hundred — which is why an empty section is no section at all rather than an empty one.
+ */
+function Disagreements({ links, rowOf, titleOf, onOpen }) {
+	const outbound = links.contradicts.filter((link) => link.how === 'by_id' && link.target);
+	const inbound = links.contradicted_by.filter((link) => link.how === 'by_id' && link.from);
+	if (outbound.length === 0 && inbound.length === 0) return null;
+
+	const card = (memoryId, key) => {
+		const other = rowOf(memoryId);
+		return (
+			<LinkCard
+				key={key}
+				title={titleOf(memoryId)}
+				meta={
+					other
+						? [other.memory_type, written(other.created_on)].filter(Boolean).join(' · ') || null
+						: null
+				}
+				onClick={() => onOpen(memoryId)}
+			/>
+		);
+	};
+
+	return (
+		<>
+			{outbound.length > 0 ? (
+				<Section title="Disagrees with" mark={<Badge tone="accent">a real link</Badge>}>
+					{outbound.map((link, index) => card(link.target, index))}
+				</Section>
+			) : null}
+			{inbound.length > 0 ? (
+				<Section title="Disagreed with by" mark={<Badge tone="accent">a real link</Badge>}>
+					{inbound.map((link, index) => card(link.from, index))}
+				</Section>
+			) : null}
+		</>
+	);
+}
+
+/* ------------------------------------------------------------------------------ the closed rows */
 
 function timeText(value) {
 	if (!value) return null;
@@ -290,136 +487,6 @@ function timeText(value) {
 	return null;
 }
 
-function qualifierText(value) {
-	const asTime = timeText(value);
-	if (asTime) return asTime;
-	if (value === null || value === undefined) return null;
-	if (typeof value === 'object') return JSON.stringify(value);
-	return String(value);
-}
-
-function Facts({ facts }) {
-	return (
-		<section className="panel">
-			<h2>
-				Facts <span className="panel-count">{facts.length}</span>
-			</h2>
-			{facts.length === 0 ? (
-				<p className="neutral">This memory states no facts.</p>
-			) : (
-				<ul className="facts">
-					{facts.map((fact, index) => {
-						const extra = Object.entries(fact ?? {}).filter(
-							([key, value]) =>
-								!HANDLED_FACT_KEYS.has(key) && value !== null && value !== undefined,
-						);
-						const about = Object.entries(fact?.about ?? {});
-						const from = timeText(fact?.from);
-						const until = timeText(fact?.until);
-						const confidence =
-							typeof fact?.confidence_millionths === 'number'
-								? (fact.confidence_millionths / 1_000_000).toFixed(2)
-								: null;
-
-						return (
-							<li key={index} className="fact">
-								<p className="statement">
-									<span className="subject">{fact?.subject}</span>
-									<span className="predicate">{fact?.predicate}</span>
-									<span className="object">{fact?.object}</span>
-								</p>
-
-								<p className="fact-qualifiers">
-									{fact?.basis ? (
-										<span className="qualifier">
-											<span className="key">how we know</span> {fact.basis}
-										</span>
-									) : null}
-									{fact?.mode ? (
-										<span className="qualifier">
-											<span className="key">kind of claim</span> {fact.mode}
-										</span>
-									) : null}
-									{from ? (
-										<span className="qualifier">
-											<span className="key">true from</span> {from}
-										</span>
-									) : null}
-									{until ? (
-										<span className="qualifier">
-											<span className="key">until</span> {until}
-										</span>
-									) : null}
-									{about.map(([key, value]) => (
-										// A qualifier key this app has never seen renders under its own name.
-										// An unknown key is data, not an error.
-										<span className="qualifier" key={key}>
-											<span className="key">{key}</span> {qualifierText(value)}
-										</span>
-									))}
-									{confidence ? (
-										// Read-only, and labelled, because it is derived: the write contract
-										// does not accept it, so a user who edited it would be editing nothing.
-										<span className="qualifier qualifier-derived" title="computed by kscope">
-											<span className="key">confidence</span> {confidence}
-										</span>
-									) : null}
-								</p>
-
-								{extra.length > 0 ? (
-									<p className="fact-extra">
-										{extra.map(([key, value]) => (
-											<span className="qualifier" key={key}>
-												<span className="key">{key}</span> {qualifierText(value)}
-											</span>
-										))}
-									</p>
-								) : null}
-							</li>
-						);
-					})}
-				</ul>
-			)}
-		</section>
-	);
-}
-
-function NamedThings({ entities, undeclared }) {
-	return (
-		<section className="panel">
-			<h2>
-				Named things <span className="panel-count">{entities.length}</span>
-			</h2>
-
-			{entities.length === 0 ? (
-				// A neutral statement of fact, not a warning. A memory that declares nothing is a
-				// legitimate regime and a large share of agent-written memories are in it.
-				<p className="neutral">
-					This memory declares no named things. Its facts still stand; nothing about it is wrong.
-				</p>
-			) : (
-				<>
-					{undeclared > 0 ? (
-						<p className="warning">
-							{undeclared} fact{undeclared === 1 ? '' : 's'} on this memory name something it does
-							not declare below.
-						</p>
-					) : null}
-					<ul className="entities">
-						{entities.map((entity, index) => (
-							<li key={index}>
-								<span className="entity-name">{entity?.n}</span>
-								<span className="entity-kind">{entity?.kind}</span>
-								<span className="entity-is">{entity?.is}</span>
-							</li>
-						))}
-					</ul>
-				</>
-			)}
-		</section>
-	);
-}
-
 /**
  * Three different times, kept apart on purpose.
  *
@@ -427,70 +494,108 @@ function NamedThings({ entities, undeclared }) {
  * not the same thing, and merging them is how a reader concludes a memory is stale because it was
  * written a while ago.
  */
-function Timing({ semantic, row }) {
+function Timing({ semantic, row, axes }) {
 	const occurred = timeText(semantic?.occurred_at);
 	const from = semantic?.temporal?.valid_from ?? null;
 	const until = semantic?.temporal?.valid_until ?? null;
 
 	return (
-		<Disclosure title="Timing">
-			<dl className="detail-meta">
-				<dt>What this is about</dt>
-				<dd>{occurred ?? <NotRecorded what="when the facts are about" />}</dd>
-
-				<dt>Serving from</dt>
-				<dd>{from ?? <NotRecorded what="start of the validity window" />}</dd>
-
-				<dt>Stops serving</dt>
-				<dd>{until ?? <NotRecorded what="end of the validity window" />}</dd>
-
-				<dt>Written</dt>
-				<dd>
-					{row.created_on ?? <NotRecorded what="first written" />}
-					{row.sequence === null ? null : <span className="muted"> · write order {row.sequence}</span>}
-				</dd>
-			</dl>
-			{!from && !until ? (
-				<p className="neutral">
-					This memory sets no validity window, so nothing about it expires on its own.
-				</p>
-			) : null}
-		</Disclosure>
-	);
-}
-
-function LinkToMemory({ target, how, label, onOpen }) {
-	if (!target) {
-		return (
-			<>
-				<span className="handle">{label}</span>{' '}
-				<span className="muted">— not a memory in this vault</span>
-			</>
-		);
-	}
-	return (
 		<>
-			<button type="button" className="link-button inline" onClick={() => onOpen(target)}>
-				{label}
-			</button>
-			{how === 'by_title' ? <span className="muted"> — matched by title</span> : null}
+			<Readings>
+				<ReadingPair term="applies to">
+					<ScopeLine scope={row.scope} axes={axes} phrase={axisCopy} />
+				</ReadingPair>
+				<ReadingPair term="what this is about">
+					{occurred ?? <NotRecorded what="when the facts are about" />}
+				</ReadingPair>
+				<ReadingPair term="served from">
+					{from ?? <NotRecorded what="start of the validity window" />}
+				</ReadingPair>
+				<ReadingPair term="stops being served">
+					{until ?? <NotRecorded what="end of the validity window" />}
+				</ReadingPair>
+			</Readings>
+			{!from && !until ? (
+				<Note>This memory sets no window, so nothing about it expires on its own.</Note>
+			) : null}
 		</>
 	);
 }
 
 /**
- * Outbound is free: it is what this record declares. Inbound has two sources and uses both — an
- * inversion over the loaded set, which costs nothing and is complete for declared links, and one
- * per-memory read that happens ONLY when this panel is expanded and is cached against the version.
+ * The identifiers, in full, and the one sentence that stops the next contributor inventing a
+ * writer column.
+ *
+ * The version identity is what a save conflict quotes back and a person comparing two of them is
+ * comparing character by character, so nothing here is shortened — not on screen and not in the
+ * DOM. "Created by" is the first column anyone would add to a memory browser and the easiest one
+ * to fill with plausible-looking values; there is no per-memory writer on an exported record, and
+ * saying so in words once is what keeps it from being invented.
  */
-function Relations({ memoryId, versionId, links, titleOf, onOpen }) {
+function Identity({ row, semantic, titleOf, onOpen }) {
+	const admission = semantic?.admission ?? null;
+	const compared = admission?.compared ?? 0;
+
+	return (
+		<>
+			<Readings>
+				<ReadingPair term="written">
+					{exact(row.created_on) ?? <NotRecorded what="first written" />}
+				</ReadingPair>
+				<ReadingPair term="write order">
+					{row.sequence ?? <NotRecorded what="write order" />}
+				</ReadingPair>
+				<ReadingPair term="version">
+					<Identifier value={row.version_id} label="version identity" />
+				</ReadingPair>
+				<ReadingPair term="memory">
+					<Identifier value={row.memory_id} label="memory id" />
+				</ReadingPair>
+				<ReadingPair term="why it was accepted">
+					{!admission ? (
+						'This record carries nothing about how it was accepted.'
+					) : compared === 0 ? (
+						'Accepted without comparing against anything.'
+					) : (
+						<>
+							Compared against {compared} of {admission.scanned ?? compared}
+							{admission.disposition ? ` · ${admission.disposition}` : ''}
+							{admission.nearest_memory_id ? (
+								<>
+									{' · nearest '}
+									<Button
+										tone="quiet"
+										size="sm"
+										onClick={() => onOpen(admission.nearest_memory_id)}
+									>
+										{titleOf(admission.nearest_memory_id)}
+									</Button>
+								</>
+							) : null}
+						</>
+					)}
+				</ReadingPair>
+			</Readings>
+			<Note>
+				<strong>Who wrote this: not recorded.</strong> kscope stores no writer on a memory, so
+				nothing on this screen can tell you who did.
+			</Note>
+		</>
+	);
+}
+
+/**
+ * What the store itself records pointing at this memory. The one thing on this page that costs a
+ * call, and it happens only when a reader opens the row.
+ */
+function LineageRow({ memoryId, versionId, titleOf, onOpen }) {
 	const cacheKey = `${memoryId}@${versionId}`;
 	const [lineage, setLineage] = useState(() => lineageCache.get(cacheKey) ?? null);
-	const [lineageError, setLineageError] = useState(null);
+	const [error, setError] = useState(null);
 
 	const load = () => {
 		if (lineageCache.has(cacheKey)) return;
-		// Marked before the request so a double-click on the toggle cannot start a second one.
+		// Marked before the request so a double-click on the row cannot start a second one.
 		lineageCache.set(cacheKey, { pending: true });
 		fetchLineage(memoryId)
 			.then((body) => {
@@ -498,245 +603,76 @@ function Relations({ memoryId, versionId, links, titleOf, onOpen }) {
 				lineageCache.set(cacheKey, data);
 				setLineage(data);
 			})
-			.catch((error) => {
+			.catch((failure) => {
 				lineageCache.delete(cacheKey);
-				setLineageError(error);
+				setError(failure);
 			});
 	};
 
-	const total =
-		links.corrects.length +
-		links.contradicts.length +
-		links.corrected_by.length +
-		links.contradicted_by.length;
+	const marked = lineage?.duplicate_of ?? lineage?.superseded_by ?? null;
+	const pointing = listOf(lineage?.contradicted_by);
 
 	return (
-		<Disclosure title="Corrections and contradictions" count={total} onOpen={load}>
-			<Direction
-				heading="This memory corrects"
-				items={links.corrects}
-				render={(link, index) => (
-					<li key={index}>
-						<LinkToMemory
-							target={link.target}
-							how={link.how}
-							label={link.target ? titleOf(link.target) : link.handle}
-							onOpen={onOpen}
+		<DetailRow label="What the vault records about this memory" onOpen={load}>
+			{error ? (
+				<Note tone="warn">
+					The vault's own answer could not be read: {error.message}. What is on this page is
+					computed from the memories already loaded.
+				</Note>
+			) : !lineage || lineage.pending ? (
+				<Note>Reading what the vault records…</Note>
+			) : (
+				<>
+					{marked ? (
+						<LinkCard
+							title={titleOf(marked)}
+							meta="the vault marks this memory as superseded by it"
+							onClick={() => onOpen(marked)}
 						/>
-						{link.says ? <span className="says"> — {link.says}</span> : null}
-					</li>
-				)}
-				empty="This memory does not declare that it corrects anything."
-			/>
-
-			<Direction
-				heading="This memory contradicts"
-				items={links.contradicts}
-				render={(link, index) => (
-					<li key={index}>
-						<LinkToMemory
-							target={link.target}
-							how={link.how}
-							label={link.target ? titleOf(link.target) : link.handle}
-							onOpen={onOpen}
-						/>
-					</li>
-				)}
-				empty="This memory does not declare that it contradicts anything."
-			/>
-
-			<Direction
-				heading="Corrected by"
-				items={links.corrected_by}
-				render={(link, index) => (
-					<li key={index}>
-						<LinkToMemory target={link.from} how={link.how} label={titleOf(link.from)} onOpen={onOpen} />
-						{link.says ? <span className="says"> — {link.says}</span> : null}
-					</li>
-				)}
-				empty="No loaded memory declares that it corrects this one."
-			/>
-
-			<Direction
-				heading="Contradicted by"
-				items={links.contradicted_by}
-				render={(link, index) => (
-					<li key={index}>
-						<LinkToMemory target={link.from} how={link.how} label={titleOf(link.from)} onOpen={onOpen} />
-					</li>
-				)}
-				empty="No loaded memory declares that it contradicts this one."
-			/>
-
-			<LineageReading lineage={lineage} error={lineageError} onOpen={onOpen} titleOf={titleOf} />
-		</Disclosure>
-	);
-}
-
-function Direction({ heading, items, render, empty }) {
-	return (
-		<div className="direction">
-			<h4>{heading}</h4>
-			{items.length === 0 ? <p className="neutral">{empty}</p> : <ul className="plain">{items.map(render)}</ul>}
-		</div>
-	);
-}
-
-/**
- * What the vault itself says about the inbound direction, as opposed to what the loaded set implies.
- *
- * The two can differ, and the difference is honest: the inversion above sees only declared links
- * among memories that loaded, and this read is the store's own answer. When the read is unavailable
- * the panel says so — an absent second opinion is not the same as agreement.
- */
-function LineageReading({ lineage, error, onOpen, titleOf }) {
-	if (error) {
-		return (
-			<p className="neutral">
-				The vault's own answer for this direction could not be read: {error.message}. What is above
-				is computed from the memories on this screen.
-			</p>
-		);
-	}
-	if (!lineage || lineage.pending) {
-		return <p className="neutral">Reading what the vault records for this memory…</p>;
-	}
-
-	const marked = lineage.duplicate_of ?? lineage.superseded_by ?? null;
-	const contradictedBy = lineage.contradicted_by ?? [];
-
-	return (
-		<div className="direction">
-			<h4>What the vault records</h4>
-			{marked ? (
-				<p>
-					<span className="key">superseded by</span>{' '}
-					<button type="button" className="link-button inline" onClick={() => onOpen(marked)}>
-						{titleOf(marked)}
-					</button>
-				</p>
-			) : null}
-			{Array.isArray(contradictedBy) && contradictedBy.length > 0 ? (
-				<ul className="plain">
-					{contradictedBy.map((item, index) => {
+					) : null}
+					{pointing.map((item, index) => {
 						const id = typeof item === 'string' ? item : item?.memory_id;
+						if (!id) return null;
 						return (
-							<li key={index}>
-								<LinkToMemory target={id} how="by_id" label={titleOf(id)} onOpen={onOpen} />
-							</li>
+							<LinkCard
+								key={index}
+								title={titleOf(id)}
+								meta="the vault records this memory as contradicted by it"
+								onClick={() => onOpen(id)}
+							/>
 						);
 					})}
-				</ul>
-			) : null}
-			{!marked && (!Array.isArray(contradictedBy) || contradictedBy.length === 0) ? (
-				<p className="neutral">
-					The vault records nothing else pointing at this memory, and it is not marked as a
-					duplicate of another.
-				</p>
-			) : null}
-		</div>
-	);
-}
-
-/**
- * The admission block as it is, and a sentence when it is empty.
- *
- * Presenting a structure full of zeros as an audit trail is worse than saying nothing was compared,
- * because the reader takes the shape of the panel as evidence that a comparison happened.
- */
-function Admission({ admission, titleOf, onOpen }) {
-	const compared = admission?.compared ?? 0;
-
-	return (
-		<Disclosure title="Why this was accepted">
-			{!admission ? (
-				<p className="neutral">This record carries nothing about how it was accepted.</p>
-			) : compared === 0 ? (
-				<p className="neutral">Accepted without comparing against anything.</p>
-			) : (
-				<dl className="detail-meta">
-					<dt>Compared against</dt>
-					<dd>
-						{compared} of {admission.scanned ?? compared} considered
-					</dd>
-					<dt>Nearest memory</dt>
-					<dd>
-						{admission.nearest_memory_id ? (
-							<button
-								type="button"
-								className="link-button inline"
-								onClick={() => onOpen(admission.nearest_memory_id)}
-							>
-								{titleOf(admission.nearest_memory_id)}
-							</button>
-						) : (
-							<NotRecorded what="nearest memory" />
-						)}
-					</dd>
-					<dt>Outcome</dt>
-					<dd>{admission.disposition ?? <NotRecorded what="disposition" />}</dd>
-					{Array.isArray(admission.reasons) && admission.reasons.length > 0 ? (
-						<>
-							<dt>Reasons</dt>
-							<dd>{admission.reasons.join(', ')}</dd>
-						</>
+					{!marked && pointing.length === 0 ? (
+						<Note>
+							Nothing else in the vault points at this memory, and it is not marked as a
+							duplicate of another.
+						</Note>
 					) : null}
-				</dl>
+				</>
 			)}
-		</Disclosure>
+		</DetailRow>
 	);
 }
 
 /**
- * The axes that are true, and one sentence that is fixed.
- *
- * That sentence is the whole job of this panel. "Created by" is the first column anyone would add
- * to a memory browser and the easiest one to fill with plausible-looking values, and there is no
- * per-memory writer on an exported record — no principal, no client, no app, no session, no device.
- * The scope axes and the first-written date look like provenance and are not. Saying so once, in
- * words, is what stops the next contributor from inventing the column.
- */
-function Provenance({ row, axes }) {
-	return (
-		<Disclosure title="Provenance">
-			<dl className="detail-meta">
-				<dt>Applies to</dt>
-				<dd>
-					<ScopeLine scope={row.scope} axes={axes} />
-				</dd>
-				<dt>First written</dt>
-				<dd>{row.created_on ?? <NotRecorded what="first written" />}</dd>
-				<dt>Write order</dt>
-				<dd>{row.sequence ?? <NotRecorded what="write order" />}</dd>
-			</dl>
-			<p className="fixed-sentence">
-				Who wrote this: not recorded. kscope does not store a writer on a memory.
-			</p>
-		</Disclosure>
-	);
-}
-
-/**
- * The record, as the browser received it — which is not quite as the engine produced it.
+ * The record as the browser received it — which is not quite as the engine produced it.
  *
  * A disclosure that quietly omitted fields would be a worse disclosure than none, so it names what
- * was removed and why. The list comes from what the server reported it actually dropped, not from a
- * list written here, so a field that stops being emitted stops being claimed.
+ * was removed. The list comes from what the server reported it actually dropped, not from a list
+ * written here, so a field that stops being emitted stops being claimed.
  */
 function RawRecord({ record, strippedFields }) {
 	const stripped = strippedFields ?? [];
 	return (
-		<Disclosure title="Raw record">
-			<p className="neutral">
+		<>
+			<Note>
 				{stripped.length === 0
 					? 'This is the record as the server received it from the engine.'
 					: `This is the record with ${stripped.length} field${
 							stripped.length === 1 ? '' : 's'
-						} removed before it reached this browser: ${stripped.join(', ')}. They are derived
-						from the memory rather than written by anyone, no screen renders them, and together
-						they are a large share of the bytes.`}
-			</p>
-			<pre className="verbatim">{JSON.stringify(record, null, 2)}</pre>
-		</Disclosure>
+						} removed before it reached this browser: ${stripped.join(', ')}. They are derived from the memory rather than written by anyone, no screen renders them, and together they are a large share of the bytes.`}
+			</Note>
+			<Verbatim scroll>{JSON.stringify(record, null, 2)}</Verbatim>
+		</>
 	);
 }

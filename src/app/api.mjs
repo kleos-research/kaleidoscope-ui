@@ -391,3 +391,30 @@ export function fetchPendingMerge({ signal } = {}) {
 export function resolvePendingMerge(action, { signal } = {}) {
 	return post('/api/pending-merge', { action }, { signal });
 }
+
+/**
+ * ASK THE WAY YOUR AGENT DOES — the one call in this app that reaches ranked search.
+ *
+ * IT IS A WRITE AND THE NAME SAYS SO. Every ranked query records an exposure row in the vault: the
+ * row is permanent, it stores the query text verbatim, and nothing published reads it back or
+ * removes one. The engine refuses a read-only ranked search rather than silently upgrading it, so
+ * there is no version of this call that does not record.
+ *
+ * THE RULE THIS FUNCTION LIVES UNDER, and it is the only rule in this file that is about WHO may
+ * call rather than about what a call does:
+ *
+ *   A ranked search happens ONLY on an explicit user action on the search screen. Never on load,
+ *   never on a poll, never on a keystroke, never on a refresh, never from any other screen.
+ *
+ * So: no `useEffect` may call this, no debounce may call this, and no other module may import it.
+ * It belongs to one button. `test/server.test.mjs` walks every route and every screen load and
+ * asserts the exposure count did not move, then presses this door once and asserts it moved by
+ * exactly one — which is what makes the sentence above a measurement rather than a promise.
+ *
+ * What comes back is the ranked result exactly as the engine compiled it. Nothing is re-ranked,
+ * filtered or annotated on the way through, because the whole claim of the screen is that this is
+ * what the agent would have been given.
+ */
+export function askRanked({ query, top_k = undefined, scope = undefined }, { signal } = {}) {
+	return post('/api/ask', { query, top_k, scope }, { signal });
+}

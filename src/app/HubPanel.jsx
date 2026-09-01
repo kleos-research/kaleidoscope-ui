@@ -1,5 +1,5 @@
-import { DRAW_CAP } from './graph-model.mjs';
 import { applyUndo } from './hub-model.mjs';
+import { Button } from './ui/index.mjs';
 
 /**
  * What the regime detector read, and what every reduction on this screen has taken away.
@@ -16,8 +16,20 @@ import { applyUndo } from './hub-model.mjs';
  * canvas blacks out on a click.
  */
 
-/** The regime, its threshold, and where the threshold came from. */
-export function HubRegime({ regime, lens, onCollapse, onAbsorb, collapsed, absorbed }) {
+/**
+ * The regime, its threshold, and where the threshold came from.
+ *
+ * **IT OFFERS; IT NEVER APPLIES.** Nothing here reduces anything — every control calls back out and
+ * the screen decides. A graph past the threshold that is still legible is offered a collapse and
+ * drawn whole until somebody presses one of these, because a view that narrows without asking is
+ * the failure this whole programme exists to prevent, arrived at from the other side.
+ *
+ * It renders nothing at all in the `working` regime. That is deliberate and it is also why the
+ * screen carries `regimeLine` in its caption: a panel that appeared only to say "nothing qualifies"
+ * would be a resident paragraph of caveat, and the reading still has to be legible when the answer
+ * is nothing.
+ */
+export function HubRegime({ regime, onCollapse, onAbsorb, collapsed, absorbed }) {
 	if (!regime || regime.regime === 'working') return null;
 	const hub = regime.hubs[0] ?? null;
 
@@ -32,7 +44,7 @@ export function HubRegime({ regime, lens, onCollapse, onAbsorb, collapsed, absor
 
 			{/* The threshold is on screen with its arithmetic, because a number a reader cannot
 			    reconstruct is a magic number whether or not it was computed. */}
-			<p className="graph-note">
+			<p className="hub-note">
 				The bar for “too connected to draw” is{' '}
 				<strong>max(20, the 99th-percentile name × 4)</strong>, which in this vault is{' '}
 				<strong>{regime.threshold.toLocaleString()}</strong> — computed from what you have written,
@@ -44,35 +56,21 @@ export function HubRegime({ regime, lens, onCollapse, onAbsorb, collapsed, absor
 
 			{hub ? (
 				<div className="hub-regime-actions">
-					<button
-						type="button"
-						className="button"
-						disabled={collapsed}
-						onClick={() => onCollapse(hub)}
-					>
+					<Button disabled={collapsed} onClick={() => onCollapse(hub)}>
 						{collapsed ? '“' + hub.surface + '” is collapsed' : `Collapse “${hub.surface}”`}
-						<span className="graph-reduction-count">
+						<span className="hub-consequence">
 							{hub.leafNeighbours.toLocaleString()} names that appear in no other fact go in the box;{' '}
 							{hub.connectorNeighbours.toLocaleString()} stay drawn
 						</span>
-					</button>
-					<button type="button" className="button" disabled={absorbed} onClick={() => onAbsorb(hub)}>
+					</Button>
+					<Button disabled={absorbed} onClick={() => onAbsorb(hub)}>
 						{absorbed ? '“' + hub.surface + '” is in the background' : 'Absorb it into the background'}
-						<span className="graph-reduction-count">
+						<span className="hub-consequence">
 							off the canvas, onto its neighbours as a badge each — reversible, and never keyed to
 							the name
 						</span>
-					</button>
+					</Button>
 				</div>
-			) : null}
-
-			{regime.regime === 'hub' && lens === 'C' ? (
-				<p className="graph-note">
-					This reading is over the names and the facts, before a lens. In Connections the same name
-					is joined to the memories that mention it rather than to the names it appears with, so the
-					count on the box below is the one for this lens and the count above is the one for the
-					vault.
-				</p>
 			) : null}
 		</section>
 	);
@@ -85,8 +83,12 @@ export function HubRegime({ regime, lens, onCollapse, onAbsorb, collapsed, absor
  * them by removing the elements, and a test cross-checks them against the same view with nothing
  * reduced — two independent computations agreeing, rather than one number quoting itself.
  */
-export function HubLedger({ plan, state, setState, onOpenList, lens }) {
+export function HubLedger({ plan, state, setState, onOpenList }) {
 	if (!plan || plan.ledger.length === 0) return null;
+
+	// The budget this plan actually ran under, carried on the plan itself. Reading a module default
+	// here instead would let the receipt quote a cap the picture was never drawn against.
+	const cap = plan.cap;
 
 	const revealMore = (id, by) => {
 		const expanded = new Map(state.expanded);
@@ -98,15 +100,15 @@ export function HubLedger({ plan, state, setState, onOpenList, lens }) {
 		<section className="hub-ledger">
 			<h3>
 				What is not on the canvas
-				<span className="graph-tag-count">
+				<span className="hub-count">
 					{plan.hidden.nodes.toLocaleString()} names · {plan.hidden.edges.toLocaleString()} links
 				</span>
 			</h3>
-			<p className="graph-note">
-				This view draws {plan.elementCount.toLocaleString()} of the{' '}
-				{plan.unreduced.elementCount.toLocaleString()} elements this scope holds in the{' '}
-				{lens} lens. Everything missing is listed here with the way to bring it back. Nothing on this
-				screen narrows without saying so.
+			<p className="hub-note">
+				This picture draws {plan.elementCount.toLocaleString()} of the{' '}
+				{plan.unreduced.elementCount.toLocaleString()} elements this vault holds. Everything missing
+				is listed here with the way to bring it back. Nothing on this screen narrows without saying
+				so.
 			</p>
 
 			<ul className="hub-ledger-rows">
@@ -120,52 +122,41 @@ export function HubLedger({ plan, state, setState, onOpenList, lens }) {
 								{/* THE LIST. A hundred thousand items is a list and a drawing is not, so the
 								    honest encoding is one click away from the box that holds them. */}
 								{entry.list ? (
-									<button type="button" className="button" onClick={() => onOpenList(entry)}>
-										{entry.list.label}
-									</button>
+									<Button onClick={() => onOpenList(entry)}>{entry.list.label}</Button>
 								) : null}
 
 								{entry.kind === 'collapsed' ? (
 									<>
-										<button
-											type="button"
-											className="button"
-											disabled={entry.hiddenNodes === 0}
-											onClick={() => revealMore(entry.id, 50)}
-										>
+										<Button disabled={entry.hiddenNodes === 0} onClick={() => revealMore(entry.id, 50)}>
 											Draw 50 more of them
 											{meta ? (
-												<span className="graph-reduction-count">
+												<span className="hub-consequence">
 													showing {meta.shownChildren.toLocaleString()} of{' '}
 													{(meta.shownChildren + meta.hiddenNodes).toLocaleString()}, busiest first
 												</span>
 											) : null}
-										</button>
+										</Button>
 										{entry.capReached ? (
 											<span className="hub-ledger-capped">
-												The box stopped adding at {DRAW_CAP.toLocaleString()} elements. It is not
-												done — the rest are in the list.
+												The box stopped adding at {cap.toLocaleString()} elements. It is not done —
+												the rest are in the list.
 											</span>
 										) : null}
 									</>
 								) : null}
 
 								{/* THE UNDO, with its consequence stated before it is taken. */}
-								<button
-									type="button"
-									className="button button-quiet"
-									onClick={() => setState(applyUndo(state, entry))}
-								>
+								<Button tone="quiet" onClick={() => setState(applyUndo(state, entry))}>
 									{entry.undo.label}
 									{entry.undo.elementsAfter ? (
-										<span className="graph-reduction-count">
+										<span className="hub-consequence">
 											{entry.undo.elementsAfter.toLocaleString()} elements
-											{entry.undo.elementsAfter > DRAW_CAP
-												? ` — past the ${DRAW_CAP.toLocaleString()} this view draws, so it will ask again`
+											{entry.undo.elementsAfter > cap
+												? ` — past the ${cap.toLocaleString()} this picture draws, so it will ask again`
 												: ''}
 										</span>
 									) : null}
-								</button>
+								</Button>
 							</div>
 						</li>
 					);

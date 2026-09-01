@@ -155,7 +155,7 @@ test('no rendered string in the removal components says it either', () => {
 
 	// PRD 0004 R2: no trash glyph, anywhere. A trash icon is a picture of incineration and this
 	// action is not one — the word is what carries the difference, so the word is what appears.
-	const screens = ['src/app/RemovalFlow.jsx', 'src/app/RemovalLimits.jsx', 'src/app/MemoryList.jsx', 'src/app/MemoryDetail.jsx'];
+	const screens = ['src/app/RemovalFlow.jsx', 'src/app/RemovalLimits.jsx', 'src/app/BrowseView.jsx', 'src/app/MemoryDetail.jsx'];
 	for (const file of screens) {
 		const source = readFileSync(join(ROOT, file), 'utf8');
 		assert.doesNotMatch(source, /\u{1F5D1}|\u{267B}/u, `${file} renders a trash glyph`);
@@ -163,7 +163,7 @@ test('no rendered string in the removal components says it either', () => {
 
 	// And the action is called the same thing everywhere it appears. A second spelling in one
 	// surface is how a product ends up promising two different things about one button.
-	for (const file of ['src/app/RemovalFlow.jsx', 'src/app/RemovalLimits.jsx', 'src/app/MemoryList.jsx', 'src/app/MemoryDetail.jsx']) {
+	for (const file of ['src/app/RemovalFlow.jsx', 'src/app/RemovalLimits.jsx', 'src/app/BrowseView.jsx', 'src/app/MemoryDetail.jsx']) {
 		const source = readFileSync(join(ROOT, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 		assert.doesNotMatch(
 			source,

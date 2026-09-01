@@ -5,9 +5,9 @@
  * WHAT THIS IS FOR
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  *
- * `graph-model.mjs` reconstructs the graph, projects it through a lens, and picks a default view.
- * All of it assumes the shape a working vault has: a few hundred names, a maximum degree in single
- * digits, and fragmentation as the subject. That assumption fails in exactly one way, and it fails
+ * `graph-model.mjs` reconstructs the graph and `names-model.mjs` projects it into a picture. All of
+ * it assumes the shape a working vault has: a few hundred names, a maximum degree in single digits,
+ * and fragmentation as the subject. That assumption fails in exactly one way, and it fails
  * hard: **a large vault has a hub** — one name, usually the one meaning "the owner of this vault",
  * joined to a large fraction of everything, with a degree in the tens or hundreds of thousands.
  * Thrown at a force layout that is a black disc, and a user looking at a black disc concludes the
@@ -24,19 +24,21 @@
  *      bring it back (`planView`).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────────
- * WHY IT WORKS ON THE PROJECTION AND NOT ON THE ENTITY GRAPH
+ * WHY IT WORKS ON THE PROJECTION AND NOT ON RAW SURFACES
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  *
- * `planView` takes what `projectLens` returned — drawn nodes and drawn edges, whatever lens made
- * them — rather than raw surfaces. A hub is a property of the picture the user is looking at, and
- * the three lenses do not agree about who has one: a name touched by one memory is a chip in C and
- * a vertex in E. Written against surfaces this would have been correct in exactly one lens and
- * silently wrong in the other two, which is the same defect as a hardcoded threshold wearing
- * different clothes.
+ * `planView` takes DRAWN NODES AND DRAWN EDGES — whatever built them — rather than surfaces out of
+ * the graph. A hub is a property of the picture the user is looking at, and a projection is free to
+ * disagree with the graph about who has one: it may hold a scope rather than the whole vault, and
+ * its edges need not be facts. Written against surfaces this would have been correct for exactly
+ * one projection and silently wrong for every other, which is a hardcoded threshold wearing
+ * different clothes. It cost nothing to write it the general way and the generality is what
+ * survived the rebuild: the three lenses it was first written for are gone and not one line here
+ * had to change for the whole-vault overview that replaced them.
  *
- * Regime DETECTION stays on the entity graph, because PRD 0005 R16 asks for one pass over the
- * cached export at load, before a lens is chosen. The two readings answer different questions and
- * both are reported.
+ * Regime DETECTION stays on the entity graph, because it is one pass over the cached export at
+ * load, before any picture is chosen. The two readings answer different questions and both are
+ * reported.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  * THE RULE EVERY FUNCTION BELOW OBEYS
@@ -55,7 +57,24 @@
  * silently, and in the direction that hides things.
  */
 
-import { DEFAULT_LENS, DRAW_CAP, projectLens, scopeSurfaces } from './graph-model.mjs';
+import { neighbourhood, subgraph } from './graph-model.mjs';
+
+/**
+ * THE LEGIBILITY BUDGET — how many elements one picture may carry.
+ *
+ * It lives here now because its old home does not exist any more: it was `DRAW_CAP` in the lens
+ * module, and the rebuild replaced the lens screens with the names table and one whole-vault
+ * overview. Nothing about the number changed with the move. It is a bound on what a PERSON can read
+ * in one picture, never on what the machine can paint — the machine draws a hundred thousand
+ * elements perfectly happily, and a black disc drawn at sixty frames a second is the failure this
+ * whole file exists to prevent.
+ *
+ * It is the DEFAULT here and not the law. Every function below takes `cap`, and a caller that draws
+ * under a different budget passes its own — the overview's ceiling is ten times this one. A sentence
+ * quoting 2,000 under a canvas that actually stopped at 20,000 is a confident number about a
+ * mechanism nobody ran, which is the same defect as a threshold nobody derived.
+ */
+export const DRAW_CAP = 2000;
 
 /**
  * The floor under the collapse threshold.
@@ -82,9 +101,26 @@ export function degreeStats(graph) {
 	const degrees = new Int32Array(graph.nodes.size);
 	let index = 0;
 	let singletons = 0;
+	/*
+	  THE BUSIEST NODE'S SURFACE, NOT ONLY ITS DEGREE.
+
+	  `max` alone cannot be checked by the person reading it. "The busiest name is named by 8 facts"
+	  sends them to the table to work out WHICH name that was, and a reader who cannot find the
+	  subject of a sentence has no way to tell a computed reading from a decorative one — which is
+	  exactly the difference this file's silence depends on being able to show. It costs a comparison
+	  in a loop that was already walking every node.
+
+	  Ties go to the first in iteration order, which is the order the export declared them in.
+	*/
+	let busiest = null;
+	let busiestDegree = -1;
 	for (const node of graph.nodes.values()) {
 		degrees[index] = node.degree;
 		if (node.degree <= 1) singletons += 1;
+		if (node.degree > busiestDegree) {
+			busiestDegree = node.degree;
+			busiest = node.surface;
+		}
 		index += 1;
 	}
 	degrees.sort();
@@ -95,6 +131,7 @@ export function degreeStats(graph) {
 	return {
 		count: degrees.length,
 		max: degrees.length === 0 ? 0 : degrees[degrees.length - 1],
+		busiest,
 		p50: at(0.5),
 		p90: at(0.9),
 		p99: at(0.99),
@@ -195,7 +232,8 @@ export function findHubs(graph, threshold) {
  * @param {number} [options.cap]
  * @param {number|null} [options.projectedElements] the element count of the view actually about to
  *        be drawn. Given, it decides `forced`; absent, the entity-level count stands in. The two can
- *        differ by orders of magnitude between lenses, and `forced` is a statement about the drawing.
+ *        differ by orders of magnitude when the view holds a scope rather than the whole vault, and
+ *        `forced` is a statement about the drawing.
  */
 export function detectRegime(graph, { cap = DRAW_CAP, projectedElements = null } = {}) {
 	const stats = degreeStats(graph);
@@ -238,6 +276,42 @@ export function detectRegime(graph, { cap = DRAW_CAP, projectedElements = null }
 }
 
 /**
+ * THE READING, IN ONE LINE, FOR A SCREEN THAT IS NOT IN A HUB REGIME.
+ *
+ * `reason` above is the sentence a TREATMENT carries — it is rendered beside a control that is
+ * about to do something, and on a working vault there is no control, so it is never seen. That is
+ * the gap this closes, and it is the difference between a guard you can watch not firing and a
+ * feature that appears to be missing.
+ *
+ * **A guard whose null result is invisible is indistinguishable from an absent guard.** From the
+ * reader's side, "this app has no way to hide a name that is eating the picture" and "this app
+ * measured your vault and found nothing that needs hiding" look identical: both are a screen with
+ * nothing on it. So the reading goes on the screen in plain words even when — especially when —
+ * the answer is nothing. Three things, because it takes all three to be checkable:
+ *
+ *   1. the busiest name, BY NAME, so the reader can go and look at it;
+ *   2. the bar, which is computed from this vault's own spread rather than set in this app;
+ *   3. the verdict that follows from the two — and it is spelled as a finding, not as an absence.
+ *
+ * It is built here, beside the numbers it quotes, for the same reason `reason` is: a screen cannot
+ * then render one verdict while describing a different one.
+ */
+export function regimeLine(regime) {
+	const { stats, threshold, hubs } = regime;
+	if (stats.count === 0) return 'No names here yet, so there is no busiest one to measure.';
+
+	const busiest =
+		`Busiest name: “${stats.busiest}”, named by ${stats.max.toLocaleString()} ` +
+		`${stats.max === 1 ? 'fact' : 'facts'}`;
+	const bar = `the bar for hiding one is ${threshold.toLocaleString()}, computed from this vault's own spread`;
+
+	if (hubs.length === 0) return `${busiest}; ${bar} — nothing here is big enough to need hiding.`;
+	return hubs.length === 1
+		? `${busiest}; ${bar} — it is past that, so collapsing it is offered above.`
+		: `${busiest}; ${bar} — ${hubs.length.toLocaleString()} names are past that, and collapsing them is offered above.`;
+}
+
+/**
  * The scope a hub regime seeds on, as a RULE rather than a materialised set.
  *
  * Two steps out, not one. A depth-1 ego network on a hub is a hundred thousand leaves and it is
@@ -252,19 +326,31 @@ export function detectRegime(graph, { cap = DRAW_CAP, projectedElements = null }
  */
 export const hubScope = (hub) => ({ kind: 'ego', seed: hub.surface ?? hub, depth: 2 });
 
-/** The drawn id of a hub, in the id space `projectLens` uses. */
-export const hubNodeId = (hub) => `e:${hub.surface ?? hub}`;
+/**
+ * The drawn id of a hub, in the id space the drawing uses.
+ *
+ * It used to prefix `e:`, because the lens projection drew names and memories into ONE id space and
+ * a name could collide with a memory id. The rebuild draws names only — `overviewElements` and
+ * `subgraph` both key a node by its surface — so the drawn id is the surface and this is now the
+ * identity function.
+ *
+ * It stays a function rather than being inlined at the four call sites, because the id space has
+ * already moved once. Inlining it is how two spellings drift apart, and the failure that produces is
+ * silent in the direction that matters: `collapsed` holds an id nothing matches, `planView` hides
+ * nothing, the ledger is empty, and the screen reports a collapse that did not happen.
+ */
+export const hubNodeId = (hub) => hub.surface ?? hub;
 
 /**
  * THE PLAN: which elements are drawn, what was hidden, and how to bring each piece back.
  *
  * This is the one function the canvas reads. It takes a PROJECTION — whatever `projectLens`
- * returned for the current lens and scope — and three user-initiated reductions, and it returns the
+ * returned for the current scope — and three user-initiated reductions, and it returns the
  * drawn elements plus a LEDGER. Nothing is removed that does not appear in the ledger with its own
  * count and its own undo, and calling this with no reductions returns the projection unchanged,
  * which is the property that makes "nothing narrows silently" checkable rather than promised.
  *
- * @param {object} projection      `{ nodes, edges }` from `projectLens`
+ * @param {object} projection      `{ nodes, edges }` — `overviewElements` or `subgraph`
  * @param {Set}  opts.collapsed    node ids to draw as compound meta-nodes
  * @param {Set}  opts.absorbed     node ids to take off the canvas and hang on their neighbours
  * @param {Map}  opts.expanded     node id → how many of its hidden neighbours to reveal
@@ -293,7 +379,7 @@ export function planView(
 	let capReached = false;
 
 	const otherEnd = (edge, id) => (edge.source === id ? edge.target : edge.source);
-	// The in-lens degree, which is what "drawn nowhere else" is a statement about.
+	// The degree IN THIS PROJECTION, which is what "drawn nowhere else" is a statement about.
 	const drawnDegree = (id) => (incident.get(id) ?? []).length;
 	/**
 	 * The tie-break, and it is deliberately NOT `localeCompare`.
@@ -307,9 +393,9 @@ export function planView(
 	 * Code-unit order is stable everywhere and is the order this file states.
 	 */
 	const byId2 = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-	// The label a person recognises, and the number behind it. An entity node carries the whole
-	// underlying node, so the box can say how many FACTS name it even in a lens whose edges are not
-	// facts — the two numbers are different and the box shows both rather than picking one.
+	// The label a person recognises, and the number behind it. A drawn node may carry the whole
+	// underlying node, so the box can say how many FACTS name it even in a projection whose edges are
+	// not facts — the two numbers are different and the box shows both rather than picking one.
 	const labelOf = (id) => byId.get(id)?.surface ?? byId.get(id)?.title ?? id;
 	const factsOf = (id) => byId.get(id)?.node?.degree ?? null;
 
@@ -529,6 +615,10 @@ export function planView(
 		badges,
 		ledger,
 		capReached,
+		// The budget this plan actually ran under, carried so the receipt beside it quotes THIS
+		// number rather than the module's default. A ledger that says "stopped adding at 2,000" under
+		// a canvas that stopped at 20,000 is a true sentence about a different mechanism.
+		cap,
 		elementCount: nodes.length + edges.length + metaNodes.length,
 		hidden: {
 			nodes: ledger.reduce((total, entry) => total + entry.hiddenNodes, 0),
@@ -621,7 +711,42 @@ export function hubWindow(index, offset, limit) {
 }
 
 /**
- * The reduction ladder's rungs, each carrying the element count it would produce IN THIS LENS.
+ * A SCOPE, RESOLVED TO SURFACES. The rule half of what `scopeSurfaces` used to be.
+ *
+ * That function and `projectLens` lived in the lens module the rebuild replaced, and between them
+ * they answered two questions: which names a scope selects, and how to draw them. The second
+ * question has one answer now — names joined by the facts that name them — and `subgraph` is it, so
+ * only the first needed a home. It is here, private, beside the one function that reads it.
+ *
+ * Every rule below is a property of the graph rather than of a surface. There is no stop list here
+ * and there must never be one; see the head of this file.
+ */
+function scopeSurfaces(graph, scope) {
+	if (scope.kind === 'component') {
+		return graph.components.find((component) => component.id === scope.componentId)?.nodes ?? [];
+	}
+	if (scope.kind === 'degree') {
+		return [...graph.nodes.values()]
+			.filter((node) => node.degree >= scope.minDegree)
+			.map((node) => node.surface);
+	}
+	if (scope.kind === 'memory_type') {
+		// Both ends of every fact a memory of this type asserted. Selecting only declared endpoints
+		// would quietly drop the majority of them on a vault whose writers declare sparingly.
+		const surfaces = new Set();
+		for (const edge of graph.edges) {
+			if (edge.memory_type !== scope.memoryType) continue;
+			surfaces.add(edge.source);
+			surfaces.add(edge.target);
+		}
+		return surfaces;
+	}
+	if (scope.kind === 'ego') return neighbourhood(graph, scope.seed, scope.depth);
+	return [...graph.nodes.keys()];
+}
+
+/**
+ * The reduction ladder's rungs, each carrying the element count it would produce.
  *
  * Extracted from the panel that used to compute it inline, for one reason: it had never run. A
  * working vault draws a few hundred elements against a cap of two thousand, so every button on that
@@ -633,9 +758,16 @@ export function hubWindow(index, offset, limit) {
  * rung still over the cap is returned with `fits: false` rather than dropped, because "this
  * reduction is not enough either" is something the reader needs to know and an absent button cannot
  * say it.
+ *
+ * **NO SCREEN CALLS THIS TODAY, and that is a different thing from the silence above it.** The
+ * threshold's silence is a computed answer about this vault; this function's silence is that the
+ * rebuild's overview has one scope — the whole vault — and no control that would take a rung. The
+ * test is its only caller. It is left standing, working and checked against a fixture that genuinely
+ * crosses the cap, because the arithmetic is right and the ladder is what a scope control would need
+ * on the day one exists; it is written down here so nobody reads an unwired function as a wired one.
  */
-export function reductionOptions(graph, { cap = DRAW_CAP, lens = DEFAULT_LENS, memoryTypes = [], hubs = [] } = {}) {
-	const elementsOf = (scope) => projectLens(graph, { lens, surfaces: scopeSurfaces(graph, scope) }).elementCount;
+export function reductionOptions(graph, { cap = DRAW_CAP, memoryTypes = [], hubs = [] } = {}) {
+	const elementsOf = (scope) => subgraph(graph, scopeSurfaces(graph, scope)).elementCount;
 
 	const options = [];
 	const largest = graph.components[0];
@@ -696,7 +828,7 @@ export function reductionOptions(graph, { cap = DRAW_CAP, lens = DEFAULT_LENS, m
 	// returns the star, because the problem is the shape and not the quantity.
 	for (const hub of hubs.slice(0, 2)) {
 		const scope = hubScope(hub);
-		const projection = projectLens(graph, { lens, surfaces: scopeSurfaces(graph, scope) });
+		const projection = subgraph(graph, scopeSurfaces(graph, scope));
 		options.push({
 			key: `collapse-${hub.surface}`,
 			label: `Around “${hub.surface}”, with it collapsed`,

@@ -1,0 +1,238 @@
+/*
+ * THE TOKENS. Every value below was lifted from an approved mockup in `design/`, not invented here.
+ *
+ * The rule this file exists to hold: A SCREEN MAY NOT SPELL A RAW VALUE. No hex, no px type size,
+ * no radius, no control height in a component's CSS — those are the choices that drifted last time,
+ * and the owner's word for the result was "I don't think there's enough padding". A locked scale
+ * cannot drift, and a value that has no token is a value the design did not decide, which is the
+ * conversation worth having rather than the number worth guessing.
+ *
+ * The scale is not a tidy geometric one. The mockups use half-pixel type sizes (13.5, 12.5, 11.5)
+ * because this is a dense reading tool and the steps between 12 and 14 carry real distinctions.
+ * Rounding them to a "proper" scale would be redrawing the design, so they are kept as drawn.
+ *
+ * Dark keeps the values the app already had. The owner did not complain about colour and a palette
+ * change inside a structural redesign is a change nobody can review: it makes every screen look
+ * different for two reasons at once.
+ */
+
+:root {
+	color-scheme: light dark;
+
+	/* ------------------------------------------------------------------ colour */
+
+	--bg: #faf9f7;
+	--surface: #ffffff;
+	--raised: #f2f0ec;
+	--text: #1a1917;
+	--muted: #6a6660;
+	--faint: #94908a;
+	--line: #e6e2db;
+	--line-strong: #d4cfc6;
+	--accent: #2f5d8a;
+	--accent-soft: #eaf1f8;
+	--warn: #8a4a17;
+	--warn-soft: #fbf1e5;
+
+	/*
+	 * The five the mockups use that the twelve above do not name. Each one appears in a drawing;
+	 * none is a tint computed here, because a computed tint drifts from the drawing it came from.
+	 */
+	--accent-line: #cddcea; /* border of an accent-soft panel or chip */
+	--accent-ink: #1f3f5f; /* text inside an accent-soft panel, and a link on hover */
+	--warn-line: #f0e2cd; /* border of a warn-soft panel */
+	--warn-raised: #f3e0c4; /* a chip on a warn-soft panel — needs to sit above it */
+	--warn-row: #fdfaf4; /* a table row that needs attention without shouting */
+
+	/* Inverse: the one filled control per screen. Never two. */
+	--inverse-bg: #1a1917;
+	--inverse-text: #faf9f7;
+
+	/*
+	 * THE GRAPH'S OWN INK: the edge, and EIGHT NUMBERED SLOTS plus an "other".
+	 *
+	 * Numbered rather than named after kinds, and that is the whole design. The entity vocabulary is
+	 * OPEN — the engine publishes it at runtime, this repository writes none of it down, and a real
+	 * vault carries several times as many kinds as the schema names. A palette keyed on kind names
+	 * would therefore have to guess, and would silently give the same colour to two different kinds
+	 * or no colour to a kind that is everywhere. So the slots are assigned at run time to the kinds
+	 * this vault actually uses, most-used first, and everything past the eighth takes `--k-other`
+	 * and is still labelled with its own name — text degrades perfectly where colour does not.
+	 *
+	 * The first five values are the hues GraphFocus's legend draws, in its order.
+	 */
+	--graph-edge: #cfcabf;
+	--k0: #2f5d8a;
+	--k1: #6a7f4f;
+	--k2: #8a6a3a;
+	--k3: #7a5a8a;
+	--k4: #8a4a17;
+	--k5: #3f7d78;
+	--k6: #8a5a5a;
+	--k7: #5a6a8a;
+	--k-other: #94908a;
+
+	--shadow-popover: 0 4px 14px rgba(26, 25, 23, 0.07);
+	--shadow-dialog: 0 12px 40px rgba(26, 25, 23, 0.16);
+	--scrim: rgba(26, 25, 23, 0.28);
+
+	/* ------------------------------------------------------------------ type */
+
+	--font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--font-prose: 'Newsreader', Georgia, 'Times New Roman', serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+	/*
+	 * UI sizes. The names say what the size is FOR, because a screen that reaches for `--text-13`
+	 * is choosing a number and a screen that reaches for `--text-meta` is choosing a role.
+	 */
+	--text-tag: 10.5px; /* the FILE / RUN / PR label on a piece of evidence */
+	--text-micro: 11px; /* a table's column headings */
+	--text-eyebrow: 11.5px; /* "WHAT YOUR AGENT ACTS ON", and every caption beside it */
+	--text-caption: 12px; /* a count, a date, a secondary line under a title */
+	--text-small: 12.5px; /* secondary controls, filter rows, footnotes */
+	--text-ui: 13px; /* the default for a control */
+	--text-ui-lg: 13.5px; /* the default for body UI text and a primary control */
+	--text-row: 14px; /* a list row's title, a table cell */
+	--text-body: 15px; /* running sans-serif copy */
+
+	/* Prose sizes. Serif, and only ever a memory's own words or a heading over them. */
+	--prose-xs: 14.5px; /* a memory title in a side rail */
+	--prose-sm: 15.5px; /* a quoted memory inside another screen */
+	--prose-md: 16.5px; /* the reading size in a two-pane preview */
+	--prose-lg: 17.5px; /* the reading size on the memory's own page */
+
+	--display-xs: 21px;
+	--display-sm: 24px;
+	--display-md: 26px;
+	--display-lg: 28px;
+	--display-xl: 30px;
+	--display-2xl: 34px;
+
+	--leading-display: 1.22;
+	--leading-title: 1.35; /* a list row's title, which wraps to two lines and must stay tight */
+	--leading-snug: 1.45;
+	--leading-ui: 1.55;
+	--leading-body: 1.65;
+	--leading-prose: 1.72;
+
+	--tracking-eyebrow: 0.08em;
+	--tracking-micro: 0.06em;
+	--tracking-tight: -0.01em;
+
+	--weight-normal: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+
+	/*
+	 * Newsreader's optical-size axis, set once. At reading sizes a text optical size is what stops
+	 * a display serif looking spindly; the mockups' prose is 16.5–17.5px and its headings are 26–40.
+	 */
+	--optical-prose: 16;
+	--optical-display: 30;
+
+	/* ------------------------------------------------------------------ space */
+
+	--space-1: 2px;
+	--space-2: 4px;
+	--space-3: 5px;
+	--space-4: 6px;
+	--space-5: 7px;
+	--space-6: 8px;
+	--space-7: 9px;
+	--space-8: 10px;
+	--space-9: 11px;
+	--space-10: 12px;
+	--space-11: 14px;
+	--space-12: 16px;
+	--space-13: 18px;
+	--space-14: 20px;
+	--space-15: 22px;
+	--space-16: 24px;
+	--space-17: 26px;
+	--space-18: 30px;
+	--space-19: 34px;
+	--space-20: 40px;
+	--space-21: 48px;
+	--space-22: 56px;
+
+	/* ------------------------------------------------------------------ shape */
+
+	--radius-tag: 4px; /* a kind label, a rank badge */
+	--radius-chip: 5px; /* a removable chip, a small input */
+	--radius-control: 6px; /* a button, an input, a select trigger */
+	--radius-card: 7px; /* a rail card, a fact row */
+	--radius-panel: 8px; /* a table, a large panel, the big search box */
+
+	--border: 1px;
+	--border-emphasis: 1.5px; /* a focused text field, drawn in `--accent` */
+	--border-marker: 2px; /* the left edge of the selected row */
+
+	/* ------------------------------------------------------------------ controls */
+
+	--control-h: 30px; /* button, input, select trigger */
+	--control-h-sm: 26px; /* a pill in a row of pills */
+	--control-h-lg: 44px; /* the search field on the search screen */
+	--icon-button: 32px; /* the square icon buttons in the top bar */
+	--topbar-h: 56px;
+
+	/* ------------------------------------------------------------------ layout */
+
+	--rail-filters: 232px; /* BrowseScale's "Narrow to" column */
+	--rail-list: 400px; /* the memory list beside a preview */
+	--rail-list-wide: 420px; /* the same list with no filter column beside it */
+	--rail-facts: 360px; /* the facts rail beside a memory's prose */
+	--rail-graph: 380px; /* the entity panel beside the ego drawing */
+	--rail-answer: 300px; /* Search's readings ABOUT the answer: budget, why these, the nudge */
+	--pane-edit: 520px; /* the editor's right-hand pane */
+	--column-read: 660px; /* a memory's own words */
+	--column-page: 1080px; /* a centred single-column screen */
+
+	--duration-fast: 90ms;
+	--duration: 140ms;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #121211;
+		--surface: #191918;
+		--raised: #212020;
+		--text: #e8e5df;
+		--muted: #9a958d;
+		--faint: #6e6a63;
+		--line: #2a2926;
+		--line-strong: #3b3934;
+		--accent: #8ab4de;
+		--accent-soft: #1a2530;
+		--warn: #d9a066;
+		--warn-soft: #241d14;
+
+		--accent-line: #2b3d4e;
+		--accent-ink: #b9d3ea;
+		--warn-line: #3b2f20;
+		--warn-raised: #4a3a25;
+		--warn-row: #1d1a15;
+
+		/*
+		 * The filled control inverts too. Keeping #1a1917 here would paint a near-black button on a
+		 * near-black page: still technically the accent-free "one filled control", and invisible.
+		 */
+		--inverse-bg: #e8e5df;
+		--inverse-text: #121211;
+
+		--graph-edge: #47443e;
+		--k0: #7aa8d6;
+		--k1: #9dbb7e;
+		--k2: #c2a06a;
+		--k3: #b193c2;
+		--k4: #d9a066;
+		--k5: #6fc4c0;
+		--k6: #d69a9a;
+		--k7: #9aa8d6;
+		--k-other: #8b867e;
+
+		--shadow-popover: 0 4px 14px rgba(0, 0, 0, 0.45);
+		--shadow-dialog: 0 12px 40px rgba(0, 0, 0, 0.6);
+		--scrim: rgba(0, 0, 0, 0.55);
+	}
+}

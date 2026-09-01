@@ -1,0 +1,456 @@
+/*
+ * THE SHELL. One 56px bar over one scrolling region, identical on every screen.
+ *
+ * The bar has two modes and they are the same object:
+ *
+ *   ROOT     wordmark · vault · project · navigation · find-or-ask · refresh · more
+ *            Every list-level screen. Nothing in it scrolls out of reach, which is the direct
+ *            answer to "I do see a Refresh, but I have to scroll".
+ *
+ *   FOCUS    back · where you are · what you can do here
+ *            One memory, the editor, one name in the graph. It replaces the root bar rather than
+ *            sitting under it, because a second bar is the second row of chrome the reader has to
+ *            scroll past before reaching the thing they opened.
+ *
+ * Both are 56px, both sit on `--surface` over a `--line` hairline, and neither ever grows a second
+ * row. That constancy is the point: the owner's diagnosis was that every screen was assembled from
+ * whatever it happened to need, and a shell that is the same shape everywhere is what makes the
+ * screens below it comparable.
+ */
+
+.app {
+	display: grid;
+	grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+	height: 100dvh;
+	background: var(--bg);
+}
+
+.topbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-11);
+	height: var(--topbar-h);
+	padding: 0 var(--space-14);
+	background: var(--surface);
+	border-bottom: var(--border) solid var(--line);
+}
+
+.topbar-group {
+	display: flex;
+	align-items: center;
+	gap: var(--space-12);
+	min-width: 0;
+}
+
+.topbar-group-right {
+	gap: var(--space-6);
+	flex-shrink: 0;
+}
+
+.topbar-divider {
+	width: 1px;
+	height: 20px;
+	background: var(--line);
+	flex-shrink: 0;
+}
+
+.wordmark {
+	font-size: var(--text-row);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-tight);
+	color: var(--text);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.wordmark:hover {
+	color: var(--text);
+	text-decoration: none;
+}
+
+/*
+ * THE VAULT IS A SHORT NAME. "I don't know why we need to enter the entire folder path. It's too
+ * long."
+ *
+ * The name is the last segment of the resolved root, and the whole path — with the engine, the
+ * contract digest, the model reading and where this app keeps its copies — is one click away in a
+ * popover. Nothing was hidden; a fingerprint stopped being a headline.
+ */
+.vault-name {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3);
+	height: var(--control-h-sm);
+	padding: 0 var(--space-4);
+	border: var(--border) solid transparent;
+	border-radius: var(--radius-chip);
+	background: none;
+	color: var(--muted);
+	font-size: var(--text-small);
+	cursor: pointer;
+	max-width: 180px;
+	white-space: nowrap;
+}
+
+.vault-name:hover {
+	background: var(--raised);
+	color: var(--text);
+}
+
+.vault-name-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.vault-sheet {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	width: 340px;
+}
+
+.vault-reading {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+}
+
+.vault-reading dt {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+	margin: 0;
+}
+
+.vault-reading dd {
+	margin: 0;
+	font-size: var(--text-small);
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+/*
+ * THE PROJECT SWITCHER — the primary axis, and the widest thing in the bar for that reason.
+ *
+ * "Project management should be a totally different thing. You can select which projects to display
+ * together, or you can have a general global view. And projects should be on the top. All of this
+ * comes under a project at the end of the day."
+ *
+ * So it is a switcher, not a facet: one choice, at the top, that every screen below is read
+ * through. It is not in the filter column and it never appears as a chip.
+ */
+.project-switcher {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-5);
+	height: 28px;
+	padding: 0 var(--space-8) 0 var(--space-9);
+	border: var(--border) solid var(--line-strong);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	color: var(--text);
+	font-size: var(--text-ui-lg);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+	max-width: 260px;
+	white-space: nowrap;
+}
+
+.project-switcher:hover {
+	background: var(--bg);
+}
+
+.project-switcher-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.project-switcher-count {
+	color: var(--faint);
+	font-weight: var(--weight-normal);
+}
+
+.project-menu {
+	min-width: 300px;
+	max-height: 420px;
+	overflow-y: auto;
+	padding: var(--space-2);
+}
+
+/*
+ * A memory with no project APPLIES EVERYWHERE. It is not a project called "none".
+ *
+ * This is the one place the distinction can be made once and inherited by every screen, so it is
+ * made here: the everywhere option is separated from the list of real projects by a rule, carries
+ * its own sentence, and is INCLUDED in every project's view rather than being an alternative to it.
+ * Rendering it as a peer project would tell the reader that choosing a project hides it, which is
+ * the opposite of what the engine does with an unset scope.
+ */
+.project-menu-note {
+	padding: var(--space-4) var(--space-8) var(--space-6);
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+/* "of 2,847 in this vault" — what the chosen project is a part of. Reads only beside the switcher. */
+.topbar-context {
+	font-size: var(--text-small);
+	color: var(--faint);
+	white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ navigation */
+
+/*
+ * FOUR DESTINATIONS, EACH LABELLED SO IT NEEDS NO EXPLAINING.
+ *
+ * "I see Kaleidoscope, Memories, Needs a decision, Graph, New memory. I don't know what either of
+ * them does." Two of those five are gone: "Graph" became "Names", which says what is in there, and
+ * "New memory" is an action rather than a place — it lives in the More menu with the other actions.
+ */
+.topbar-nav {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.nav-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: var(--control-h-sm);
+	padding: 0 var(--space-8);
+	border-radius: var(--radius-control);
+	color: var(--muted);
+	font-size: var(--text-ui);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.nav-link:hover {
+	background: var(--raised);
+	color: var(--text);
+	text-decoration: none;
+}
+
+.nav-link[aria-current='page'] {
+	background: var(--raised);
+	color: var(--text);
+	font-weight: var(--weight-medium);
+}
+
+/* ------------------------------------------------------------------ find or ask */
+
+/*
+ * ONE BOX, TWO JOBS, NAMED HONESTLY — and this one is a NAVIGATION, not a query.
+ *
+ * Typing here filters nothing and asks nothing. It carries what was typed to the search screen,
+ * where "Find these words" runs over the payload the browser already has and "Ask the way your
+ * agent does" is a separate, explicit press. No keystroke in this app reaches the ranked door.
+ */
+.findbox {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	width: 220px;
+	height: var(--control-h);
+	padding: 0 var(--space-10);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--bg);
+	color: var(--faint);
+	font-size: var(--text-ui);
+	text-align: left;
+	cursor: text;
+}
+
+.findbox:hover {
+	border-color: var(--line-strong);
+}
+
+.findbox-icon {
+	color: var(--faint);
+	flex-shrink: 0;
+}
+
+.findbox-input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	background: none;
+	color: var(--text);
+	font-size: var(--text-ui);
+	outline: none;
+	padding: 0;
+}
+
+.findbox-input::placeholder {
+	color: var(--faint);
+}
+
+/*
+ * "This vault has moved — refresh."
+ *
+ * The badge FETCHES NOTHING. The liveness read says the vault's commit position changed and the
+ * badge waits to be asked; an accepted refresh is the only thing that re-reads. It sits on the
+ * refresh control it is about rather than floating in the bar, so pressing the obvious thing is
+ * the right thing.
+ */
+.refresh-dot {
+	position: absolute;
+	top: -2px;
+	right: -2px;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--accent);
+	border: 1.5px solid var(--surface);
+}
+
+.refresh-wrap {
+	position: relative;
+	display: inline-flex;
+}
+
+/* ------------------------------------------------------------------ focus bar */
+
+.topbar-back {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-7);
+	height: var(--control-h-sm);
+	padding: 0 var(--space-4) 0 0;
+	border: 0;
+	background: none;
+	color: var(--muted);
+	font-size: var(--text-ui-lg);
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.topbar-back:hover {
+	color: var(--text);
+	text-decoration: none;
+}
+
+.breadcrumb {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	min-width: 0;
+	font-size: var(--text-ui-lg);
+}
+
+.breadcrumb-sep {
+	color: var(--line-strong);
+	flex-shrink: 0;
+}
+
+.breadcrumb-current {
+	font-weight: var(--weight-medium);
+	color: var(--text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ the region below */
+
+.main {
+	min-height: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+/* A screen that scrolls as one column. */
+.screen {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+/* A screen made of side-by-side panes, each scrolling on its own. */
+.screen-split {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	overflow: hidden;
+}
+
+.pane {
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+}
+
+.pane-bordered {
+	border-right: var(--border) solid var(--line);
+}
+
+.pane-surface {
+	background: var(--surface);
+}
+
+/* A centred single-column page — the search screen, the entity table. */
+.page {
+	width: min(var(--column-page), 100%);
+	margin: 0 auto;
+	padding: var(--space-18) var(--space-20) var(--space-20);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-13);
+}
+
+.page-narrow {
+	width: min(940px, 100%);
+}
+
+/*
+ * A banner that changes what every screen below it MEANS, and therefore sits above all of them.
+ * Two things qualify and there will never be many: an engine this build was not tested against,
+ * and a half-finished merge. Neither is a toast and neither goes away on its own.
+ */
+.notice {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: var(--space-10) var(--space-14);
+	border-bottom: var(--border) solid var(--line);
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+}
+
+.notice-warn {
+	background: var(--warn-soft);
+	border-bottom-color: var(--warn-line);
+	color: var(--warn);
+}
+
+.notice h2 {
+	margin: 0;
+	font-size: var(--text-ui-lg);
+	font-weight: var(--weight-semibold);
+}
+
+.notice p {
+	margin: 0;
+}
+
+/*
+ * The two controls a notice offers. A banner that says something is half-done and gives no way to
+ * finish it is a status line, and this one is not: both writes it names are one press away.
+ */
+.notice-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-6);
+	padding-top: var(--space-2);
+}

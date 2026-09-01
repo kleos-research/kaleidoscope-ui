@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #2f5d8a; } a:hover { color: #1f3f5f; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      <div style="font-size: 13.5px; color: #6a6660;">Things your memories talk about</div>
+      <div style="font-size: 13.5px; color: #d4cfc6;">/</div>
+      <div style="font-size: 13.5px; font-weight: 500;">build cache</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; border: 1px solid #e6e2db; border-radius: 6px; overflow: hidden; background: #ffffff;">
+        <div style="padding: 5px 12px; font-size: 12.5px; background: #1a1917; color: #faf9f7; font-weight: 500;">Direct</div>
+        <div style="padding: 5px 12px; font-size: 12.5px; color: #6a6660;">Two steps</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; overflow: hidden;">
+
+    <div style="flex: 1; position: relative; background: #faf9f7;">
+      <svg width="100%" height="100%" viewBox="0 0 840 844" style="display: block;">
+        <g stroke="#cfcabf" stroke-width="1.4">
+          <line x1="420" y1="380" x2="420" y2="150"></line>
+          <line x1="420" y1="380" x2="568" y2="204"></line>
+          <line x1="420" y1="380" x2="646" y2="340"></line>
+          <line x1="420" y1="380" x2="619" y2="495"></line>
+          <line x1="420" y1="380" x2="499" y2="596"></line>
+          <line x1="420" y1="380" x2="341" y2="596"></line>
+          <line x1="420" y1="380" x2="221" y2="495"></line>
+          <line x1="420" y1="380" x2="193" y2="340"></line>
+          <line x1="420" y1="380" x2="272" y2="204"></line>
+        </g>
+
+        <g font-family="'IBM Plex Sans', sans-serif" font-size="10.5" fill="#94908a" text-anchor="middle">
+          <text x="431" y="262">is keyed on</text>
+          <text x="507" y="284">stopped using</text>
+          <text x="546" y="352">powers</text>
+          <text x="533" y="447">depends on</text>
+          <text x="472" y="500">measured at</text>
+          <text x="368" y="500">part of</text>
+          <text x="307" y="447">blocked by</text>
+          <text x="294" y="352">avoids</text>
+          <text x="341" y="284">used by</text>
+        </g>
+
+        <g>
+          <circle cx="420" cy="150" r="11" fill="#6a7f4f"></circle>
+          <circle cx="568" cy="204" r="9" fill="#6a7f4f"></circle>
+          <circle cx="646" cy="340" r="10" fill="#6a7f4f"></circle>
+          <circle cx="619" cy="495" r="9" fill="#2f5d8a"></circle>
+          <circle cx="499" cy="596" r="8" fill="#8a4a17"></circle>
+          <circle cx="341" cy="596" r="9" fill="#8a6a3a"></circle>
+          <circle cx="221" cy="495" r="8" fill="#7a5a8a"></circle>
+          <circle cx="193" cy="340" r="8" fill="#8a6a3a"></circle>
+          <circle cx="272" cy="204" r="9" fill="#2f5d8a"></circle>
+        </g>
+
+        <g font-family="'IBM Plex Sans', sans-serif" font-size="12.5" fill="#1a1917" text-anchor="middle">
+          <text x="420" y="132">lockfile hash</text>
+          <text x="568" y="186">branch name</text>
+          <text x="672" y="344" text-anchor="start">cross-branch reuse</text>
+          <text x="639" y="521" text-anchor="start">CI runner pool</text>
+          <text x="499" y="622">cache hit rate</text>
+          <text x="341" y="622">nightly rebuild</text>
+          <text x="201" y="521" text-anchor="end">cold start incident</text>
+          <text x="173" y="344" text-anchor="end">manual cache purge</text>
+          <text x="272" y="186">dependency install</text>
+        </g>
+
+        <circle cx="420" cy="380" r="30" fill="#1a1917"></circle>
+        <text x="420" y="432" font-family="'IBM Plex Sans', sans-serif" font-size="15" font-weight="600" fill="#1a1917" text-anchor="middle">build cache</text>
+      </svg>
+
+      <div style="position: absolute; left: 20px; bottom: 18px; display: flex; align-items: center; gap: 14px; font-size: 11.5px; color: #94908a;">
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2f5d8a; display: inline-block;"></span>tool</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #6a7f4f; display: inline-block;"></span>concept</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #8a6a3a; display: inline-block;"></span>practice</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #7a5a8a; display: inline-block;"></span>event</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #8a4a17; display: inline-block;"></span>metric</div>
+        <div style="color: #d4cfc6;">|</div>
+        <div>circle size = how often it is named</div>
+      </div>
+    </div>
+
+    <div style="width: 380px; flex-shrink: 0; border-left: 1px solid #e6e2db; background: #ffffff; display: flex; flex-direction: column; overflow: hidden;">
+
+      <div style="padding: 22px 24px 16px 24px; border-bottom: 1px solid #e6e2db; display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-family: 'Newsreader', Georgia, serif; font-size: 24px;">build cache</div>
+        <div style="font-size: 12.5px; color: #6a6660; line-height: 1.55;">tool · the shared dependency cache used by CI</div>
+        <div style="display: flex; gap: 16px; padding-top: 4px;">
+          <div style="display: flex; flex-direction: column;"><span style="font-size: 17px; font-weight: 600;">9</span><span style="font-size: 11.5px; color: #94908a;">connections</span></div>
+          <div style="display: flex; flex-direction: column;"><span style="font-size: 17px; font-weight: 600;">7</span><span style="font-size: 11.5px; color: #94908a;">memories</span></div>
+          <div style="display: flex; flex-direction: column;"><span style="font-size: 17px; font-weight: 600;">6</span><span style="font-size: 11.5px; color: #94908a;">relations used</span></div>
+        </div>
+      </div>
+
+      <div style="padding: 16px 24px; border-bottom: 1px solid #e6e2db; display: flex; flex-direction: column; gap: 11px;">
+        <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">What is said about it</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.5;">
+          <div><span style="color: #94908a;">is keyed on</span> lockfile hash</div>
+          <div><span style="color: #94908a;">stopped using</span> branch name</div>
+          <div><span style="color: #94908a;">powers</span> cross-branch reuse</div>
+          <div><span style="color: #94908a;">depends on</span> CI runner pool</div>
+          <div style="color: #2f5d8a; font-weight: 500;">5 more</div>
+        </div>
+      </div>
+
+      <div style="padding: 16px 24px; display: flex; flex-direction: column; gap: 11px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">Memories that name it</div>
+          <div style="font-size: 12px; color: #94908a;">7</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-family: 'Newsreader', Georgia, serif; font-size: 14.5px; line-height: 1.4;">Cache keys use the lockfile hash, not the branch name</div>
+            <div style="font-size: 11.5px; color: #94908a;">correction · today</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-family: 'Newsreader', Georgia, serif; font-size: 14.5px; line-height: 1.4;">Cold builds warm the cache from the last green main</div>
+            <div style="font-size: 11.5px; color: #94908a;">procedure · 3 days ago</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-family: 'Newsreader', Georgia, serif; font-size: 14.5px; line-height: 1.4;">The nightly rebuild was dropped in March</div>
+            <div style="font-size: 11.5px; color: #94908a;">outcome · 4 days ago</div>
+          </div>
+          <div style="font-size: 12.5px; color: #2f5d8a; font-weight: 500;">See all 7</div>
+        </div>
+      </div>
+
+      <div style="margin-top: auto; padding: 14px 24px; border-top: 1px solid #e6e2db; background: #faf9f7; font-size: 12px; line-height: 1.55; color: #6a6660;">
+        Drawn by this app from what your memories say. Two spellings the engine already treats as one thing would still appear here twice.
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

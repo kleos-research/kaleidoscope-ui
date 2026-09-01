@@ -87,6 +87,11 @@ const ALLOWED = [
 	['the whole workspace', 'ordinary English, and the unit the export door returns'],
 	['kscope where', 'a published command name'],
 	['kscope activate', 'a published command name'],
+	// The ranked door's published OUTPUT field. `docs/BOUNDARY.md` permits this repository to
+	// describe the engine's published contract, and the search screen cannot read an answer without
+	// naming the field the answer arrives in. It is in the vault because agents wrote memories about
+	// building this engine, not because anything was copied out of one.
+	['selected_hits', "the field name the engine's ranked door returns its served memories in"],
 	// Flagged for human review in docs/M7-M8-STATUS.md rather than allowed silently. It names a block
 	// in the record the export door returns, which docs/BOUNDARY.md permits a client to describe —
 	// but it sits close enough to the engine's own decisions to be a judgement rather than a rule,

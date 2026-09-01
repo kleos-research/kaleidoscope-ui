@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #2f5d8a; } a:hover { color: #1f3f5f; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Kaleidoscope</div>
+      <div style="width: 1px; height: 20px; background: #e6e2db;"></div>
+      <div style="display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 11px; border: 1px solid #d4cfc6; border-radius: 6px; font-size: 13.5px; font-weight: 500;">
+        Payments platform
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; display: flex; justify-content: center; padding: 30px 0 0 0;">
+    <div style="width: 940px; display: flex; flex-direction: column; gap: 18px;">
+
+      <!-- one input, two jobs, named honestly -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; border: 1px solid #d4cfc6; border-radius: 8px; background: #ffffff;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+          <div style="font-size: 15px; flex: 1;">how does the build cache decide what to reuse</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="padding: 5px 11px; border-radius: 6px; background: #ffffff; border: 1px solid #e6e2db; font-size: 12.5px; color: #6a6660;">Find these words &nbsp;<span style="color: #94908a;">6</span></div>
+          <div style="padding: 5px 11px; border-radius: 6px; background: #1a1917; color: #faf9f7; font-size: 12.5px; font-weight: 500;">Ask the way your agent does</div>
+          <div style="flex: 1;"></div>
+          <div style="font-size: 12px; color: #94908a;">186&thinsp;ms</div>
+        </div>
+      </div>
+
+      <div style="height: 1px; background: #e6e2db;"></div>
+
+      <!-- the honest part: this is the agent's own door, and using it leaves a mark -->
+      <div style="background: #eaf1f8; border: 1px solid #cddcea; border-radius: 7px; padding: 13px 16px; display: flex; align-items: flex-start; gap: 10px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2f5d8a" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16"></line><circle cx="12" cy="7.8" r="0.9" fill="#2f5d8a" stroke="none"></circle></svg>
+        <div style="font-size: 13px; line-height: 1.6; color: #1f3f5f;">This is the same door your agent reads through, so what you see below is <strong style="font-weight: 600;">exactly what it would have been given</strong> for this question. Asking is recorded in the vault, the way your agent's own reads are — the words you type are not.</div>
+      </div>
+
+      <div style="display: flex; gap: 26px;">
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 13px;">
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">It would receive</div>
+            <div style="font-size: 12.5px; color: #94908a;">4 of 349 · nothing left out</div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 9px;">
+            <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 13px 15px; background: #ffffff; display: flex; flex-direction: column; gap: 5px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 18px; height: 18px; border-radius: 4px; background: #1a1917; color: #faf9f7; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">1</div>
+                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 16px; line-height: 1.35;">Cache keys use the lockfile hash, not the branch name</div>
+              </div>
+              <div style="font-size: 12px; color: #94908a; padding-left: 26px;">correction · today · 2.1 KB</div>
+            </div>
+            <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 13px 15px; background: #ffffff; display: flex; flex-direction: column; gap: 5px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 18px; height: 18px; border-radius: 4px; background: #1a1917; color: #faf9f7; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">2</div>
+                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 16px; line-height: 1.35;">Cold builds warm the cache from the last green main</div>
+              </div>
+              <div style="font-size: 12px; color: #94908a; padding-left: 26px;">procedure · 3 days ago · 3.4 KB</div>
+            </div>
+            <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 13px 15px; background: #ffffff; display: flex; flex-direction: column; gap: 5px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 18px; height: 18px; border-radius: 4px; background: #1a1917; color: #faf9f7; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">3</div>
+                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 16px; line-height: 1.35;">The vendored parser was dropped in March</div>
+              </div>
+              <div style="font-size: 12px; color: #94908a; padding-left: 26px;">outcome · 4 days ago · 2.8 KB</div>
+            </div>
+            <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 13px 15px; background: #ffffff; display: flex; flex-direction: column; gap: 5px; opacity: 0.55;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 18px; height: 18px; border-radius: 4px; background: #6a6660; color: #faf9f7; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">4</div>
+                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 16px; line-height: 1.35;">Retries used a fixed delay of two seconds</div>
+              </div>
+              <div style="font-size: 12px; color: #94908a; padding-left: 26px;">superseded · last week · 2.1 KB</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+          <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 15px 16px; background: #ffffff; display: flex; flex-direction: column; gap: 12px;">
+            <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">How much it got</div>
+            <div style="display: flex; flex-direction: column; gap: 7px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 26px;">10.4<span style="font-size: 15px; color: #94908a;"> KB</span></div>
+                <div style="font-size: 12.5px; color: #94908a;">of 32 KB</div>
+              </div>
+              <div style="height: 5px; border-radius: 3px; background: #f2f0ec; overflow: hidden;">
+                <div style="width: 32%; height: 100%; background: #2f5d8a;"></div>
+              </div>
+              <div style="font-size: 12px; color: #6a6660; line-height: 1.5;">Room to spare, so nothing was dropped for size.</div>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 15px 16px; background: #ffffff; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">Why these four</div>
+            <div style="font-size: 12.5px; line-height: 1.6; color: #6a6660;">Ranked on the words, on meaning, and on how the named things connect — then cut to fit the budget above.</div>
+            <div style="font-size: 12.5px; color: #2f5d8a; font-weight: 500;">Show the ranking</div>
+          </div>
+
+          <div style="border: 1px solid #f0e2cd; background: #fbf1e5; border-radius: 7px; padding: 13px 15px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; font-weight: 600; color: #8a4a17;">One of these looks wrong to you?</div>
+            <div style="font-size: 12.5px; line-height: 1.55; color: #8a4a17;">That is the fastest way to find a memory worth fixing — your agent just told you it would use it.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

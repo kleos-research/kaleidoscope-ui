@@ -1,0 +1,4151 @@
+/*
+ * The primitives, one block each, in the order they are exported from `ui/index.mjs`.
+ *
+ * Every rule here reads a token and spells no raw value. The one exception is a number that IS the
+ * component — the 1px inset that keeps a chip's remove button on the baseline, say — and each of
+ * those carries the reason on the line above it.
+ *
+ * Radix owns behaviour: focus trapping, roving tabindex, positioning, escape, outside-click, ARIA.
+ * This file owns paint only. If a rule here is trying to make something behave, it is in the wrong
+ * file and the primitive is missing a Radix part.
+ */
+
+/* ================================================================= button */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-4);
+	height: var(--control-h);
+	padding: 0 var(--space-11);
+	border: var(--border) solid transparent;
+	border-radius: var(--radius-control);
+	font-size: var(--text-ui);
+	font-weight: var(--weight-medium);
+	line-height: 1;
+	white-space: nowrap;
+	cursor: pointer;
+	background: transparent;
+	color: var(--text);
+	transition:
+		background var(--duration-fast) linear,
+		border-color var(--duration-fast) linear,
+		color var(--duration-fast) linear;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+/*
+ * ONE FILLED BUTTON PER SCREEN. Every mockup has exactly one — Edit, Save, Ask the way your agent
+ * does — and that is what makes it findable. A second one on the same screen is the bug.
+ */
+.btn-primary {
+	background: var(--inverse-bg);
+	color: var(--inverse-text);
+	border-color: var(--inverse-bg);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--text);
+	border-color: var(--text);
+	filter: brightness(1.25);
+}
+
+.btn-default {
+	background: var(--surface);
+	color: var(--text);
+	border-color: var(--line);
+}
+
+.btn-default:hover:not(:disabled) {
+	border-color: var(--line-strong);
+	background: var(--bg);
+}
+
+/* A control that is a sentence: "Add a fact", "Clear both filters", "Show the ranking". */
+.btn-quiet {
+	height: auto;
+	padding: 0;
+	background: none;
+	border-color: transparent;
+	color: var(--accent);
+	font-size: var(--text-small);
+	font-weight: var(--weight-medium);
+}
+
+.btn-quiet:hover:not(:disabled) {
+	color: var(--accent-ink);
+	text-decoration: underline;
+}
+
+/*
+ * A destructive control is NOT red-filled. Removal in this product hides a memory and keeps a copy;
+ * a red button says "gone", which is the one thing it does not mean. It is an ordinary button whose
+ * word is the warning, tinted only enough to be told apart.
+ */
+.btn-warn {
+	background: var(--warn-soft);
+	color: var(--warn);
+	border-color: var(--warn-line);
+}
+
+.btn-warn:hover:not(:disabled) {
+	background: var(--warn-raised);
+}
+
+.btn-sm {
+	height: var(--control-h-sm);
+	padding: 0 var(--space-9);
+	font-size: var(--text-small);
+}
+
+.btn-icon {
+	width: var(--icon-button);
+	height: var(--icon-button);
+	padding: 0;
+	background: var(--surface);
+	border-color: var(--line);
+	color: var(--muted);
+}
+
+.btn-icon:hover:not(:disabled) {
+	border-color: var(--line-strong);
+	color: var(--text);
+}
+
+.btn-block {
+	width: 100%;
+}
+
+/* ================================================================= field */
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.field-label {
+	font-size: var(--text-small);
+	color: var(--muted);
+}
+
+/* The sentence under a field that explains what the value does. Never a tooltip; always visible. */
+.field-note {
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+	background: var(--raised);
+	border-radius: var(--radius-chip);
+	padding: var(--space-6) var(--space-8);
+}
+
+.field-note-warn {
+	color: var(--warn);
+	background: var(--warn-soft);
+}
+
+.input,
+.textarea {
+	width: 100%;
+	border: var(--border) solid var(--line-strong);
+	border-radius: var(--radius-chip);
+	background: var(--surface);
+	color: var(--text);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+	padding: var(--space-5) var(--space-8);
+}
+
+.input {
+	height: var(--control-h);
+	padding-block: 0;
+}
+
+.textarea {
+	min-height: 84px;
+	resize: vertical;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+	color: var(--faint);
+}
+
+/*
+ * A focused field is drawn 1.5px in the accent, exactly as EditValues draws it — and the border
+ * width is compensated with a negative margin so the field does not jump a half pixel on focus.
+ */
+.input:focus,
+.textarea:focus {
+	outline: none;
+	border-width: var(--border-emphasis);
+	border-color: var(--accent);
+	margin: -0.5px;
+}
+
+.input:disabled,
+.textarea:disabled {
+	background: var(--raised);
+	color: var(--muted);
+	cursor: not-allowed;
+}
+
+/*
+ * "EVERY BRANCH", "EVERY FILE", "STILL TRUE" — a field left empty on purpose, drawn dashed.
+ *
+ * This is a real design decision and not decoration: an omitted scope axis matches EVERY request,
+ * so a blank box reads as "narrower" and means "wider". The dashed edge is what says the emptiness
+ * was chosen. It is a class rather than a state so a read-only screen can render the same shape.
+ */
+.input-unset {
+	border-style: dashed;
+	border-color: var(--line-strong);
+	background: var(--bg);
+	color: var(--faint);
+	display: flex;
+	align-items: center;
+}
+
+/* A field the memory's own words go into: serif, because that is what it will be read as. */
+.textarea-prose {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-prose);
+	font-size: var(--prose-md);
+	line-height: var(--leading-prose);
+	border-color: var(--line);
+}
+
+/* The title, which spans both panes of the editor and is underlined rather than boxed. */
+.input-title {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-size: var(--display-xl);
+	line-height: var(--leading-display);
+	height: auto;
+	border: 0;
+	border-bottom: var(--border) dashed var(--line-strong);
+	border-radius: 0;
+	padding: 0 0 var(--space-7) 0;
+	background: transparent;
+}
+
+.input-title:focus {
+	margin: 0;
+	border-width: 0 0 var(--border-emphasis) 0;
+	border-bottom-style: solid;
+}
+
+/* ================================================================= select */
+
+.select-trigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-6);
+	width: 100%;
+	height: var(--control-h);
+	padding: 0 var(--space-8);
+	border: var(--border) solid var(--line-strong);
+	border-radius: var(--radius-chip);
+	background: var(--surface);
+	color: var(--text);
+	font-size: var(--text-ui);
+	cursor: pointer;
+}
+
+/*
+ * A select that is a LABEL you can change rather than a field you fill in — "Newest first ⌄" over
+ * the list. BrowseScale draws it with no border and no fill, because it sits inside a strip that is
+ * already bounded and a bordered control there would read as a second, competing thing to do.
+ */
+.select-quiet {
+	width: auto;
+	height: var(--control-h-sm);
+	padding: 0 var(--space-4);
+	border-color: transparent;
+	background: none;
+	color: var(--muted);
+	font-size: var(--text-small);
+}
+
+.select-quiet:hover {
+	background: var(--raised);
+	color: var(--text);
+}
+
+.select-trigger[data-placeholder] {
+	color: var(--faint);
+}
+
+.select-trigger:disabled {
+	background: var(--raised);
+	color: var(--muted);
+	cursor: not-allowed;
+}
+
+.select-icon {
+	color: var(--faint);
+	flex-shrink: 0;
+}
+
+/*
+ * One surface for every floating thing: select menu, popover, dropdown, combobox list. The mockups
+ * draw all four the same and a second shadow would be the first inconsistency back.
+ */
+.surface-float {
+	background: var(--surface);
+	border: var(--border) solid var(--line-strong);
+	border-radius: var(--radius-control);
+	box-shadow: var(--shadow-popover);
+	overflow: hidden;
+	z-index: 40;
+}
+
+.select-content {
+	min-width: var(--radix-select-trigger-width);
+	max-height: min(360px, var(--radix-select-content-available-height));
+}
+
+.select-viewport {
+	padding: var(--space-2);
+}
+
+.select-item,
+.menu-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	padding: var(--space-5) var(--space-8);
+	border-radius: var(--radius-tag);
+	font-size: var(--text-ui);
+	color: var(--text);
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+}
+
+.select-item[data-highlighted],
+.menu-item[data-highlighted] {
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+}
+
+.select-item[data-disabled],
+.menu-item[data-disabled] {
+	color: var(--faint);
+	cursor: not-allowed;
+}
+
+/* The count beside a value: "already in 4 memories", "1 memory", "612". */
+.item-count {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+	flex-shrink: 0;
+}
+
+.select-label,
+.menu-label {
+	padding: var(--space-6) var(--space-8) var(--space-2);
+	font-size: var(--text-micro);
+	font-weight: var(--weight-medium);
+	letter-spacing: var(--tracking-micro);
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+.menu-separator {
+	height: 1px;
+	background: var(--line);
+	margin: var(--space-2) 0;
+}
+
+.select-scroll {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 22px;
+	background: var(--surface);
+	color: var(--faint);
+}
+
+/* ================================================================= combobox */
+
+/*
+ * The floating panel itself. Its width is the field's, taken from Radix's own measurement of the
+ * anchor rather than guessed, so a long name in the list never makes the popover wider than the
+ * input it belongs to — which is what makes it read as part of the field.
+ */
+/*
+ * The root cmdk mounts on. It carries no paint — the input inside it is the drawn control — and it
+ * exists so that input can shrink below its own content width when the row it is in runs out of
+ * room. Without `min-width: 0` a long name is what decides how wide a fact row wants to be.
+ */
+.combobox {
+	min-width: 0;
+}
+
+/*
+ * A FLOOR ON THE PANEL'S WIDTH. It is sized to its anchor, and in a fact row the anchor is one of
+ * three controls sharing a 436px card — so the list of names came out about 120px wide and "Use
+ * “recurrence” as a new name" wrapped onto three lines inside it. EditValues draws this panel at the
+ * width of the field's whole row.
+ */
+.combobox-panel {
+	/* `width` comes from the anchor, inline. `min-width` is the floor that stops it collapsing. */
+	min-width: 260px;
+	padding: 0;
+}
+
+.combobox-list {
+	max-height: 280px;
+	overflow-y: auto;
+	padding: 0;
+}
+
+/*
+ * The combobox's rows are drawn as full-width bands with hairlines between them, not as inset
+ * pills — EditValues shows the first row filled in `--accent-soft` edge to edge. It is a different
+ * object from a select's menu because it is a list of things that already exist in the vault, with
+ * how often each one is used, and the reader is comparing those counts down the column.
+ */
+.combobox-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-6);
+	padding: var(--space-5) var(--space-10);
+	font-size: var(--text-ui-lg);
+	color: var(--text);
+	cursor: pointer;
+	border-top: var(--border) solid var(--raised);
+	outline: none;
+}
+
+.combobox-item:first-child {
+	border-top: 0;
+}
+
+.combobox-item[data-selected='true'] {
+	background: var(--accent-soft);
+	color: var(--text);
+	font-weight: var(--weight-medium);
+}
+
+.combobox-item[data-selected='true'] .item-count {
+	color: var(--muted);
+}
+
+/*
+ * "Use "lockfile ha" as a new name."
+ *
+ * ALWAYS PRESENT, never conditional on the list being empty. The vocabulary grows and this app must
+ * never be the thing that stops it — but the existing values are listed above this row, because
+ * names join only when they match exactly and picking the existing one is what keeps them one
+ * thing. Offering "new" first would make fragmentation the default gesture.
+ */
+.combobox-create {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: var(--space-5) var(--space-10);
+	border-top: var(--border) solid var(--raised);
+	font-size: var(--text-ui-lg);
+	color: var(--muted);
+	cursor: pointer;
+	outline: none;
+}
+
+.combobox-create[data-selected='true'] {
+	background: var(--raised);
+	color: var(--text);
+}
+
+.combobox-empty {
+	padding: var(--space-8) var(--space-10);
+	font-size: var(--text-ui);
+	color: var(--faint);
+}
+
+/* A vocabulary shown as a wrap of chips rather than a list — the relation picker in EditValues. */
+.combobox-cloud {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+	padding: var(--space-8) var(--space-10);
+}
+
+/* ================================================================= dialog */
+
+.dialog-overlay {
+	position: fixed;
+	inset: 0;
+	background: var(--scrim);
+	z-index: 60;
+}
+
+.dialog-content {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: min(560px, calc(100vw - var(--space-20)));
+	max-height: calc(100vh - var(--space-20));
+	overflow-y: auto;
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	box-shadow: var(--shadow-dialog);
+	padding: var(--space-16);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-11);
+	z-index: 61;
+}
+
+.dialog-wide {
+	width: min(880px, calc(100vw - var(--space-20)));
+}
+
+.dialog-title {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-size: var(--display-sm);
+	line-height: var(--leading-display);
+	font-weight: var(--weight-normal);
+	margin: 0;
+}
+
+.dialog-description {
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+	color: var(--muted);
+	margin: 0;
+}
+
+.dialog-footer {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-6);
+	padding-top: var(--space-2);
+}
+
+/* ================================================================= popover / menu */
+
+.popover-content {
+	padding: var(--space-11) var(--space-12);
+	max-width: min(360px, calc(100vw - var(--space-14)));
+}
+
+.menu-content {
+	min-width: 200px;
+	padding: var(--space-2);
+}
+
+/* ================================================================= tabs / segmented */
+
+.tabs-list {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+/*
+ * The filter-shaped tab row from GraphEntry: pills, one filled, each carrying its own count. It is
+ * a tab list and not a filter panel because the four are mutually exclusive orderings of one table.
+ */
+.tab {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: var(--control-h-sm);
+	padding: 0 var(--space-9);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	color: var(--muted);
+	font-size: var(--text-small);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tab:hover {
+	border-color: var(--line-strong);
+	color: var(--text);
+}
+
+.tab[data-state='active'] {
+	background: var(--inverse-bg);
+	border-color: var(--inverse-bg);
+	color: var(--inverse-text);
+}
+
+.tab-count {
+	color: var(--faint);
+	font-weight: var(--weight-normal);
+}
+
+.tab[data-state='active'] .tab-count {
+	color: var(--inverse-text);
+	opacity: 0.7;
+}
+
+.tab-count-warn {
+	color: var(--warn);
+	font-weight: var(--weight-semibold);
+}
+
+/*
+ * The joined two-up switch — "Direct / Two steps" in GraphFocus. A different object from the pills
+ * above: those are four independent orderings, this is one axis with two positions.
+ */
+.segmented {
+	display: inline-flex;
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	overflow: hidden;
+}
+
+.segmented-item {
+	padding: var(--space-3) var(--space-10);
+	font-size: var(--text-small);
+	color: var(--muted);
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.segmented-item[data-state='on'] {
+	background: var(--inverse-bg);
+	color: var(--inverse-text);
+	font-weight: var(--weight-medium);
+}
+
+/* ================================================================= table */
+
+.table-frame {
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	overflow: hidden;
+}
+
+.table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--text-row);
+}
+
+.table thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	text-align: left;
+	padding: var(--space-7) var(--space-12);
+	background: var(--bg);
+	border-bottom: var(--border) solid var(--line);
+	font-size: var(--text-micro);
+	font-weight: var(--weight-medium);
+	letter-spacing: var(--tracking-micro);
+	text-transform: uppercase;
+	color: var(--faint);
+	white-space: nowrap;
+}
+
+.table tbody td {
+	padding: var(--space-10) var(--space-12);
+	border-bottom: var(--border) solid var(--raised);
+	color: var(--muted);
+	vertical-align: middle;
+}
+
+/* The column a reader scans down. Full-strength ink; every other column is support. */
+.table td.table-subject {
+	color: var(--text);
+}
+
+.table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.table tbody tr[data-selected='true'] td {
+	background: var(--accent-soft);
+}
+
+.table tbody tr[data-attention='true'] td {
+	background: var(--warn-row);
+}
+
+.table tbody tr[data-clickable='true'] {
+	cursor: pointer;
+}
+
+.table tbody tr[data-clickable='true']:hover td {
+	background: var(--raised);
+}
+
+.table td.table-numeric,
+.table th.table-numeric {
+	text-align: right;
+	font-size: var(--text-small);
+}
+
+/*
+ * A degree bar, NOT a sparkline.
+ *
+ * A sparkline needs range, and degree here spans about 1 to 10 with most rows constant at 1 — three
+ * quarters of the column would be a flat line pretending to be a trend. Discrete ticks say how many
+ * and stop there, which is honest about the resolution and stays sortable.
+ */
+.degree {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.degree-ticks {
+	display: flex;
+	gap: var(--space-1);
+}
+
+.degree-tick {
+	width: 3px;
+	height: 14px;
+	border-radius: 1px;
+	background: var(--accent);
+}
+
+.degree-tick-provisional {
+	background: var(--warn-line);
+}
+
+/* ================================================================= badge / chip */
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-1) var(--space-5);
+	border-radius: var(--radius-tag);
+	font-size: var(--text-caption);
+	font-weight: var(--weight-medium);
+	line-height: var(--leading-snug);
+	white-space: nowrap;
+}
+
+.badge-neutral {
+	background: var(--raised);
+	color: var(--muted);
+}
+
+.badge-accent {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.badge-warn {
+	background: var(--warn-soft);
+	color: var(--warn);
+	border: var(--border) solid var(--warn-line);
+}
+
+/* FILE / RUN / PR / SAID — the locator's type, beside the locator itself. */
+.badge-tag {
+	padding: var(--space-1) var(--space-4);
+	font-size: var(--text-tag);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.03em;
+	background: var(--raised);
+	color: var(--muted);
+	flex-shrink: 0;
+}
+
+/* The relation inside a fact. Always accent, always this shape, on every screen that draws a fact. */
+.badge-relation {
+	padding: var(--space-1) var(--space-5);
+	font-size: var(--text-small);
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.badge-relation-stale {
+	background: var(--warn-raised);
+	color: var(--warn);
+}
+
+/* The rank a memory was given by the ranked door: 1, 2, 3, 4 down the side of a result list. */
+.badge-rank {
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	justify-content: center;
+	background: var(--inverse-bg);
+	color: var(--inverse-text);
+	font-size: var(--text-micro);
+	font-weight: var(--weight-semibold);
+	flex-shrink: 0;
+}
+
+.badge-rank-dimmed {
+	background: var(--muted);
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3);
+	padding: var(--space-1) var(--space-5);
+	border: var(--border) solid var(--accent-line);
+	border-radius: var(--radius-chip);
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: var(--text-eyebrow);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+}
+
+.chip-neutral {
+	background: var(--raised);
+	border-color: transparent;
+	color: var(--muted);
+}
+
+.chip-warn {
+	background: var(--warn-soft);
+	border-color: var(--warn-line);
+	color: var(--warn);
+}
+
+/*
+ * The remove control is a BUTTON, not a glyph on a clickable div.
+ *
+ * The chip reads back a filter the user set, and taking it off is the fastest way to widen a list
+ * that came back empty. A cross that is only a cross is not reachable from a keyboard, and this is
+ * a screen a reader moves through with j and k.
+ */
+.chip-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+	opacity: 0.75;
+	/* The cross sits a hair high against a 11.5px cap height; this is the optical correction. */
+	margin-top: 1px;
+}
+
+.chip-remove:hover {
+	opacity: 1;
+}
+
+/* ================================================================= tooltip */
+
+.tooltip-content {
+	max-width: 280px;
+	padding: var(--space-4) var(--space-6);
+	border-radius: var(--radius-chip);
+	background: var(--inverse-bg);
+	color: var(--inverse-text);
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	z-index: 70;
+}
+
+.tooltip-arrow {
+	fill: var(--inverse-bg);
+}
+
+/* ================================================================= collapsible row */
+
+/*
+ * "Named things 3", "Evidence 1", "History and identifiers 2 versions".
+ *
+ * The single most repeated object in the approved set, and the whole answer to "too much
+ * information on any page": everything that is not the first or second thing on a screen becomes
+ * one of these, closed, with its count visible so the reader knows whether opening it is worth it.
+ *
+ * A count of nothing is still rendered. A row that disappeared when empty would make "no evidence"
+ * indistinguishable from "evidence I have not scrolled to".
+ */
+.rows {
+	display: flex;
+	flex-direction: column;
+	border-bottom: var(--border) solid var(--line);
+}
+
+.row-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	width: 100%;
+	padding: var(--space-9) 0;
+	border: 0;
+	border-top: var(--border) solid var(--line);
+	background: none;
+	color: var(--text);
+	font-size: var(--text-ui-lg);
+	text-align: left;
+	cursor: pointer;
+}
+
+.row-trigger:hover {
+	color: var(--accent);
+}
+
+.row-label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-5);
+}
+
+.row-count {
+	font-size: var(--text-small);
+	color: var(--faint);
+	flex-shrink: 0;
+}
+
+.row-count-warn {
+	color: var(--warn);
+}
+
+.row-chevron {
+	color: var(--faint);
+	transition: transform var(--duration) ease;
+}
+
+.row-trigger[data-state='open'] .row-chevron {
+	transform: rotate(90deg);
+}
+
+.row-body {
+	padding: 0 0 var(--space-11);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+	color: var(--muted);
+}
+
+/* ================================================================= toast */
+
+.toast-viewport {
+	position: fixed;
+	bottom: var(--space-14);
+	right: var(--space-14);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	width: min(380px, calc(100vw - var(--space-20)));
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	z-index: 80;
+	outline: none;
+}
+
+.toast {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-8);
+	padding: var(--space-10) var(--space-11);
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+	box-shadow: var(--shadow-popover);
+}
+
+.toast-warn {
+	background: var(--warn-soft);
+	border-color: var(--warn-line);
+}
+
+.toast-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	flex: 1;
+	min-width: 0;
+}
+
+.toast-title {
+	font-size: var(--text-ui-lg);
+	font-weight: var(--weight-medium);
+	color: var(--text);
+}
+
+.toast-description {
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+/* ================================================================= filter panel */
+
+/*
+ * BrowseScale's "Narrow to" column. Each facet is a closed row that opens; a facet with values
+ * chosen shows them as removable chips underneath, so the column reads back what it is doing
+ * without being opened.
+ *
+ * The owner's complaint was three always-open columns showing every value at once. The fix is not
+ * fewer filters — it is that a filter is closed until it is used and says its own count when it is.
+ */
+.filters {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	width: var(--rail-filters);
+	flex-shrink: 0;
+	padding: var(--space-12) var(--space-11);
+	background: var(--bg);
+	border-right: var(--border) solid var(--line);
+	overflow-y: auto;
+}
+
+.filters-heading {
+	padding: 0 var(--space-2) var(--space-4);
+}
+
+.filter-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-6);
+	width: 100%;
+	padding: var(--space-6) var(--space-8);
+	border: var(--border) solid transparent;
+	border-radius: var(--radius-control);
+	background: none;
+	color: var(--muted);
+	font-size: var(--text-ui);
+	text-align: left;
+	cursor: pointer;
+}
+
+.filter-trigger:hover {
+	background: var(--surface);
+	border-color: var(--line);
+	color: var(--text);
+}
+
+/* A facet that is doing something looks different from one that is not, closed or open. */
+.filter-trigger[data-active='true'] {
+	background: var(--surface);
+	border-color: var(--accent-line);
+	color: var(--text);
+	font-weight: var(--weight-medium);
+}
+
+.filter-trigger-right {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	flex-shrink: 0;
+}
+
+.filter-badge {
+	padding: 1px var(--space-4);
+	border-radius: var(--radius-tag);
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: var(--text-eyebrow);
+	font-weight: var(--weight-semibold);
+}
+
+.filter-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	padding: var(--space-1) var(--space-2) var(--space-6);
+}
+
+.filter-values {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	padding: var(--space-2) var(--space-2) var(--space-8);
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.filter-value {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: var(--space-3) var(--space-4);
+	border-radius: var(--radius-tag);
+	font-size: var(--text-small);
+	color: var(--text);
+	cursor: pointer;
+}
+
+.filter-value:hover {
+	background: var(--surface);
+}
+
+.filter-value-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/*
+ * THE COUNT IS THE POINT. Datasette's rule: a facet value without its count is a guess about
+ * whether clicking it is worth anything.
+ */
+.filter-value-count {
+	color: var(--faint);
+	font-size: var(--text-eyebrow);
+	flex-shrink: 0;
+}
+
+/* The foot of the column: how much is left, and the one control that puts it all back. */
+.filters-foot {
+	margin-top: auto;
+	padding: var(--space-8) var(--space-2) var(--space-1);
+	border-top: var(--border) solid var(--line);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	font-size: var(--text-small);
+	color: var(--text);
+}
+
+/*
+ * "Clear both filters" — accent TEXT, not a button.
+ *
+ * The mockup draws it as a link under the honest count and that is the right weight: it is the way
+ * back from a narrowing, not a second action competing with the one filled control on the screen.
+ */
+.filters-clear {
+	align-self: flex-start;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent);
+	font-size: var(--text-caption);
+	font-family: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+
+.filters-clear:hover {
+	color: var(--accent-ink);
+	text-decoration: underline;
+}
+
+/*
+ * One sentence inside an open facet, for a label a reader may not know.
+ *
+ * "Applies to branch. I don't know why we have it, and I don't even know how this works." The
+ * answer is not a tooltip and not a permanent paragraph in the column — it is a line that exists at
+ * the moment the reader opened the thing they did not understand.
+ */
+.filter-note {
+	margin: 0;
+	padding: var(--space-2) var(--space-4) var(--space-6);
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+/*
+ * WHY A FACET IS EMPTY, in words. An empty list reads as a broken control, and worse, it teaches
+ * the reader something false — a permanently empty "still true" facet teaches them nothing in this
+ * vault has ever been corrected.
+ */
+.filter-empty {
+	margin: 0;
+	padding: var(--space-3) var(--space-4);
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--faint);
+}
+
+/*
+ * The box a long value list grows. It narrows THE VALUES IN THIS PANEL and issues no request: the
+ * counts beside them were computed before it was drawn.
+ */
+.filter-find {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	/* Aligned with `.filter-values`, which is the block under it and carries the same inset. */
+	margin: var(--space-2) var(--space-2) 0;
+	padding: 0 var(--space-5);
+	height: var(--control-h-sm);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-chip);
+	background: var(--surface);
+	color: var(--faint);
+	flex-shrink: 0;
+}
+
+.filter-find:focus-within {
+	border-color: var(--accent);
+}
+
+.filter-find-input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	padding: 0;
+	background: none;
+	color: var(--text);
+	font-size: var(--text-small);
+	font-family: inherit;
+	outline: none;
+}
+
+.filter-find-input::placeholder {
+	color: var(--faint);
+}
+
+.checkbox {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	border: var(--border) solid var(--line-strong);
+	border-radius: 3px;
+	background: var(--surface);
+	color: var(--inverse-text);
+	cursor: pointer;
+	padding: 0;
+}
+
+.checkbox[data-state='checked'] {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--surface);
+}
+
+/* ================================================================= card / meter */
+
+.card {
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+	padding: var(--space-12) var(--space-12);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+}
+
+.card-warn {
+	background: var(--warn-soft);
+	border-color: var(--warn-line);
+	color: var(--warn);
+}
+
+.card-accent {
+	background: var(--accent-soft);
+	border-color: var(--accent-line);
+	color: var(--accent-ink);
+}
+
+.card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+}
+
+.meter {
+	height: 5px;
+	border-radius: 3px;
+	background: var(--raised);
+	overflow: hidden;
+}
+
+.meter-fill {
+	height: 100%;
+	background: var(--accent);
+}
+
+/* ================================================================= states */
+
+/*
+ * The four things a screen can be instead of itself. One shape, four tones, so a reader learns the
+ * shape once — and so "nothing here" is never mistaken for "still loading".
+ */
+.state {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-8);
+	max-width: 560px;
+	margin: var(--space-19) auto;
+	padding: var(--space-16);
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+}
+
+.state-title {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-size: var(--display-sm);
+	line-height: var(--leading-display);
+	font-weight: var(--weight-normal);
+	margin: 0;
+}
+
+.state-body {
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+	color: var(--muted);
+	margin: 0;
+}
+
+.state-detail {
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--faint);
+	margin: 0;
+}
+
+.state-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding-top: var(--space-2);
+}
+
+.state-error {
+	border-color: var(--warn-line);
+	background: var(--warn-soft);
+}
+
+.state-error .state-body {
+	color: var(--warn);
+}
+
+.state-toolarge {
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+}
+
+.state-toolarge .state-body {
+	color: var(--accent-ink);
+}
+
+/*
+ * The loading state's only motion. It does not slide, spin or bounce — it fades the panel in once,
+ * because everything else on this screen is text somebody is trying to read.
+ */
+.state-loading {
+	animation: fade-in var(--duration) ease-out;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+/* An inline "still working" that does not take the screen away from what is already on it. */
+.inline-busy {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	font-size: var(--text-small);
+	color: var(--muted);
+}
+
+/* ================================================================= icons */
+
+.icon {
+	flex-shrink: 0;
+	display: block;
+}
+
+/* ================================================================= the ego drawing */
+
+/*
+ * The one node-link canvas. Its colours come from the slot tokens above, and its type is the UI
+ * face at the two smallest sizes — a label on a canvas is a mark, not running text.
+ */
+.ego {
+	display: block;
+	width: 100%;
+	height: 100%;
+	background: var(--bg);
+	touch-action: none;
+	cursor: grab;
+}
+
+.ego:active {
+	cursor: grabbing;
+}
+
+.ego-edge {
+	stroke: var(--graph-edge);
+	stroke-width: 1.4;
+}
+
+/* A relation few facts use. Thinner rather than a second colour: the hues are spoken for. */
+.ego-edge-rare {
+	stroke-width: 0.9;
+	stroke-dasharray: 4 3;
+}
+
+.ego-edge-label {
+	font-family: var(--font-ui);
+	font-size: 10.5px;
+	fill: var(--faint);
+	pointer-events: none;
+}
+
+.ego-node {
+	cursor: pointer;
+}
+
+.ego-shape {
+	stroke: var(--line-strong);
+	stroke-width: 1;
+}
+
+.ego-shape-hub {
+	stroke: none;
+}
+
+.ego-node[data-selected='true'] .ego-shape {
+	stroke: var(--accent);
+	stroke-width: 2.5;
+}
+
+.ego-label {
+	font-family: var(--font-ui);
+	font-size: 12.5px;
+	fill: var(--text);
+	pointer-events: none;
+}
+
+.ego-label-hub {
+	font-size: 15px;
+	font-weight: var(--weight-semibold);
+}
+
+/* ================================================================= the search screen */
+
+/*
+ * ONE BOX, TWO JOBS. The box is the drawn 44px field (`--control-h-lg` exists for it and for
+ * nothing else); the two buttons under it are deliberately UNLIKE each other, because they are
+ * unlike each other: one reads what is already loaded and the other writes a permanent record of
+ * a read into the user's vault. Drawing them as a matched pair would be the lie.
+ */
+.ask {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.ask-box {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	height: var(--control-h-lg);
+	padding: 0 var(--space-12);
+	border: var(--border) solid var(--line-strong);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+	cursor: text;
+}
+
+.ask-box:focus-within {
+	border-color: var(--accent);
+}
+
+.ask-icon {
+	color: var(--muted);
+	flex-shrink: 0;
+}
+
+.ask-input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	background: none;
+	color: var(--text);
+	font-size: var(--text-body);
+	outline: none;
+	padding: 0;
+}
+
+.ask-input::placeholder {
+	color: var(--faint);
+}
+
+.ask-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.ask-spacer {
+	flex: 1;
+}
+
+/* The free one. A quiet outlined pill — it costs nothing, so it does not ask to be pressed. */
+.ask-mode {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	height: var(--control-h-sm);
+	padding: 0 var(--space-9);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	color: var(--muted);
+	font-size: var(--text-small);
+	font-family: inherit;
+	cursor: pointer;
+	transition: border-color var(--duration-fast) linear;
+}
+
+.ask-mode:hover {
+	border-color: var(--line-strong);
+}
+
+.ask-mode-on {
+	border-color: var(--line-strong);
+	color: var(--text);
+}
+
+.ask-mode-count {
+	color: var(--faint);
+}
+
+.ask-timing {
+	font-size: var(--text-caption);
+	color: var(--faint);
+}
+
+/*
+ * ONE RESULT. A card, a rank, the memory's own words in the serif, and a meta line under both that
+ * is indented past the badge so the titles form one column down the page.
+ */
+.result {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-10) var(--space-12);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+	background: var(--surface);
+	text-align: left;
+	font-family: inherit;
+}
+
+.result-open {
+	cursor: pointer;
+	transition: border-color var(--duration-fast) linear;
+}
+
+.result-open:hover {
+	border-color: var(--line-strong);
+}
+
+/*
+ * The one served memory the vault itself says has been answered. Dimmed, never hidden: the agent
+ * WOULD have been given it, and this screen's whole claim is that it shows what the agent gets.
+ */
+.result-dimmed {
+	opacity: 0.55;
+}
+
+.result-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.result-title {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-prose);
+	font-size: var(--prose-md);
+	line-height: var(--leading-title);
+	color: var(--text);
+}
+
+.result-meta,
+.result-note {
+	font-size: var(--text-caption);
+	color: var(--faint);
+	/* 18px badge + the 8px gap beside it, so every line under a title starts where the title does. */
+	padding-left: 26px;
+}
+
+.result-note {
+	color: var(--muted);
+	line-height: var(--leading-ui);
+}
+
+/* ================================================================= reading a memory */
+
+/*
+ * `ReadB` and `ReadEvidence`, which are one screen drawn twice.
+ *
+ * THE COLUMN IS 660px AND THE RAIL IS 360px because that is what the mockups draw, and the width
+ * is the design: 660px of Newsreader at 17.5px is about 70 characters, which is a measure a person
+ * reads rather than scans. A memory is a document and this is the one screen that treats it as one.
+ *
+ * THE RAIL STICKS. The owner's complaint about the old page was that facts were below the note —
+ * "I have to scroll quite a lot below to facts, named things, then some evidence". Putting them
+ * beside the words is only half the fix; staying beside the words while the words scroll is the
+ * other half, and it is one line of CSS.
+ */
+.reading {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.reading-inner {
+	display: flex;
+	justify-content: center;
+	gap: var(--space-22);
+	padding: var(--space-20) var(--space-22) var(--space-21);
+}
+
+.reading-column {
+	width: var(--column-read);
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-16);
+	min-width: 0;
+}
+
+.reading-rail {
+	width: var(--rail-facts);
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-13);
+	/* Beside the words, and still beside them at the bottom of a long note. */
+	position: sticky;
+	top: 0;
+	align-self: flex-start;
+	max-height: calc(100vh - var(--topbar-h) - var(--space-20));
+	overflow-y: auto;
+}
+
+/*
+ * Under about 1100px the rail cannot sit beside a 660px column without squeezing the measure, so
+ * it goes under it — still in the same order, still the same components, and no longer sticky,
+ * because a sticky block in a single column is a block that covers the thing being read.
+ */
+@media (max-width: 1100px) {
+	.reading-inner {
+		flex-direction: column;
+		align-items: center;
+		padding: var(--space-16) var(--space-14) var(--space-20);
+		gap: var(--space-16);
+	}
+
+	.reading-column,
+	.reading-rail {
+		width: min(var(--column-read), 100%);
+		position: static;
+		max-height: none;
+	}
+}
+
+.reading-head {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+}
+
+/* The line under the title: what kind of memory, when it was written, where it applies. */
+.reading-meta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-7);
+	font-size: var(--text-ui);
+	color: var(--faint);
+}
+
+.reading-section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-9);
+}
+
+.reading-section-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-7);
+}
+
+/* The relation inside a fact, on a READING surface. The editor's is a chip; see reading.jsx. */
+.fact-relation {
+	color: var(--accent);
+	font-weight: var(--weight-medium);
+}
+
+/* The rail's denser fact list: 13.5px sentences with room between them. */
+.facts-rail {
+	gap: var(--space-9);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+}
+
+.facts-rail .fact {
+	display: block;
+}
+
+/* ---------------------------------------------------------------- evidence */
+
+.evidence {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.evidence-item {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-7);
+}
+
+/* The badge is a cap-height object beside a line of text; this is the optical correction. */
+.evidence-item .badge-tag {
+	margin-top: 1px;
+}
+
+.evidence-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.evidence-ref {
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--accent);
+}
+
+/* A path, a command, an id: the face is what says "you can paste this somewhere". */
+.evidence-ref-mono {
+	font-family: var(--font-mono);
+	font-size: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+.evidence-digest {
+	font-family: var(--font-mono);
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--faint);
+	overflow-wrap: anywhere;
+}
+
+.evidence-foot {
+	margin: 0;
+	padding-top: var(--space-5);
+	border-top: var(--border) solid var(--raised);
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- a note, and a real link */
+
+/*
+ * A CORRECTION IS A QUOTE, NOT A LINK, and the paint has to carry that on its own.
+ *
+ * It is warn-tinted and it is a quotation: a left rule, a handle, and the writer's own sentence in
+ * the serif the memory itself is set in. Nothing here hovers and nothing here has a chevron —
+ * those belong to `.link-card`, which is what a stored link looks like. A reader can tell the two
+ * apart at a glance without reading either label, which is the whole requirement.
+ */
+.note {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-9);
+}
+
+/* The writer's words and this app's gloss on them, stacked and told apart. See `NoteQuote`. */
+.note-quote-block {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-9);
+}
+
+.note-quote {
+	border-left: var(--border-marker) solid var(--warn-line);
+	padding: var(--space-1) 0 var(--space-1) var(--space-11);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+.note-handle {
+	font-size: var(--text-ui);
+	font-weight: var(--weight-semibold);
+	color: var(--warn);
+}
+
+.note-says {
+	margin: 0;
+	color: var(--text);
+}
+
+.note-foot {
+	margin: 0;
+	padding: var(--space-8) var(--space-10);
+	border-radius: var(--radius-control);
+	background: var(--raised);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.link-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	width: 100%;
+	padding: var(--space-10) var(--space-11);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+	background: var(--surface);
+	color: var(--text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.link-card:hover {
+	border-color: var(--line-strong);
+}
+
+.link-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.link-card-title {
+	line-height: var(--leading-title);
+}
+
+.link-card-meta {
+	font-size: var(--text-caption);
+	color: var(--faint);
+}
+
+.link-card-icon {
+	color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- named things */
+
+.named {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+}
+
+.named-name {
+	font-size: var(--text-ui-lg);
+	font-weight: var(--weight-medium);
+}
+
+.named-gloss {
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- term and value */
+
+.readings {
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.reading-pair {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.reading-pair dt {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+.reading-pair dd {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+/* A row with no rank badge: nothing to indent past, so the meta sits under the title flush. */
+.result-meta-flush {
+	padding-left: 0;
+}
+
+/*
+ * THE RESULT AND ITS RAIL. Search's own widths, not ReadB's: a results column that fills the page
+ * beside a 300px rail of readings about the answer as a whole.
+ */
+.ask-split {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-17);
+}
+
+.ask-column {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+}
+
+.ask-rail {
+	width: var(--rail-answer);
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-11);
+}
+
+.result-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-7);
+}
+
+/* The banner that says this door records. An icon beside a sentence, so it overrides the card's
+ * own column direction rather than nesting another wrapper inside it. */
+.banner-row {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: var(--space-8);
+	line-height: var(--leading-body);
+}
+
+.banner-icon {
+	color: var(--accent);
+	flex-shrink: 0;
+	margin-top: var(--space-1);
+}
+
+.banner-copy {
+	margin: 0;
+	font-size: var(--text-ui);
+	line-height: var(--leading-body);
+}
+
+/* ---------------------------------------------------------------- the context budget */
+
+.budget-read {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-6);
+}
+
+.budget-unit {
+	font-size: var(--text-body);
+	color: var(--faint);
+}
+
+.budget-of {
+	font-size: var(--text-small);
+	color: var(--faint);
+}
+
+/*
+ * The honest reading under the bar: whether anything was actually dropped for size. It is derived
+ * from the omission reasons rather than from the fill of the bar, which is why it is a sentence
+ * rather than a percentage.
+ */
+.budget-note {
+	margin: 0;
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+/* A rail card's running copy, and the one line above it that carries the card's whole point. */
+.rail-copy {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-body);
+	color: var(--muted);
+}
+
+.card-warn .rail-copy,
+.card-warn .rail-lede {
+	color: var(--warn);
+}
+
+.rail-lede {
+	margin: 0;
+	font-size: var(--text-small);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-ui);
+	color: var(--text);
+}
+
+/* What was ranked and then left out, each with the engine's own reason beside it. */
+.reasons {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+}
+
+.reason-what {
+	color: var(--text);
+}
+
+.reason-why {
+	color: var(--muted);
+}
+
+/* ================================================================= prompt / outcomes / verbatim */
+
+/*
+ * An inline question and the report of what it did. See prompt.jsx for why neither is an overlay.
+ *
+ * THE FRAME IS TINTED AND THE FILL IS NOT. A red panel says "gone", and the action this shape was
+ * built for — removal — hides a memory and keeps its text on disk. The words are the warning; the
+ * paint only has to say which of the three things happened.
+ */
+.prompt {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+	width: min(620px, 100%);
+	padding: var(--space-14);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+}
+
+.prompt-warn {
+	border-color: var(--warn-line);
+}
+
+.prompt-good {
+	border-color: var(--accent-line);
+}
+
+.prompt-title {
+	margin: 0;
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-size: var(--display-sm);
+	line-height: var(--leading-display);
+	font-weight: var(--weight-normal);
+}
+
+/* The one sentence in a prompt that has to be read. Never truncated, never in a tooltip. */
+.prompt-sentence {
+	margin: 0;
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+	color: var(--text);
+}
+
+.prompt-sentence-warn {
+	padding: var(--space-8) var(--space-10);
+	border-radius: var(--radius-control);
+	background: var(--warn-soft);
+	color: var(--warn);
+}
+
+.prompt-note {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.prompt-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	/* Every one of them. It scrolls; nothing truncates. */
+	max-height: 240px;
+	overflow-y: auto;
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-prose);
+	font-size: var(--prose-sm);
+	line-height: var(--leading-title);
+}
+
+.prompt-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding-top: var(--space-2);
+}
+
+.prompt-footer {
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.outcomes {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	border-bottom: var(--border) solid var(--line);
+}
+
+.outcome {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-9) 0;
+	border-top: var(--border) solid var(--line);
+}
+
+.outcome-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-10);
+}
+
+.outcome-title {
+	font-size: var(--text-row);
+	font-weight: var(--weight-medium);
+	min-width: 0;
+}
+
+/* What happened, in words. Warn by default, because only one of the states is the good one. */
+.outcome-state {
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--warn);
+	text-align: right;
+	flex-shrink: 0;
+	max-width: 60%;
+}
+
+.outcome-good .outcome-state {
+	color: var(--muted);
+}
+
+.outcome-detail {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-4) var(--space-8);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--faint);
+}
+
+.verbatim {
+	margin: 0;
+	padding: var(--space-9) var(--space-10);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-chip);
+	background: var(--raised);
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* A record, rather than a command: long enough that it has to have a bottom. */
+.verbatim-scroll {
+	max-height: 420px;
+	overflow: auto;
+	white-space: pre;
+}
+
+/* ================================================================= stat strip */
+
+/*
+ * GraphEntry's opening row: three readings and the sentence they add up to.
+ *
+ * THE MOCKUP DRAWS 13px / 15px PADDING AND A 3px GAP, and this uses the nearest steps of the space
+ * scale — 14, 16 and 4. That is deliberate. The type scale keeps its half-pixels because the steps
+ * between 12 and 14 carry real distinctions in a dense reading tool; a pixel of padding carries
+ * none, and a padding value that exists nowhere else in the system is exactly how the previous
+ * design ended up with six spellings of one gap.
+ */
+
+.stats {
+	display: flex;
+	gap: var(--space-8);
+}
+
+.stat {
+	flex: 1 1 0;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-11) var(--space-12);
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+}
+
+/* The sentence card is wider than a reading, because it is a sentence. */
+.stat-grow {
+	flex-grow: 1.6;
+}
+
+.stat-value {
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-weight: var(--weight-normal);
+	font-size: var(--display-sm);
+	line-height: var(--leading-display);
+	color: var(--text);
+}
+
+.stat-label {
+	font-size: var(--text-small);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+/* At most one per strip. Two things shouting is nothing being heard. */
+.stat-warn {
+	background: var(--warn-soft);
+	border-color: var(--warn-line);
+}
+
+.stat-warn .stat-value,
+.stat-warn .stat-label {
+	color: var(--warn);
+}
+
+.stat-note {
+	justify-content: center;
+	background: var(--raised);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+/* The sentence itself: one flow, so the emphasis inside it stays inline. See `StatNote`. */
+.stat-note-body {
+	margin: 0;
+}
+
+.stat-note strong {
+	font-weight: var(--weight-semibold);
+	color: var(--text);
+}
+
+/* ================================================================= note */
+
+/*
+ * The sentence that says what something costs you, or how it works. Quiet by design: a screen can
+ * carry six of these without turning into a wall of warnings, which is the whole reason the
+ * curation screen can afford one per group.
+ */
+
+.note {
+	margin: 0;
+	padding: var(--space-6) var(--space-8);
+	border-radius: var(--radius-chip);
+	background: var(--raised);
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.note strong {
+	font-weight: var(--weight-semibold);
+	color: var(--text);
+}
+
+.note-warn {
+	background: var(--warn-soft);
+	color: var(--warn);
+}
+
+.note-warn strong {
+	color: var(--warn);
+}
+
+.note-accent {
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+}
+
+.note-accent strong {
+	color: var(--accent-ink);
+}
+
+/* ================================================================= choice */
+
+/*
+ * A row of spellings, one of which survives. Native radios, so the arrow keys and the group
+ * semantics come from the platform; this file paints them and nothing else.
+ */
+
+.choice {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.choice-option {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--space-5);
+	padding: var(--space-5) var(--space-8);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	cursor: pointer;
+}
+
+.choice-option:hover {
+	border-color: var(--line-strong);
+}
+
+/* The chosen one is tinted rather than ticked: at two to five options the tint IS the answer. */
+.choice-option[data-chosen='true'] {
+	background: var(--accent-soft);
+	border-color: var(--accent-line);
+}
+
+/*
+ * The input itself is hidden from sight and NOT from the accessibility tree or the keyboard —
+ * `display: none` would take the group out of tab order and leave a control nothing can operate.
+ */
+.choice-input {
+	position: absolute;
+	opacity: 0;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	pointer-events: none;
+}
+
+.choice-input:focus-visible + .choice-label {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+.choice-label {
+	font-size: var(--text-ui-lg);
+	color: var(--text);
+}
+
+.choice-option[data-chosen='true'] .choice-label {
+	font-weight: var(--weight-medium);
+	color: var(--accent-ink);
+}
+
+.choice-note {
+	font-size: var(--text-caption);
+	color: var(--faint);
+}
+
+.choice-option[data-chosen='true'] .choice-note {
+	color: var(--accent-ink);
+	opacity: 0.8;
+}
+
+/* ================================================================= decision */
+
+/*
+ * ONE THING THAT NEEDS A DECISION: what it is, what is at stake, the evidence, and the ways out.
+ *
+ * The same shape carries a curation finding, a proposed cluster and one step of a merge report,
+ * because in all three the reader is doing the same thing — reading a claim, checking the number
+ * beside it, and choosing. Three shapes that agreed on the day they were written would not agree
+ * for long, and the owner could see the last version of that: "I don't think there's enough
+ * padding."
+ */
+
+.decisions {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.decision {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: var(--space-10) 0;
+	border-top: var(--border) solid var(--line);
+}
+
+.decisions > .decision:first-child {
+	border-top: 0;
+	padding-top: var(--space-2);
+}
+
+.decision-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-8);
+}
+
+.decision-lead {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-5);
+	min-width: 0;
+	font-size: var(--text-row);
+	line-height: var(--leading-title);
+	color: var(--text);
+}
+
+/*
+ * THE STAKE, IN THE QUANTITIES THE SORT USED — never a rank number and never a score. A reader can
+ * check "7 facts · 5 memories" against the rows under it; they cannot check a 4.
+ */
+.decision-stake {
+	flex-shrink: 0;
+	font-size: var(--text-small);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.decision-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	min-width: 0;
+}
+
+.decision-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-6);
+}
+
+/*
+ * A control inside a decision's body — "Show the other 4" — hangs from the left.
+ *
+ * The body is a flex COLUMN, so a button in it stretches to the full width and `.btn`'s own
+ * centring then puts the words in the middle of the row, under nothing. It reads as a caption for
+ * the list above it rather than as the control that opens the rest of that list.
+ */
+.decision-body > .btn {
+	align-self: flex-start;
+}
+
+/* A list of the memories one decision touches, each one openable. */
+.decision-sources {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-size: var(--text-small);
+}
+
+.decision-source {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-5);
+}
+
+.decision-source-note {
+	color: var(--faint);
+	font-size: var(--text-caption);
+}
+
+/* ================================================================= rewrite */
+
+/*
+ * WHAT ONE FACT BECOMES, before and after, rather than "3 facts change".
+ *
+ * A count is a number a person cannot check, and the whole failure the preview exists to prevent is
+ * somebody authorising a rewrite of memories they have not read. So every changed statement is
+ * printed twice, whole, and the arrow is the only thing between them.
+ */
+
+.rewrites {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.rewrite {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-5);
+	font-size: var(--text-small);
+	line-height: var(--leading-snug);
+}
+
+.rewrite-before {
+	color: var(--muted);
+}
+
+.rewrite-arrow {
+	color: var(--faint);
+}
+
+.rewrite-after {
+	color: var(--text);
+}
+
+/* ================================================================= run bar */
+
+/*
+ * The bar that carries the one write on a review screen, pinned under the list it describes.
+ *
+ * It is inside the flow rather than fixed to the viewport: a fixed bar over a long table hides the
+ * last row, and the last row of a cluster list is a cluster. It says what is ticked, in words,
+ * beside the button — a button labelled only "Merge" is a button that authorises a count.
+ */
+
+.runbar {
+	position: sticky;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	padding: var(--space-8) var(--space-12);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+	box-shadow: var(--shadow-popover);
+}
+
+.runbar-what {
+	font-size: var(--text-ui);
+	color: var(--muted);
+	min-width: 0;
+}
+
+.runbar-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	flex-shrink: 0;
+}
+
+/* ================================================================= page head */
+
+/*
+ * A screen's first line and the sentence under it. Every approved mockup opens with exactly this —
+ * a serif display heading and one line of grey — and it is one class so that six screens cannot
+ * each choose their own gap between the two.
+ */
+
+.head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--space-12);
+}
+
+.head-titles {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.head-sub {
+	font-size: var(--text-ui);
+	color: var(--faint);
+}
+
+.head-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	flex-shrink: 0;
+}
+
+/* A block inside a page: a heading, its explanation, and the thing itself. */
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.section-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-8);
+}
+
+/*
+ * The count beside a section heading. It sets its own family because the heading is serif and a
+ * number is not part of the sentence — it is the reader's answer to "is this worth opening".
+ */
+.section-count {
+	margin-left: var(--space-6);
+	font-family: var(--font-ui);
+	font-size: var(--text-small);
+	font-weight: var(--weight-medium);
+	color: var(--faint);
+	vertical-align: middle;
+}
+
+.section-count-warn {
+	color: var(--warn);
+}
+
+/* ================================================================= the editor */
+
+/*
+ * EditB and EditValues, and the one insight the owner approved: "two columns were never the problem,
+ * four things per column were". So the shapes below hold exactly two things — the words, and what
+ * the agent acts on — and everything else this screen can do is a control in the bar.
+ *
+ * THE GUTTER IS A PROPERTY OF THE PANE. It is declared once, as `--pane-pad`, and the head, the body
+ * and the foot inside that pane read it. Two panes side by side can therefore be drawn at different
+ * gutters — the reading column at 48 and the side pane at 26, as the mockup draws them — without
+ * either one spelling a number, and no two labels in one pane can disagree about their left edge.
+ * That disagreement is what the owner was looking at when he said "I don't think that's aligned
+ * correctly. I don't think there's enough padding."
+ */
+
+.band {
+	flex-shrink: 0;
+	padding: var(--space-18) var(--space-21) var(--space-15);
+	border-bottom: var(--border) solid var(--line);
+	background: var(--surface);
+}
+
+/*
+ * The column the words are in: it takes whatever the fixed pane beside it does not. `.pane` itself
+ * carries no growth, because the panes on the reading screens are sized rather than shared.
+ */
+.pane-reading {
+	flex: 1;
+	--pane-pad: var(--space-21);
+}
+
+.pane-side {
+	--pane-pad: var(--space-17);
+}
+
+.pane-head {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	padding: var(--space-12) var(--pane-pad, var(--space-14)) var(--space-8);
+}
+
+/*
+ * The body scrolls, not the pane. That is what keeps `.pane-foot` on the screen: the snapshot
+ * sentence is the standing condition of the pane, and a condition that scrolls away is one the
+ * reader met once.
+ */
+.pane-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding: var(--space-2) var(--pane-pad, var(--space-14)) var(--space-14);
+}
+
+.pane-body-lg {
+	gap: var(--space-11);
+}
+
+.pane-foot {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: var(--space-11) var(--pane-pad, var(--space-14));
+	border-top: var(--border) solid var(--line);
+	font-size: var(--text-small);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+/* The editor fills the region under the bar and never scrolls as a whole. */
+.edit {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* Where a prompt about this save stands: full width, under the title, over both panes. */
+.edit-notices {
+	flex-shrink: 0;
+	max-height: 50%;
+	overflow-y: auto;
+	padding: var(--space-10) var(--space-21);
+	border-bottom: var(--border) solid var(--line);
+	background: var(--bg);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+/*
+ * The words. Borderless and full-height, because this is not a field on a form — it is the memory,
+ * being written where it will be read, at the size the reading screen will read it at.
+ */
+.edit-prose {
+	flex: 1;
+	min-height: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: var(--prose-lg);
+	padding: var(--space-2) var(--pane-pad, var(--space-14)) var(--space-14);
+	resize: none;
+}
+
+.edit-prose:focus {
+	border: 0;
+	margin: 0;
+}
+
+/* The side pane's fixed measure: what an agent acts on, beside the words rather than under them. */
+.pane-edit {
+	width: var(--pane-edit);
+	flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------- a fact, being edited */
+
+/*
+ * The same object `prose.css` draws, in the state where every part of it is a control. It keeps
+ * `.fact-row` — one card, one border, one radius — and only becomes a column, because an edited
+ * fact carries the sentence about what is wrong with it under the statement itself.
+ */
+.fact-row-editing {
+	position: relative;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-7);
+	background: var(--bg);
+}
+
+/*
+ * IT WRAPS, because real names are not the mockup's names.
+ *
+ * "build cache · is keyed on · lockfile hash" fits a 520px pane on one line. "cross-branch cache
+ * reuse · depends on · the resolved dependency set" does not, and an input that does not fit does not
+ * ellipsise — it scrolls its own text out of sight, which reads as a value the app has truncated.
+ * So the object drops to its own line rather than being clipped, and the row stays a sentence.
+ */
+.fact-row-line {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-4) var(--space-6);
+	min-width: 0;
+	/* Room for the two icon buttons, which sit over this rather than in it. See below. */
+	padding-right: 68px;
+}
+
+/*
+ * THE BASIS IS ZERO, NOT 40%.
+ *
+ * At 40% the two endpoints alone claimed 80% of a 436px card, so the relation and the two icon
+ * buttons beside them had nowhere to go and the row wrapped — every fact card in the editor stood
+ * ~30px taller than EditB draws it, and the extra height was an EMPTY line holding controls that
+ * are invisible until hover. A basis of zero lets the endpoints divide whatever the relation and
+ * the actions leave, which is what puts the sentence back on one line.
+ *
+ * The safety valve the 40% was reaching for is kept as `min-width`: a genuinely long pair still
+ * wraps to a second line rather than scrolling its own text out of sight.
+ */
+.fact-part {
+	flex: 1 1 0;
+	min-width: 11ch;
+}
+
+/*
+ * OVER THE ROW, NOT IN IT. As a flex sibling of the three endpoints these two buttons were the
+ * widest thing that could not shrink, so they were the part that wrapped — and because they are
+ * invisible until the row is touched, what they wrapped onto was an empty second line on every
+ * card. Taken out of the flow they cost the row a fixed 58px of reserved space instead, and the
+ * sentence keeps the whole of the rest.
+ */
+.fact-row-actions {
+	position: absolute;
+	top: var(--space-8);
+	right: var(--space-9);
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	flex-shrink: 0;
+	/*
+	 * Hidden until the row is touched, and hidden with `visibility` so the row does not change width
+	 * when it is. `:focus-within` is what keeps them reachable from the keyboard — without it these
+	 * would be controls only a mouse can find.
+	 */
+	visibility: hidden;
+}
+
+.fact-row:hover .fact-row-actions,
+.fact-row:focus-within .fact-row-actions {
+	visibility: visible;
+}
+
+/* ---------------------------------------------------------------- values, edited in place */
+
+/*
+ * A field with no box until you touch it: the value is drawn as the sentence it will be read as,
+ * and the control appears under the pointer. Everything a `.input` does about focus still applies —
+ * this only takes away the resting border.
+ */
+.input-inline {
+	border-color: transparent;
+	background: transparent;
+	padding-inline: var(--space-4);
+}
+
+.input-inline:hover {
+	border-color: var(--line);
+	background: var(--surface);
+}
+
+/* The object end of a fact, pushed away from the relation exactly as the mockup pushes it. */
+.input-end {
+	text-align: right;
+}
+
+/*
+ * THE RELATION, WHICH IS A CONTROL AND THEREFORE WEARS THE CHIP.
+ *
+ * `reading.jsx` draws the same verb as accent text, because there it is not a control. Here it is
+ * the thing you press to change what the fact says, so it takes the shape of `RelationBadge`.
+ *
+ * It sizes to its own content: `is keyed on` and `stopped using` are different widths and a fixed
+ * box would either clip one or pad the other. `ch` and `field-sizing` are content measurements
+ * rather than design values — where the browser cannot do it, the min-width holds the shape.
+ */
+.input-relation {
+	field-sizing: content;
+	width: auto;
+	min-width: 9ch;
+	max-width: 22ch;
+	height: var(--control-h-sm);
+	border-color: transparent;
+	border-radius: var(--radius-tag);
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: var(--text-small);
+	font-weight: var(--weight-medium);
+	text-align: center;
+	padding-inline: var(--space-7);
+}
+
+.input-relation:hover {
+	border-color: var(--accent-line);
+}
+
+/* A fact the prose no longer supports keeps its verb readable against the warn ground. */
+.fact-row-stale .input-relation {
+	background: var(--warn-raised);
+	color: var(--warn);
+}
+
+/* ---------------------------------------------------------------- what a save sends */
+
+/*
+ * The Details sheet: everything about this memory that is not its words or its facts. It is a
+ * column of `Card`s in one dialog rather than four blocks down the side of the screen, which is
+ * the whole of "two columns were never the problem, four things per column were".
+ */
+.sheet {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-11);
+	max-height: 62vh;
+	overflow-y: auto;
+	padding-right: var(--space-4);
+}
+
+.sheet-grid {
+	display: flex;
+	gap: var(--space-7);
+	align-items: flex-start;
+}
+
+.sheet-axis {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.sheet-axis-label {
+	width: 62px;
+	flex-shrink: 0;
+	font-size: var(--text-small);
+	color: var(--muted);
+}
+
+.sheet-axis-control {
+	flex: 1;
+	min-width: 0;
+}
+
+/* One declared name, opened for editing: the name and its kind on a line, the gloss under them. */
+.declared {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-7);
+	padding: var(--space-10) var(--space-11);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+	background: var(--bg);
+}
+
+.declared-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.declared-name {
+	flex: 1.4;
+	min-width: 0;
+}
+
+.declared-kind {
+	flex: 1;
+	min-width: 0;
+}
+
+/* A block on the search screen: an eyebrow, the reading of the whole block beside it, and rows. */
+.result-block {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+}
+
+.result-block-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-8);
+}
+
+/* ================================================================= running copy, and steps */
+
+/*
+ * A PARAGRAPH THE APP IS SAYING, on a screen made mostly of paragraphs.
+ *
+ * The escalation screen is the only one in this product that is genuinely a document: a page of
+ * sentences about what removal cannot do, most of which have to be read in order. Everywhere else a
+ * paragraph is a `Note` — quiet, tinted, explaining the thing above it — and a screen with eight
+ * Notes on it has no emphasis left for the one that matters. So the running text is plain and the
+ * two tinted blocks on that screen are the two sentences a reader must not miss.
+ *
+ * The margin is zero because the section around it sets the gap. A default paragraph margin inside
+ * a flex column produces two spacings for one gap, which is exactly the "not enough padding /
+ * too much padding" inconsistency the redesign exists to end.
+ */
+.copy {
+	margin: 0;
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+	color: var(--text);
+}
+
+/*
+ * A short numbered instruction list. The one ordered list outside a memory's own prose — the steps
+ * before the command that ends a vault — and it is a component rather than a rule in that screen
+ * because a screen adds no CSS of its own.
+ */
+.steps {
+	margin: 0;
+	padding-left: var(--space-14);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+	color: var(--text);
+}
+
+.steps li + li {
+	margin-top: var(--space-3);
+}
+
+.steps::marker,
+.steps li::marker {
+	color: var(--faint);
+}
+
+/* ================================================================= browse: the list and preview */
+
+/*
+ * BrowseB and BrowseScale — the screen the owner approved by name.
+ *
+ * Three regions on one row: the facets, the list, the memory. Each is `.pane`, so each scrolls on
+ * its own and the 56px bar above them never moves. The two fixed widths come from the drawings and
+ * live in the tokens as `--rail-filters` (232) and `--rail-list` (400); the memory takes the rest.
+ *
+ * THE FILTER COLUMN IS THE FIRST REGION AND IT DOES NOT SCROLL WITH THE ROWS. That is the direct
+ * fix for "I had to scroll for ten minutes for each": closed, all five facets and the honest count
+ * under them fit in the column with nothing below the fold.
+ */
+
+.browse {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ the middle column */
+
+.mlist {
+	width: var(--rail-list);
+	flex-shrink: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--surface);
+	border-right: var(--border) solid var(--line);
+}
+
+/* No filter column beside it — the BrowseB width, which is the same list with more room. */
+.mlist-wide {
+	width: var(--rail-list-wide);
+}
+
+.mlist-bar {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	padding: var(--space-9) var(--space-13);
+	border-bottom: var(--border) solid var(--line);
+}
+
+.mlist-bar-left {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+/* "j / k to move". Faint, because it is an offer rather than an instruction. */
+.mlist-bar-hint {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+/*
+ * The rows are the scroll region, not the pane, so the sort strip above them and the bulk bar below
+ * them both stay on screen. "I do see a Refresh, but I have to scroll" was about the bar; this is
+ * the same rule applied one level down.
+ */
+.mlist-rows {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+/* ------------------------------------------------------------------ a time heading */
+
+/*
+ * Sticky, because its whole job is to tell a reader in the middle of a long month which month they
+ * are in. `top: 0` against `.mlist-rows`, which is the scroller.
+ */
+.mgroup {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-6);
+	padding: var(--space-5) var(--space-13);
+	background: var(--raised);
+	border-top: var(--border) solid var(--line);
+	border-bottom: var(--border) solid var(--line);
+}
+
+/* The first heading needs no top rule: the sort strip above it already drew one. */
+.mlist-rows > .mgroup:first-child {
+	border-top: 0;
+}
+
+.mgroup-label {
+	font-size: var(--text-eyebrow);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-micro);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.mgroup-count {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+/* ------------------------------------------------------------------ a row */
+
+/*
+ * EVERY ROW CARRIES THE 2px LEFT EDGE, in `transparent` until it is the selected one.
+ *
+ * The mockup draws the edge only on the selected row, which moves that row's text 2px right of
+ * every other row's. On a list you move through with j and k, that is a title that twitches
+ * sideways under the reader on every keystroke — and it is exactly the class of thing behind "I
+ * don't think that's aligned correctly".
+ *
+ * `content-visibility` is what makes the list cheap. A row below the fold is not laid out and not
+ * painted; `contain-intrinsic-size` gives the scrollbar a real height to work from in the meantime,
+ * and the `auto` keyword replaces the guess with the row's own last measured height once it has
+ * been seen. The list therefore stays ONE array — the keyboard walks it, the browser's own find
+ * searches it — while costing about what a screenful costs.
+ */
+.mrow {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-6);
+	border-left: var(--border-marker) solid transparent;
+	border-bottom: var(--border) solid var(--raised);
+	content-visibility: auto;
+	contain-intrinsic-size: auto 62px;
+}
+
+.mrow:hover {
+	background: var(--bg);
+}
+
+.mrow-selected,
+.mrow-selected:hover {
+	background: var(--accent-soft);
+	border-left-color: var(--accent);
+}
+
+/* A memory another one corrects. Half strength, and the word is in the meta line beside it. */
+.mrow-dimmed .mrow-open {
+	opacity: 0.5;
+}
+
+.mrow-open {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-10) var(--space-13) var(--space-10) 0;
+	border: 0;
+	background: none;
+	text-align: left;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+}
+
+/* The gutter belongs to the row, so an untickable list still starts its text in the same place. */
+.mrow-open:only-child {
+	padding-left: var(--space-13);
+}
+
+.mrow-title {
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-title);
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+.mrow-selected .mrow-title {
+	font-weight: var(--weight-medium);
+}
+
+.mrow-meta {
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--faint);
+}
+
+.mrow-selected .mrow-meta {
+	color: var(--muted);
+}
+
+/* The reading that is the reason to look: "corrects 1", "superseded", "3 name undeclared things". */
+.mrow-mark-warn {
+	color: var(--warn);
+}
+
+/*
+ * THE TICK APPEARS WHERE THE POINTER IS, and stays once anything is ticked.
+ *
+ * A permanent checkbox column turns a reading list into a form and tells the reader the screen is
+ * about removal. Hidden by `opacity` rather than by `display`, so it holds its own width and no row
+ * shifts when the pointer crosses it.
+ */
+.mrow-tick {
+	display: flex;
+	align-items: center;
+	padding: var(--space-10) 0 var(--space-10) var(--space-8);
+	opacity: 0;
+	transition: opacity var(--duration-fast) ease-out;
+}
+
+.mrow:hover .mrow-tick,
+.mrow-ticked .mrow-tick,
+.mrow-tick:focus-within,
+.mlist-selecting .mrow-tick {
+	opacity: 1;
+}
+
+/* The sentinel that asks for the next window of rows. It renders nothing. */
+.mlist-more {
+	height: 1px;
+}
+
+/*
+ * The bulk bar: pinned under the rows, present only while something is ticked.
+ *
+ * The count is on the control itself rather than beside it, because the number is what is being
+ * authorised and a control that hides it cannot be checked before it is pressed.
+ */
+.mlist-bulk {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-6);
+	padding: var(--space-8) var(--space-13);
+	border-top: var(--border) solid var(--line);
+	background: var(--accent-soft);
+	font-size: var(--text-small);
+	color: var(--accent-ink);
+}
+
+.mlist-bulk-count {
+	font-weight: var(--weight-medium);
+	margin-right: auto;
+}
+
+.mlist-bulk-note {
+	flex-basis: 100%;
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--accent-ink);
+}
+
+/* Nothing matched, said inside the list rather than instead of the whole screen. */
+.mlist-empty {
+	padding: var(--space-16) var(--space-13);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	align-items: flex-start;
+	font-size: var(--text-small);
+	line-height: var(--leading-body);
+	color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ the preview */
+
+/*
+ * ONE GUTTER, DECLARED ONCE. Every block below reads `--pane-pad`, so the title, the words, the
+ * eyebrow over the facts and the deferred rows all share one left edge — which is the whole of what
+ * "I don't think there's enough padding" was pointing at.
+ */
+.preview {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+	--pane-pad: var(--space-20);
+	padding-bottom: var(--space-20);
+}
+
+.preview-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-16);
+	padding: var(--space-17) var(--pane-pad) 0;
+}
+
+.preview-head-titles {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+	min-width: 0;
+	max-width: var(--column-read);
+}
+
+.preview-head-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	flex-shrink: 0;
+}
+
+.preview-meta {
+	font-size: var(--text-small);
+	color: var(--faint);
+}
+
+.preview-block {
+	padding: var(--space-15) var(--pane-pad) 0;
+	max-width: calc(var(--column-read) + var(--pane-pad) * 2);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-9);
+}
+
+/* The words sit closer to the title than the sections below them do to each other. */
+.preview-words {
+	padding-top: var(--space-13);
+}
+
+/* Nothing is selected. The one sentence that says what the pane is for, and not an error. */
+.preview-idle {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-6);
+	padding: var(--space-20);
+	text-align: center;
+	color: var(--faint);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-body);
+}
+
+/*
+ * THE CLUSTER TABLE. One modifier, and it is about alignment rather than colour.
+ *
+ * Every other table in this app has one line per cell. A cluster row is three or four — the
+ * spellings, the choice, and the sentence saying what merging them would do — and a checkbox
+ * centred against four lines reads as belonging to none of them. So the cells of this table hang
+ * from their first line, which is where the reader's eye is.
+ */
+.cluster-table .table tbody td {
+	vertical-align: top;
+}
+
+/* The tick sits on the baseline of the first spelling rather than at the top of the cell. */
+.cluster-table .table tbody td:first-child {
+	padding-top: var(--space-11);
+}
+
+/* ================================================================= the names screens */
+
+/*
+ * THE FIND BOX THAT NARROWS WHAT IS ON THE PAGE.
+ *
+ * GraphEntry draws it beside the heading at 260px with a 14px magnifier. It is deliberately not the
+ * same object as `.ask-box` on the search screen, which is 44px tall and can reach the engine — two
+ * controls that do different things must not look the same.
+ */
+.find-input {
+	display: flex;
+	align-items: center;
+	gap: var(--space-5);
+	width: 260px;
+	max-width: 100%;
+	padding: 0 var(--space-10);
+	height: var(--control-h);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	color: var(--faint);
+}
+
+.find-input:focus-within {
+	border-color: var(--accent);
+}
+
+.find-input-icon {
+	color: var(--faint);
+}
+
+.find-input-control {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: var(--text-ui);
+	color: var(--text);
+	outline: none;
+}
+
+.find-input-control::placeholder {
+	color: var(--faint);
+}
+
+/* The tab row and the one control beside it. */
+.names-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+}
+
+.name-cell {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-7);
+	flex-wrap: wrap;
+}
+
+/*
+ * WHAT TO DO ABOUT A ROW.
+ *
+ * "Show" appears on the row under the pointer and nowhere else — a column of three hundred identical
+ * blue words is a column of noise, and the whole row is already the control. "Merge?" is always
+ * visible, because it is the one row-level thing on this screen that changes the data rather than
+ * the view, and a reader scanning for those must be able to find them without a mouse.
+ */
+.row-action {
+	display: block;
+	text-align: right;
+	font-size: var(--text-small);
+	font-weight: var(--weight-medium);
+}
+
+.row-action-show {
+	color: var(--accent);
+	opacity: 0;
+	transition: opacity var(--duration-fast) ease;
+}
+
+.table tbody tr:hover .row-action-show,
+.table tbody tr:focus-within .row-action-show {
+	opacity: 1;
+}
+
+.row-action-warn {
+	color: var(--warn);
+	text-decoration: none;
+}
+
+.names-more {
+	margin: var(--space-10) 0 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- the whole-vault overview */
+
+.overview {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.overview-frame {
+	position: relative;
+	height: 560px;
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+	overflow: hidden;
+}
+
+.vault-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	touch-action: none;
+}
+
+/*
+ * The legend sits OVER the drawing, so on the whole-vault overview — where the drawing reaches
+ * every edge of the frame — it was reading through a field of coloured dots. GraphFocus can put its
+ * legend on bare paper because an ego network of nine nodes leaves the corner empty; a picture of
+ * 1,274 leaves nothing empty anywhere. The surface behind it is what keeps the key readable, and it
+ * is the same panel colour the frame is already painted in rather than a new one.
+ */
+.overview-legend,
+.name-canvas-legend {
+	position: absolute;
+	left: var(--space-14);
+	bottom: var(--space-13);
+	display: flex;
+	align-items: center;
+	gap: var(--space-11);
+	padding: var(--space-4) var(--space-8);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+	pointer-events: none;
+}
+
+.overview-legend-sep {
+	color: var(--line-strong);
+}
+
+.overview-legend-warn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3);
+	color: var(--warn);
+}
+
+/* The mark in the legend for the dashed link between two spellings of probably one thing. */
+.overview-dash {
+	display: inline-block;
+	width: 16px;
+	border-top: var(--border-emphasis) dashed var(--warn);
+}
+
+.kind-legend {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-11);
+}
+
+.kind-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.kind-legend-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	display: inline-block;
+}
+
+/*
+ * ONE LINE, NOT FOUR. The fuller statement of what this reconstruction cannot show is on the panel
+ * of any name you open, behind a row that says what is in it.
+ */
+.overview-caption {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.overview-caption strong {
+	font-weight: var(--weight-medium);
+	color: var(--text);
+}
+
+.overview-hint {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	margin: 0;
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- one name */
+
+/*
+ * The focused-name screen: the drawing, and the pane of text beside it.
+ *
+ * `height: 100%` rather than `flex: 1`, because this sits inside the scroll region the app opens
+ * for every non-list route. A flex grow term in a block container does nothing, and the symptom of
+ * getting it wrong is a canvas of zero height, which reads as a rendering bug rather than a layout
+ * one.
+ */
+.name-split {
+	display: flex;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.name-canvas {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	background: var(--bg);
+}
+
+.name-canvas-note {
+	position: absolute;
+	left: var(--space-14);
+	right: var(--space-14);
+	top: var(--space-14);
+	max-width: 520px;
+}
+
+.name-panel {
+	width: var(--rail-graph);
+	flex-shrink: 0;
+	/* The border is on the LEFT: this pane is the right-hand one, and `.pane-bordered` draws right. */
+	border-left: var(--border) solid var(--line);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.name-panel-scroll {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.name-panel-head {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: var(--space-15) var(--space-16) var(--space-12);
+	border-bottom: var(--border) solid var(--line);
+}
+
+.name-panel-what {
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+/* Three readings, side by side: the number large, what it counts small under it. */
+.name-counts {
+	display: flex;
+	gap: var(--space-12);
+	margin: var(--space-2) 0 0;
+}
+
+.name-counts div {
+	display: flex;
+	flex-direction: column;
+}
+
+.name-counts dt {
+	font-size: 17px;
+	font-weight: var(--weight-semibold);
+}
+
+.name-counts dd {
+	margin: 0;
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+.name-panel-dupes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+	padding-top: var(--space-2);
+}
+
+.name-dupe {
+	border: 0;
+	cursor: pointer;
+	font: inherit;
+	font-size: var(--text-micro);
+	font-weight: var(--weight-medium);
+}
+
+.name-panel-block {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-9);
+	padding: var(--space-12) var(--space-16);
+	border-bottom: var(--border) solid var(--line);
+}
+
+.name-panel-block:last-child {
+	border-bottom: 0;
+}
+
+.name-panel-block-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* What is said about this name: the relation grey, the other end the link. */
+.statements {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.statement {
+	font-size: var(--text-ui);
+	line-height: var(--leading-snug);
+	/*
+	 * `anywhere` rather than the body's `break-word`: this list sits in a 380px panel and a relation
+	 * name from a real vault is routinely longer than the column. `anywhere` also lowers the
+	 * min-content width, which is what stops the panel itself being widened by one predicate.
+	 */
+	overflow-wrap: anywhere;
+}
+
+.statement-relation {
+	color: var(--faint);
+}
+
+.statement-other {
+	border: 0;
+	padding: 0;
+	background: none;
+	font: inherit;
+	color: var(--text);
+	cursor: pointer;
+	text-align: left;
+}
+
+.statement-other:hover {
+	color: var(--accent);
+}
+
+.name-memories {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.name-memory {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	width: 100%;
+	border: 0;
+	padding: 0;
+	background: none;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.name-memory-title {
+	font-family: var(--font-prose);
+	font-size: var(--prose-xs);
+	line-height: var(--leading-title);
+	color: var(--text);
+}
+
+.name-memory:hover .name-memory-title {
+	color: var(--accent);
+}
+
+.name-memory-meta {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+/* The reconstruction, examined. Closed by default; this is what is inside it. */
+.fidelity-lede {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.fidelity-rows {
+	margin: var(--space-8) 0 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.fidelity-rows div {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+}
+
+.fidelity-rows dt {
+	font-size: var(--text-eyebrow);
+	letter-spacing: var(--tracking-eyebrow);
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+.fidelity-rows dd {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+}
+
+.fidelity-count {
+	font-weight: var(--weight-medium);
+}
+
+.fidelity-meaning {
+	display: block;
+	padding-top: var(--space-2);
+	color: var(--muted);
+}
+
+/*
+ * A SCOPE VALUE IN A METADATA LINE. See `ScopeLine` in `ui/text.jsx` for why this is the one string
+ * in the product that is allowed to end in an ellipsis. `28ch` is about the width of a two-segment
+ * path, which is where a reader stops reading a path and starts skipping it.
+ */
+.scope-value {
+	display: inline-block;
+	max-width: 28ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: bottom;
+}
+
+/* The scope phrase and the separator in front of it are one wrapping unit. See `MemoryDetail`. */
+.reading-meta-scope {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+/*
+ * One part of the preview's metadata line. It exists so the separator travels with the phrase after
+ * it: as bare text nodes the line could wrap between a "·" and the words it separates, and leave the
+ * dot stranded at the end of a row.
+ */
+.preview-meta-part {
+	display: inline;
+	white-space: normal;
+}
+
+/* ---------------------------------------------------------------- the merge screens */
+
+/*
+ * The line that says which two memories are being merged, above the composition.
+ *
+ * It is a `.page` of its own so it is held to the same measure as the panel under it — pinned to
+ * the window's left edge above a centred column, it reads as two screens rather than one — and it
+ * carries no bottom padding because the composition immediately follows it.
+ */
+.merge-context {
+	padding-bottom: 0;
+}
+
+/* The tick column of a table whose rows are chosen rather than read. As narrow as its control. */
+.table-tick {
+	width: 1px;
+	white-space: nowrap;
+}
+
+/*
+ * A decision that is here to say it does NOT exist — "pin this to the top", "give it a score".
+ *
+ * Quieted rather than omitted: a reader who came looking for one of these needs to be told it is
+ * absent at the moment they look for it, and a row drawn at full strength beside the real ones
+ * reads as a fourth thing they could do.
+ */
+.decision-absent .decision-lead {
+	color: var(--muted);
+	text-decoration: line-through;
+	text-decoration-color: var(--line-strong);
+}
+
+/* A memory's title, used as the control that picks it. Reads as the row's subject, not as a link. */
+.decision-open {
+	font-size: var(--text-row);
+	color: var(--text);
+	text-align: left;
+	white-space: normal;
+}
+
+.decision-open:hover:not(:disabled) {
+	color: var(--accent);
+}
+
+
+/* A list that was cut says so; see `combobox.jsx`. */
+.combobox-more {
+	padding: var(--space-6) var(--space-10);
+	border-top: var(--border) solid var(--line);
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--faint);
+}
+
+
+/* ================================================= the hub programme's two panels and its list
+ *
+ * `HubPanel.jsx` and `HubList.jsx` live one directory up rather than in `ui/`, because they are not
+ * a shape any screen may reach for — they are the visible half of one mechanism, and the mechanism
+ * is in `hub-model.mjs` beside them. Their paint is here anyway, for the reason the head of this
+ * file gives: a component carries its own, and the alternative is a screen growing a stylesheet.
+ *
+ * THESE RULES ARE ALMOST NEVER SEEN, AND THAT IS THE DESIGN WORKING. Every one of them is behind a
+ * threshold computed from the vault's own degree distribution, so on a vault where nothing is an
+ * outlier none of this renders at all. The reading that says so is one line in the overview's
+ * caption, which needs no rule of its own.
+ */
+
+.hub-regime,
+.hub-ledger {
+	padding: var(--space-12) var(--space-13);
+	margin-bottom: var(--space-12);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+}
+
+/* The two regimes read differently, because they are two different problems. A hub is an OUTLIER
+   and gets the accent edge; over-cap is a QUANTITY and gets a quiet one — a panel that shouted the
+   same colour at both would be teaching the reader that the distinction does not matter. */
+.hub-regime {
+	border-left: 3px solid var(--line-strong);
+}
+
+.hub-regime-hub {
+	border-left-color: var(--accent);
+}
+
+.hub-regime h3,
+.hub-ledger h3 {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-6);
+	margin: 0 0 var(--space-4);
+	font-size: var(--text-body);
+	font-weight: var(--weight-semibold);
+}
+
+.hub-regime p {
+	margin: 0 0 var(--space-6);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+}
+
+/* The explanatory line under a heading: the threshold with its arithmetic, or what a list holds. */
+.hub-note {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+/* A count beside the thing it counts, never on its own. */
+.hub-count {
+	font-size: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--weight-medium);
+	color: var(--faint);
+}
+
+/*
+ * WHAT A CONTROL WILL DO, ON THE CONTROL. Every button in these panels states its own consequence
+ * before it is taken — how many names go in the box, how many elements the undo would draw — so the
+ * button is two lines and left-aligned rather than one centred word. A confirm-and-apologise
+ * control has already drawn the picture the cap exists to prevent.
+ */
+.hub-regime-actions,
+.hub-ledger-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-4);
+	margin-top: var(--space-8);
+}
+
+.hub-regime-actions .btn,
+.hub-ledger-actions .btn {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-1);
+	height: auto;
+	padding: var(--space-6) var(--space-10);
+	text-align: left;
+	white-space: normal;
+}
+
+.hub-consequence {
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+.hub-ledger-rows {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+	margin: var(--space-8) 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.hub-ledger-sentence {
+	margin: 0 0 var(--space-5);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+}
+
+.hub-ledger-capped {
+	font-size: var(--text-caption);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+.hub-list {
+	margin-top: var(--space-10);
+	padding: var(--space-12) var(--space-13);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+	/*
+	 * THE LIST SITS UNDER THE PICTURE, AND THE PICTURE IS A CANVAS THAT FILLS ITS FRAME.
+	 *
+	 * A positioned element paints above a static one whatever the DOM order. Without this the
+	 * drawing rendered straight through an opaque panel and neither was readable. The list is what
+	 * the reader asked for by clicking, so it wins — and it stays in normal flow, so the picture is
+	 * still above it rather than being replaced by it.
+	 */
+	position: relative;
+	z-index: 4;
+}
+
+.hub-list-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-12);
+}
+
+.hub-list-head h3 {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-6);
+	margin: 0;
+	font-size: var(--text-body);
+	font-weight: var(--weight-semibold);
+}
+
+.hub-list-groups {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-11);
+	margin: var(--space-8) 0;
+	padding: 0;
+	list-style: none;
+	font-size: var(--text-small);
+}
+
+.hub-list-groups li {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-3);
+}
+
+/*
+ * THE SCROLLER AND ITS SPACER ARE THE VIRTUALIZATION.
+ *
+ * The spacer carries the full height of the list, so the scrollbar tells the truth about how much
+ * there is — on a collapsed hub that is the only thing on screen saying this is a hundred thousand
+ * rows and not the twenty a reader can see. The rows inside it are a window, translated into place,
+ * and there are never more of them in the document than fit.
+ */
+.hub-list-scroller {
+	position: relative;
+	overflow-x: hidden;
+	overflow-y: auto;
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-card);
+}
+
+.hub-list-spacer {
+	position: relative;
+}
+
+.hub-list-rows {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.hub-list-rows li {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: 0 var(--space-6);
+	overflow: hidden;
+	border-bottom: var(--border) solid var(--line);
+	font-size: var(--text-small);
+	white-space: nowrap;
+}
+
+.hub-list-position {
+	min-width: var(--space-21);
+	color: var(--faint);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.hub-list-claim {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}

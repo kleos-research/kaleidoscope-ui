@@ -28,11 +28,15 @@
  */
 
 /**
- * The legibility budget, in drawn elements (nodes + edges). Not a framerate budget: the library
- * will happily draw ten times this at an acceptable framerate and teach nobody anything.
+ * THERE WAS A DRAW BUDGET HERE — two numbers, in drawn elements, that decided when a whole-vault
+ * canvas would refuse and offer to prune itself. It is gone with the canvas it governed.
+ *
+ * The budget it replaced it with lives in `names-model.mjs`, and it is a different KIND of number:
+ * the ego drawing's hard node cap is about what a person can read, and the overview's ceiling is
+ * about what a painter can put on a canvas in a frame. Those two were one number here, which is
+ * how a legibility limit came to be enforced on a renderer and a renderer's limit came to be
+ * quoted as a legibility claim.
  */
-export const DRAW_TARGET = 800;
-export const DRAW_CAP = 2000;
 
 /** A trimmed non-empty string, or null. Absent is reported as absent everywhere in this app. */
 const text = (value) => {
@@ -135,17 +139,8 @@ export function buildGraph(records = []) {
 	/** surface -> node */
 	const nodes = new Map();
 	const edges = [];
-	/** memory_id -> the memory as a NODE, because two of the three lenses draw it as one */
+	/** memory_id -> the memory, which the selection panel lists and the table orders by. */
 	const memories = new Map();
-	/**
-	 * One entry per fact ENDPOINT: this memory touched this surface, in this role, with this
-	 * predicate. It is the bipartite half of the model and it is what lens C draws.
-	 *
-	 * Kept as the raw list rather than pre-aggregated, because the aggregation is a drawing
-	 * decision (one line per memory/surface pair) and the counts underneath it are a finding. A
-	 * self-referential fact contributes two entries, deliberately: it is two endpoints.
-	 */
-	const incidences = [];
 
 	const nodeFor = (surface) => {
 		let node = nodes.get(surface);
@@ -183,6 +178,8 @@ export function buildGraph(records = []) {
 		const memoryId = record?.memory_id ?? semantic.memory_id ?? null;
 		const memoryTitle = text(semantic.title);
 		const memoryType = text(semantic.memory_type);
+		const memoryCreated = text(semantic.created_on);
+		const memorySequence = typeof semantic.sequence === 'number' ? semantic.sequence : null;
 
 		// The memory as a node. Every operation this app can perform is addressed by memory id, so
 		// a lens with no memory node in it is a lens with no verbs — you can look at a fact and you
@@ -194,7 +191,8 @@ export function buildGraph(records = []) {
 					title: memoryTitle,
 					memory_type: memoryType,
 					scope: semantic.scope ?? null,
-					sequence: semantic.sequence ?? null,
+					sequence: memorySequence,
+					created_on: memoryCreated,
 					version_id: record?.version_id ?? null,
 					factCount: (semantic.facts ?? []).length,
 					entityCount: (semantic.entities ?? []).length,
@@ -248,30 +246,28 @@ export function buildGraph(records = []) {
 			for (const node of source === target ? [source] : [source, target]) {
 				if (memoryId && !node.memorySet.has(memoryId)) {
 					node.memorySet.add(memoryId);
-					node.memories.push({ memory_id: memoryId, title: memoryTitle, memory_type: memoryType });
+					// WHEN, AND IN WHAT ORDER, carried on the node itself. The selection panel prints
+					// "correction · 3 days ago" beside every memory that names a thing, and the table
+					// can be ordered by "recently mentioned" — neither is answerable from a memory id,
+					// and looking both up again from the record list is a second index that can
+					// disagree with this one about the same memory.
+					node.memories.push({
+						memory_id: memoryId,
+						title: memoryTitle,
+						memory_type: memoryType,
+						created_on: memoryCreated,
+						sequence: memorySequence,
+					});
 				}
 			}
 
-			// The two endpoints, as incidences. Both are recorded even when they are the same node,
-			// because the export literally contains two endpoints and this list is the export's
-			// shape rather than the drawing's.
+			// Which distinct surfaces this memory touches, in first-seen order. Both ends are walked
+			// even when they are the same node, because the export literally contains two endpoints.
 			if (memory) {
-				for (const [surface, role] of [
-					[subject, 'subject'],
-					[object, 'object'],
-				]) {
-					incidences.push({
-						id: `i${incidences.length}`,
-						memory_id: memoryId,
-						surface,
-						role,
-						predicate: predicate ?? null,
-						fact: edge.id,
-					});
-					if (!memory.surfaceSet.has(surface)) {
-						memory.surfaceSet.add(surface);
-						memory.surfaces.push(surface);
-					}
+				for (const surface of [subject, object]) {
+					if (memory.surfaceSet.has(surface)) continue;
+					memory.surfaceSet.add(surface);
+					memory.surfaces.push(surface);
 				}
 			}
 		}
@@ -396,7 +392,6 @@ export function buildGraph(records = []) {
 		// The memory level, which is a different and much better-connected graph than the entity
 		// one. These four are what decide the C lens's empty state and its header counter.
 		memoryNodeCount: memories.size,
-		incidenceCount: incidences.length,
 		connectorCount,
 		loneSurfaceCount: nodes.size - connectorCount,
 		connectedMemoryCount: connectedMemories,
@@ -413,7 +408,6 @@ export function buildGraph(records = []) {
 		nodes,
 		edges,
 		memories,
-		incidences,
 		components,
 		counts,
 		declaredNeverAsserted,
@@ -569,499 +563,48 @@ export function subgraph(graph, surfaces) {
 	return { nodes, edges, elementCount: nodes.length + edges.length };
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
-// THE THREE LENSES
+// THE THREE EMPTY STATES
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 //
-// ONE reconstruction, three projections of it. A lens switch is `projectLens` run again over the
-// SAME `buildGraph` result — nothing is refetched, nothing is rebuilt, and a selection that exists
-// in the target lens survives the switch. That is not a performance note: three lenses each
-// building their own model is three models that can disagree about the vault, and the disagreement
-// would show up as a node that exists on one screen and not on another with no explanation.
+// THREE CONDITIONS, THREE SENTENCES, AND ONLY ONE OF THEM IS A DEFECT. Collapsing them into one
+// "nothing to draw" is the failure this function exists to prevent: a young vault that is working
+// exactly as intended reads as a broken screen, and a genuinely broken build reads as a young
+// vault.
 //
-// WHY C IS THE DEFAULT, and it is not a taste.
-//
-// The entity lens (E) is the obvious one and it is the wrong first screen for two reasons, the
-// second fatal. First, at the entity level a real vault is mostly disconnected dyads: names appear
-// in exactly one fact and nothing joins them. Second, E DISCARDS THE MEMORY. Every operation this
-// app can perform — open, edit, remove, unify, merge — is addressed by memory id, so a canvas with
-// no memory node on it is a canvas with no verbs, and a node's only route into an action is a link
-// in a side panel.
-//
-// THE MEMORY LEVEL IS A DIFFERENT GRAPH, AND IT IS FAR BETTER CONNECTED. Measured with the
-// functions below, on a 339-memory vault, at the moment this was written:
-//
-//   entity level (E)   1,149 names, 888 facts, 311 components, largest holds 193 names — 16.8%
-//   connections (C)      274 nodes, 279 joins,  31 components, largest holds 149 nodes  — 54.4%
-//   memories (M)         172 nodes, 286 joins,  31 components, largest holds  88 nodes  — 51.2%
-//
-// Ten times fewer components, and a largest component that holds half the drawing rather than a
-// sixth of it. The reason is not a smarter algorithm: two memories written months apart routinely
-// name the same thing while sharing no fact endpoint PAIR, so a join that is invisible at the
-// entity level is an edge at the memory level. That is why C is the default and E is a lens you
-// choose. The same reading also says what C hides and must therefore relocate: of those 339
-// memories, 172 share a name with another memory and 167 share none — so the counter naming those
-// 167 is not a nicety, it is half the vault.
-//
-// M is the memory level with the reason removed: it draws that two memories are joined and not
-// WHAT joins them, and the shared surface is exactly the thing a user would act on. So M is in
-// budget and mute, and it is offered rather than defaulted to.
-//
-// C is the bipartite model restricted to its connectors: memory nodes, the surfaces two or more
-// memories touch, and the incidences between them. A surface only one memory touches is folded
-// onto that memory as a chip — RELOCATION, not suppression: it is still on the node, still in the
-// rail, still a finding. The memories left with no connector at all are relocated the same way,
-// into a counter that is a filter rather than a silent omission.
+// There used to be a fourth, and it was about a lens that no longer exists — it said that no two
+// memories shared a name, which was a statement about a projection rather than about the vault.
+// The surface these states now guard is a TABLE OF NAMES, and a table of names needs exactly one
+// thing to be worth opening: a name. So the conditions are about names and facts, and each one
+// still names what the reader should do instead.
 
 /**
- * The lenses, as data, so the control that switches them cannot drift from the projection that
- * implements them. `id` is what goes in the URL and it is a single letter on purpose: it is this
- * app's own vocabulary, not a value read from the vault, and it is short enough to live in a
- * fragment beside everything else the view has to restore.
+ * @returns {{kind: string, heading: string, body: string}|null}
+ *          null when there is something to show.
  */
-export const LENSES = [
-	{
-		id: 'C',
-		name: 'Connections',
-		nodeKinds: ['memory', 'entity'],
-		edgeKinds: ['incidence'],
-		summary: 'Memories, and the names two or more of them share.',
-	},
-	{
-		id: 'M',
-		name: 'Memories',
-		nodeKinds: ['memory'],
-		edgeKinds: ['shared-surface'],
-		summary: 'Memories only, joined where they share a name.',
-	},
-	{
-		id: 'E',
-		name: 'Claims',
-		nodeKinds: ['entity'],
-		edgeKinds: ['claim'],
-		summary: 'Names only, joined by the facts that relate them.',
-	},
-];
+export function emptyState(graph) {
+	if (graph.counts.memoryCount === 0) {
+		return {
+			kind: 'no-memories',
+			heading: 'This vault is empty',
+			body: 'Memories arrive when an agent writes one. There is nothing here yet, and that is not a fault.',
+		};
+	}
 
-export const DEFAULT_LENS = 'C';
+	if (graph.counts.edgeCount === 0) {
+		return {
+			kind: 'no-facts',
+			heading: `${graph.counts.memoryCount.toLocaleString()} memories, and nothing said about a name yet`,
+			body:
+				'None of these memories records a statement with both ends filled in, so there is no name for ' +
+				'this table to be about. Statements are what put a name in here. This is a normal state for a ' +
+				'young vault, and it changes the first time an agent writes one.',
+		};
+	}
 
-export const lensById = (id) => LENSES.find((lens) => lens.id === id) ?? LENSES[0];
-
-/**
- * A drawn node's id, and the two things it can address.
- *
- * Entity and memory nodes share one id space on the canvas, and a surface is an arbitrary string
- * the user's agents wrote — so the prefix is separated on the FIRST colon only and never split
- * naively, or a surface containing a colon addresses nothing.
- */
-export const entityNodeId = (surface) => `e:${surface}`;
-export const memoryNodeId = (memoryId) => `m:${memoryId}`;
-
-export function parseNodeId(id) {
-	if (typeof id !== 'string') return null;
-	const cut = id.indexOf(':');
-	if (cut < 1) return null;
-	const kind = id.slice(0, cut);
-	const ref = id.slice(cut + 1);
-	if (kind === 'e') return { kind: 'entity', surface: ref };
-	if (kind === 'm') return { kind: 'memory', memory_id: ref };
 	return null;
 }
-
-/**
- * The scope, resolved to a set of entity surfaces.
- *
- * SCOPE IS EXPRESSED IN ENTITY SURFACES IN ALL THREE LENSES, and that is a deliberate choice with
- * a consequence worth stating. Every rung of the ladder — the largest group, one group, everything,
- * an ego network, a minimum degree, one memory type — is a statement about names, so all six
- * survive a lens change and mean the obvious thing: in C and M they select the names that are
- * ALLOWED TO JOIN two memories.
- *
- * Where it stops making sense is a scope whose names are each touched by exactly one memory. In E
- * that scope draws a picture; in C and M it draws nothing, because nothing in it joins anything.
- * That is not an empty canvas to shrug at — `projectLens` returns it as `emptyReason`, and the
- * screen says which lens would show it instead of leaving the user in front of a blank stage.
- */
-export function scopeSurfaces(graph, scope) {
-	const kind = scope?.kind ?? 'all';
-	if (kind === 'component') {
-		return new Set(graph.components.find((component) => component.id === scope.componentId)?.nodes ?? []);
-	}
-	if (kind === 'ego' && scope.seed) return neighbourhood(graph, scope.seed, scope.depth ?? 2);
-	if (kind === 'degree') {
-		return new Set(
-			[...graph.nodes.values()]
-				.filter((node) => node.degree >= (scope.minDegree ?? 3))
-				.map((node) => node.surface),
-		);
-	}
-	if (kind === 'memory_type') {
-		const surfaces = new Set();
-		for (const edge of graph.edges) {
-			if (edge.memory_type !== scope.memoryType) continue;
-			surfaces.add(edge.source);
-			surfaces.add(edge.target);
-		}
-		return surfaces;
-	}
-	return new Set(graph.nodes.keys());
-}
-
-/**
- * How much pairing work the M lens is allowed to do before it refuses.
- *
- * The M projection joins every pair of memories that share a surface, so one name touched by k
- * memories costs k(k-1)/2 pairs. On a hub that is quadratic, and the cap check cannot save a
- * projection that has already spent the time building the pairs. So the upper bound is computed
- * FIRST, from the degree sequence, and the projection refuses with that number rather than
- * computing it. A refusal that names its own number is a control panel; a hang is not.
- */
-const PAIR_WORK_CEILING = 200_000;
-
-/**
- * Project the one reconstruction through one lens.
- *
- * @param {object} graph               what `buildGraph` returned
- * @param {object} [options]
- * @param {string} [options.lens]      'C', 'M' or 'E'
- * @param {Set<string>} [options.surfaces]  the scope, already resolved
- * @param {boolean} [options.showUnconnectedMemories]  draw the memories no connector reaches
- * @returns {{lens: string, nodes: object[], edges: object[], elementCount: number,
- *            unconnected: object[], emptyReason: string|null, refusal: object|null}}
- *
- * NOTHING HERE TRUNCATES. The element count is returned so the caller can compare it with the cap
- * before a single element is drawn; a projection that dropped part of itself to fit would be a
- * refusal spelled as an answer, and the reader could not tell a sparse vault from a cropped view.
- */
-export function projectLens(graph, { lens = DEFAULT_LENS, surfaces, showUnconnectedMemories = false } = {}) {
-	const scoped = surfaces instanceof Set ? surfaces : new Set(surfaces ?? graph.nodes.keys());
-
-	if (lens === 'E') {
-		const cut = subgraph(graph, scoped);
-		return {
-			lens: 'E',
-			nodes: cut.nodes.map((node) => ({
-				id: entityNodeId(node.surface),
-				kind: 'entity',
-				surface: node.surface,
-				node,
-				degree: node.degree,
-			})),
-			edges: cut.edges.map((edge) => ({
-				id: `c:${edge.id}`,
-				kind: 'claim',
-				source: entityNodeId(edge.source),
-				target: entityNodeId(edge.target),
-				label: edge.predicate ?? '',
-				predicate: edge.predicate,
-				memory_id: edge.memory_id,
-				memory_title: edge.memory_title,
-				memory_type: edge.memory_type,
-				claim: edge,
-			})),
-			elementCount: cut.elementCount,
-			unconnected: [],
-			emptyReason: cut.elementCount === 0 ? 'nothing-in-scope' : null,
-			refusal: null,
-		};
-	}
-
-	// C and M share their node selection exactly: the connectors inside the scope, and the memories
-	// those connectors reach. Two lenses over one selection, so a memory drawn in C is drawn in M.
-	const connectors = [...scoped].map((surface) => graph.nodes.get(surface)).filter((node) => node?.connector);
-	const drawnMemories = new Map();
-	for (const node of connectors) {
-		for (const memory of node.memories) {
-			const record = graph.memories.get(memory.memory_id);
-			if (record) drawnMemories.set(memory.memory_id, record);
-		}
-	}
-
-	// The memories a scoped surface touches that no scoped CONNECTOR reaches. Relocated, never
-	// hidden: they are returned here and the screen renders them as a counter that is a filter.
-	const unconnected = [];
-	const touched = new Set();
-	for (const surface of scoped) {
-		for (const memory of graph.nodes.get(surface)?.memories ?? []) touched.add(memory.memory_id);
-	}
-	for (const memoryId of touched) {
-		if (drawnMemories.has(memoryId)) continue;
-		const record = graph.memories.get(memoryId);
-		if (record) unconnected.push(record);
-	}
-	if (showUnconnectedMemories) for (const record of unconnected) drawnMemories.set(record.memory_id, record);
-
-	const memoryNode = (record) => ({
-		id: memoryNodeId(record.memory_id),
-		kind: 'memory',
-		// THE ID A CLICK NEEDS. Every verb in this product is addressed by memory id, so the node
-		// carries it rather than an index into a list that the next projection would renumber.
-		memory_id: record.memory_id,
-		title: record.title,
-		memory_type: record.memory_type,
-		memory: record,
-		// The surfaces folded onto this node as chips: what C does with a name only this memory
-		// touches. They are on the node, not deleted from the model.
-		folded: record.foldedSurfaces,
-		degree: 0,
-	});
-
-	if (lens === 'M') {
-		// The upper bound on pairing work, from the degree sequence, before any pair is built.
-		const work = connectors.reduce((total, node) => {
-			const k = node.memories.length;
-			return total + (k * (k - 1)) / 2;
-		}, 0);
-		if (work > PAIR_WORK_CEILING) {
-			return {
-				lens: 'M',
-				nodes: [],
-				edges: [],
-				elementCount: 0,
-				unconnected,
-				emptyReason: null,
-				refusal: {
-					kind: 'pair-work',
-					pairs: work,
-					ceiling: PAIR_WORK_CEILING,
-					reason:
-						`Joining these memories pairwise is up to ${work.toLocaleString()} joins, past the ` +
-						`${PAIR_WORK_CEILING.toLocaleString()} this lens will compute. Narrow the scope, or use ` +
-						'Connections, which draws the shared name once instead of once per pair.',
-				},
-			};
-		}
-
-		/** `a|b` (sorted) -> the shared surfaces behind that join */
-		// Keyed on the two ids and CARRYING them, rather than parsed back out of the key. A memory
-		// id is vault content: a delimiter that turns out to appear inside one addresses the wrong
-		// node, silently, and the drawing is wrong in a way no assertion about counts would catch.
-		const pairs = new Map();
-		for (const node of connectors) {
-			const ids = node.memories.map((memory) => memory.memory_id).filter((id) => drawnMemories.has(id));
-			for (let i = 0; i < ids.length; i += 1) {
-				for (let j = i + 1; j < ids.length; j += 1) {
-					const [a, b] = ids[i] < ids[j] ? [ids[i], ids[j]] : [ids[j], ids[i]];
-					const pair = pairs.get(`${a}\u0000${b}`) ?? { a, b, shared: [] };
-					pair.shared.push(node.surface);
-					pairs.set(`${a}\u0000${b}`, pair);
-				}
-			}
-		}
-
-		const nodes = [...drawnMemories.values()].map(memoryNode);
-		const byId = new Map(nodes.map((node) => [node.memory_id, node]));
-		const edges = [...pairs.values()].map(({ a, b, shared }, index) => {
-			byId.get(a).degree += 1;
-			byId.get(b).degree += 1;
-			return {
-				id: `s:${index}`,
-				// A shared-surface edge is a PROJECTION of two incidences the export literally
-				// contains — memory A touched this name, memory B touched this name — and never an
-				// inference. The surfaces behind it travel on the edge and are named in the panel,
-				// because an edge whose reason is not on screen is the whole reason M is not the
-				// default.
-				kind: 'shared-surface',
-				source: memoryNodeId(a),
-				target: memoryNodeId(b),
-				surfaces: shared,
-				label: shared.length === 1 ? shared[0] : `${shared.length} shared names`,
-			};
-		});
-		return {
-			lens: 'M',
-			nodes,
-			edges,
-			elementCount: nodes.length + edges.length,
-			unconnected,
-			emptyReason: nodes.length === 0 ? 'no-connectors' : null,
-			refusal: null,
-		};
-	}
-
-	// ── C ───────────────────────────────────────────────────────────────────────────────────────
-	const drawnSurfaces = new Set(connectors.map((node) => node.surface));
-	const nodes = [
-		...[...drawnMemories.values()].map(memoryNode),
-		...connectors.map((node) => ({
-			id: entityNodeId(node.surface),
-			kind: 'entity',
-			surface: node.surface,
-			node,
-			degree: node.memories.length,
-		})),
-	];
-	const byId = new Map(nodes.map((node) => [node.id, node]));
-
-	// One line per memory/surface pair, carrying both ends rather than encoding them in a key that
-	// would then have to be parsed back out. A surface is vault content and may contain anything.
-	const lines = new Map();
-	for (const incidence of graph.incidences) {
-		if (!drawnSurfaces.has(incidence.surface) || !drawnMemories.has(incidence.memory_id)) continue;
-		const key = `${incidence.memory_id}\u0000${incidence.surface}`;
-		const line = lines.get(key) ?? { memory_id: incidence.memory_id, surface: incidence.surface, group: [] };
-		line.group.push(incidence);
-		lines.set(key, line);
-	}
-
-	const edges = [...lines.values()].map(({ memory_id: memoryId, surface, group }, index) => {
-		const source = memoryNodeId(memoryId);
-		const target = entityNodeId(surface);
-		if (byId.has(source)) byId.get(source).degree += 1;
-		const predicates = [...new Set(group.map((incidence) => incidence.predicate).filter(Boolean))];
-		return {
-			id: `i:${index}`,
-			// One line per memory/surface pair rather than one per endpoint. That is an aggregation
-			// of identical endpoints between the same two nodes — every one of them is in the export
-			// — and never a link the export does not carry. The count travels on the edge.
-			kind: 'incidence',
-			source,
-			target,
-			incidences: group,
-			count: group.length,
-			predicates,
-			label: predicates.length === 1 ? predicates[0] : `${group.length}`,
-		};
-	});
-
-	return {
-		lens: 'C',
-		nodes,
-		edges,
-		elementCount: nodes.length + edges.length,
-		unconnected,
-		emptyReason: nodes.length === 0 ? 'no-connectors' : null,
-		refusal: null,
-	};
-}
-
-/**
- * The connected components of a PROJECTION, so the fallback ladder can be evaluated in the lens the
- * user is actually looking at rather than in the entity graph underneath it.
- */
-export function projectionComponents(projection) {
-	const order = projection.nodes.map((node) => node.id);
-	const indexOf = new Map(order.map((id, index) => [id, index]));
-	const sets = unionFind(order.length);
-	for (const edge of projection.edges) {
-		const a = indexOf.get(edge.source);
-		const b = indexOf.get(edge.target);
-		if (a !== undefined && b !== undefined) sets.union(a, b);
-	}
-	const byRoot = new Map();
-	for (const id of order) {
-		const root = sets.find(indexOf.get(id));
-		const bucket = byRoot.get(root) ?? [];
-		bucket.push(id);
-		byRoot.set(root, bucket);
-	}
-	return [...byRoot.values()].map((ids) => ids.length).sort((a, b) => b - a);
-}
-
-/**
- * THE DEFAULT VIEW: lens C over the whole vault, and the ladder that fires when it does not fit.
- *
- * This used to be "the largest connected component", and it was the right answer for the lens that
- * shipped first. In the ENTITY lens the whole vault is the failure this screen exists to avoid: a
- * few hundred scattered islands, most of them a single fact, drifting apart under a force layout at
- * a perfectly good framerate while teaching nothing. It renders and it is worthless.
- *
- * In lens C the same vault is not that picture. The projection has already folded every name only
- * one memory touches onto the memory that touches it, so what remains is exactly the connective
- * structure — and that fits with headroom, needs no seed, and answers "what shape is this?" before
- * asking "where do you want to start?". A seeded ego network is the standard cold-start
- * recommendation for a graph view and it is the wrong first question here: it makes the user choose
- * a starting point before they know what is in the vault.
- *
- * So the ladder is lens-dependent, each rung names itself in the banner, and nothing it leaves out
- * is hidden — the memories with no shared name are counted and listed, which is RELOCATION rather
- * than suppression. The distinction is the whole design: suppressing degree-1 nodes is the standard
- * remedy for this picture and it deletes three quarters of the vertices along with every finding
- * worth showing. The picture gets prettier as it gets emptier and nothing on screen says so.
- *
- * The scope it returns is URL-ENCODABLE — a rule and its arguments, never a materialised set of
- * surfaces. A default that returned the set could not be written into the address bar, so a reload
- * could not restore it, and the view would silently be a different one from the link that named it.
- */
-export function defaultView(graph, { lens = DEFAULT_LENS, cap = DRAW_CAP } = {}) {
-	const rung = (scope) => {
-		const projection = projectLens(graph, { lens, surfaces: scopeSurfaces(graph, scope) });
-		return { scope, projection, elements: projection.elementCount };
-	};
-
-	const largest = graph.components[0];
-	if (!largest || largest.size === 0) {
-		return {
-			scope: { kind: 'all' },
-			rule: 'empty',
-			elements: 0,
-			reason: 'This vault has no facts with two endpoints.',
-		};
-	}
-
-	// RUNG 1, AND IT IS LENS-DEPENDENT — which is the whole reason the ladder is not a constant.
-	//
-	// In C and M the whole vault is the right first screen: the projection has already folded every
-	// name only one memory touches, so what is left is the connective structure and it fits. In E
-	// the whole vault is the confetti field this screen exists to avoid — hundreds of scattered
-	// islands drifting apart under a force layout at a perfectly good framerate, teaching nothing —
-	// so E starts one rung lower, at the largest group, exactly as it always has.
-	const ladder =
-		lens === 'E'
-			? [{ kind: 'component', componentId: largest.id }, { kind: 'all' }]
-			: [{ kind: 'all' }, { kind: 'component', componentId: largest.id }];
-
-	for (const scope of ladder) {
-		const step = rung(scope);
-		if (step.elements > cap) continue;
-		if (step.elements === 0 && scope.kind !== 'all') continue;
-		return {
-			scope,
-			rule: scope.kind === 'all' ? 'whole-vault' : 'largest-component',
-			elements: step.elements,
-			reason:
-				scope.kind === 'all'
-					? lens === 'E'
-						? `Everything: ${graph.counts.componentCount} separate groups, and that is the shape.`
-						: `Every memory that shares a name with another one — ${step.projection.nodes.length} nodes, ` +
-							`${step.projection.edges.length} joins. ${step.projection.unconnected.length} memories share ` +
-							'no name with any other and are listed on the right rather than drawn as dots.'
-					: `The largest connected group: ${largest.size} names joined by ${largest.edgeCount} facts. ` +
-						`The other ${graph.counts.componentCount - 1} groups are listed on the right — that is where the work is.`,
-		};
-	}
-
-	// Both rungs are over budget. Seed on the busiest name rather than truncating anything.
-	const hub = largest.nodes.reduce(
-		(best, surface) =>
-			graph.nodes.get(surface).degree > (graph.nodes.get(best)?.degree ?? -1) ? surface : best,
-		largest.nodes[0],
-	);
-	for (const depth of [2, 1]) {
-		const scope = { kind: 'ego', seed: hub, depth };
-		const step = rung(scope);
-		if (step.elements <= cap) {
-			return {
-				scope,
-				rule: 'ego',
-				elements: step.elements,
-				reason:
-					`The whole vault is past what this view draws in this lens. ` +
-					`Showing ${depth} step${depth === 1 ? '' : 's'} around "${hub}", its busiest name.`,
-			};
-		}
-	}
-
-	return {
-		scope: { kind: 'ego', seed: hub, depth: 1 },
-		rule: 'refused',
-		elements: rung({ kind: 'ego', seed: hub, depth: 1 }).elements,
-		reason:
-			`"${hub}" alone touches ${graph.nodes.get(hub).degree} facts, which is past what this view draws. ` +
-			'Pick a reduction below; nothing has been dropped silently.',
-	};
-}
-
 /**
  * The colour assignment, computed from THIS vault at load.
  *
@@ -1082,65 +625,6 @@ export function kindPalette(graph, size = 8) {
 	};
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════════════════════
-// THE FOUR EMPTY STATES
-// ═══════════════════════════════════════════════════════════════════════════════════════════════
-//
-// FOUR CONDITIONS, FOUR SENTENCES, AND ONLY ONE OF THEM IS A DEFECT. Collapsing them into one
-// "nothing to draw" is the failure this function exists to prevent: a young vault that is working
-// exactly as intended reads as a broken screen, and a genuinely broken build reads as a young
-// vault. The third state is the one that is usually missing, and it is the one where this product
-// has the most to say — the rail, not the drawing, is what a user needs at that moment.
-
-/**
- * @returns {{kind: string, heading: string, body: string, drawCanvas: boolean, railFullWidth: boolean}|null}
- *          null when there is something to draw.
- */
-export function emptyState(graph, { lens = DEFAULT_LENS } = {}) {
-	if (graph.counts.memoryCount === 0) {
-		return {
-			kind: 'no-memories',
-			heading: 'This vault is empty',
-			body: 'Memories arrive when an agent writes one. There is nothing here yet, and that is not a fault.',
-			drawCanvas: false,
-			railFullWidth: false,
-		};
-	}
-
-	if (graph.counts.edgeCount === 0) {
-		return {
-			kind: 'no-facts',
-			heading: `${graph.counts.memoryCount.toLocaleString()} memories, no facts`,
-			body:
-				'None of these memories records a fact with both a subject and an object, so there is nothing ' +
-				'to join. Facts are what make the graph. This is a normal state for a young vault.',
-			drawCanvas: false,
-			railFullWidth: false,
-		};
-	}
-
-	// THE ONE THAT USED TO BE FOLDED INTO THE ONE ABOVE, AND IS A COMPLETELY DIFFERENT SENTENCE.
-	// There are facts, and they draw fine as claims — what there is not is a single name that two
-	// memories both touch, so at the memory level nothing connects to anything. An empty canvas
-	// here would be read as a broken screen. The rail goes full width instead, because in this
-	// state the rail IS the product: every row in it is the work that would create the first join.
-	if (lens !== 'E' && graph.counts.connectorCount === 0) {
-		return {
-			kind: 'no-connectors',
-			heading: 'Nothing here connects yet',
-			body:
-				`Every one of these ${graph.counts.nodeCount.toLocaleString()} names is mentioned by exactly one ` +
-				`memory, so no two memories share anything and there is nothing to join. The ` +
-				`${graph.counts.edgeCount.toLocaleString()} facts are still there — the Claims lens draws them — ` +
-				'but at the memory level this vault has no structure yet. That is the normal state of a young ' +
-				'vault and the list on the right is where it changes.',
-			drawCanvas: false,
-			railFullWidth: true,
-		};
-	}
-
-	return null;
-}
 
 /**
  * The engine's own reading of its embedding model, as a warning that belongs ON THIS STRIP.
@@ -1294,222 +778,4 @@ export function fidelityReading(graph, health) {
 	}
 
 	return { rows, notes, available: true };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════════════════════
-// THE VIEW, IN THE URL
-// ═══════════════════════════════════════════════════════════════════════════════════════════════
-//
-// ── THE TOKEN INTERACTION, WHICH IS THE WHOLE HAZARD HERE ────────────────────────────────────
-//
-// This app is launched at `http://127.0.0.1:<port>/#token=<the launch token>`. The token is in the
-// FRAGMENT because a fragment is the one part of a URL the browser never puts on the wire; it is
-// read once at startup and the entry is immediately rewritten with `history.replaceState` so the
-// credential is not reachable by pressing Back. The route is ALSO in the fragment (`#/graph`), so
-// the view state and the credential share one carrier, and that is the trap:
-//
-//   * ENCODING MUST BUILD THE FRAGMENT FROM THE VIEW STATE, NEVER BY EDITING THE FRAGMENT THAT IS
-//     THERE. "Read the current fragment, set one parameter, write it back" is the obvious
-//     implementation and it copies whatever else the fragment holds into the new history entry —
-//     which, in the one instant between launch and capture, is the token. That would write a
-//     credential into browser history, where it outlives the tab. So `encodeGraphView` takes state
-//     and returns a string, and it is the only thing that composes a fragment for this screen.
-//   * DECODING MUST IGNORE A `token` PARAMETER RATHER THAN CARRYING IT. A fragment that still holds
-//     one is a fragment the capture has not run over yet; the view decodes to its default and the
-//     token is not copied into the view state, from where the next write would put it back.
-//   * EVERY WRITE IS `replaceState`, NEVER A PUSH. Ticking a filter is not a navigation, and a
-//     history stack with forty entries for one screen makes Back useless — which matters more here
-//     than usual, because Back is how a user returns from a memory they clicked to the drawing they
-//     clicked it from.
-//
-// WHAT THIS DOES AND DOES NOT BUY, said plainly: a reload restores the VIEW and cannot restore the
-// SESSION. The token is minted per launch and lives only in the launch URL and in one variable in
-// this tab, so a reloaded tab has no credential and the sidecar answers 401 — the app says so and
-// asks for a relaunch. Putting the token anywhere that survives a reload (storage, a cookie, the
-// query string) would fix the reload and would be a materially worse product: the credential has
-// total read and write authority over the vault. So the URL carries the view, the launch carries
-// the credential, and within a session Back, Forward and a copied link all land on the same
-// drawing.
-
-/** The parameter names this screen owns. Anything else in the fragment is not this screen's. */
-const VIEW_PARAMETERS = [
-	'lens', 'scope', 'group', 'seed', 'depth', 'degree', 'type', 'kind', 'sel', 'loners',
-	// The hub reductions — PRD 0005 R18 and R25 both say the absorbed set is in the URL, and the
-	// reason is not symmetry with the filters. A reduction is the one piece of view state that
-	// REMOVES things: a link that carries the lens and the scope but not the collapse shows the
-	// recipient a different picture from the one the sender was looking at, and neither of them can
-	// tell. `collapse` and `absorb` repeat, one per node id; `expand` carries a count as well, so it
-	// is written `<k>|<id>` and split on the FIRST bar, because a surface may contain one and a
-	// decimal count may not.
-	'collapse', 'absorb', 'expand',
-];
-
-/**
- * A reduction state as three plain arrays.
- *
- * The screen holds `collapsed`/`absorbed` as Sets and `expanded` as a Map, because that is what
- * `planView` reads. The codec deals in arrays instead, and the conversion happens at the one seam
- * in `GraphView.jsx`: a codec whose round trip can be asserted with `deepEqual` is a codec a test
- * can hold, and a Set inside an assertion is a comparison that silently succeeds on identity.
- */
-const reductionArrays = (state) => ({
-	collapsed: [...(state?.collapsed ?? [])].map(String),
-	absorbed: [...(state?.absorbed ?? [])].map(String),
-	expanded: [...(state?.expanded ?? [])].map(([id, k]) => [String(id), Number(k)]),
-});
-
-/**
- * The view state as a fragment query string, built from the state and from nothing else.
- *
- * Defaults are OMITTED rather than written, so the common case is `#/graph` and a link a user
- * copies says only what they changed.
- */
-export function encodeGraphView({
-	lens,
-	scope,
-	kindFilter = [],
-	typeFilter = [],
-	selected = null,
-	showUnconnectedMemories = false,
-	collapsed = [],
-	absorbed = [],
-	expanded = [],
-} = {}) {
-	const parameters = new URLSearchParams();
-	if (lens && lens !== DEFAULT_LENS) parameters.set('lens', lens);
-
-	const kind = scope?.kind ?? null;
-	if (kind === 'component') {
-		parameters.set('scope', 'group');
-		parameters.set('group', String(scope.componentId ?? ''));
-	} else if (kind === 'ego') {
-		parameters.set('scope', 'ego');
-		parameters.set('seed', String(scope.seed ?? ''));
-		if (scope.depth != null && scope.depth !== 2) parameters.set('depth', String(scope.depth));
-	} else if (kind === 'degree') {
-		parameters.set('scope', 'degree');
-		parameters.set('degree', String(scope.minDegree ?? 3));
-	} else if (kind === 'memory_type') {
-		parameters.set('scope', 'type');
-		parameters.set('type', String(scope.memoryType ?? ''));
-	} else if (kind === 'all') {
-		parameters.set('scope', 'all');
-	}
-
-	for (const value of kindFilter) parameters.append('kind', value);
-	for (const value of typeFilter) parameters.append('type', value);
-	if (selected) parameters.set('sel', selected);
-	if (showUnconnectedMemories) parameters.set('loners', '1');
-
-	const reductions = reductionArrays({ collapsed, absorbed, expanded });
-	for (const id of reductions.collapsed) parameters.append('collapse', id);
-	for (const id of reductions.absorbed) parameters.append('absorb', id);
-	for (const [id, k] of reductions.expanded) {
-		if (Number.isFinite(k) && k > 0) parameters.append('expand', `${k}|${id}`);
-	}
-
-	return parameters.toString();
-}
-
-/**
- * The inverse. Unknown parameters are dropped, and `token` is dropped LOUDLY in the sense that it
- * is named here: it is the one parameter that must never survive a round trip through this codec.
- */
-export function decodeGraphView(search) {
-	const raw = typeof search === 'string' ? search.replace(/^[#?]+/, '') : '';
-	const parameters = new URLSearchParams(raw);
-
-	const lens = parameters.get('lens');
-	const scopeName = parameters.get('scope');
-	let scope = null;
-	if (scopeName === 'all') scope = { kind: 'all' };
-	else if (scopeName === 'group') scope = { kind: 'component', componentId: parameters.get('group') ?? '' };
-	else if (scopeName === 'ego') {
-		const depth = Number(parameters.get('depth'));
-		scope = {
-			kind: 'ego',
-			seed: parameters.get('seed') ?? '',
-			depth: Number.isFinite(depth) && depth > 0 ? depth : 2,
-		};
-	} else if (scopeName === 'degree') {
-		const minDegree = Number(parameters.get('degree'));
-		scope = { kind: 'degree', minDegree: Number.isFinite(minDegree) && minDegree > 0 ? minDegree : 3 };
-	} else if (scopeName === 'type') scope = { kind: 'memory_type', memoryType: parameters.get('type') ?? '' };
-
-	// `type` is two things — the scope's argument and a facet filter — and only the facet reading
-	// belongs in the filter list. Taking every `type` would make selecting a scope also tick its
-	// own filter, which then removes every edge asserted by any other kind of memory.
-	const typeFilter = parameters.getAll('type').filter((value) => !(scopeName === 'type' && value === scope?.memoryType));
-
-	// A malformed `expand` is DROPPED rather than defaulted to some k. "Show me some of it" is not a
-	// state this screen has: every expansion carries a number the chip renders as `showing k of N`,
-	// and inventing one here would put a number on screen that came from a broken link.
-	const expanded = [];
-	for (const raw of parameters.getAll('expand')) {
-		const bar = raw.indexOf('|');
-		if (bar < 1) continue;
-		const k = Number(raw.slice(0, bar));
-		const id = raw.slice(bar + 1);
-		if (!Number.isFinite(k) || k <= 0 || id.length === 0) continue;
-		expanded.push([id, Math.floor(k)]);
-	}
-
-	return {
-		// A lens name that is not one of ours falls back to the default rather than drawing nothing.
-		lens: LENSES.some((entry) => entry.id === lens) ? lens : DEFAULT_LENS,
-		scope,
-		kindFilter: parameters.getAll('kind'),
-		typeFilter,
-		selected: parameters.get('sel'),
-		showUnconnectedMemories: parameters.get('loners') === '1',
-		collapsed: parameters.getAll('collapse'),
-		absorbed: parameters.getAll('absorb'),
-		expanded,
-	};
-}
-
-/** Every parameter this codec will emit, so a test can assert what it will never emit. */
-export const graphViewParameters = () => [...VIEW_PARAMETERS];
-
-/**
- * The facet filters, applied to a PROJECTION rather than to the model.
- *
- * One implementation for all three lenses, because a filter that behaved differently per lens is
- * three filters, and the two that are not on screen are the ones that rot. The rules:
- *
- *   - an entity node survives a kind filter if any of its declared kinds is selected; a node with
- *     no declaration at all is matched by the explicit `(not declared)` value, never by silence;
- *   - a memory node survives a type filter if its own type is selected;
- *   - a CLAIM edge survives a type filter on the memory that asserted it, which is what the type
- *     facet has always meant in the entity lens;
- *   - an edge survives only if both of its endpoints did;
- *   - a node left with no surviving edge is dropped unless it is the selection, so filtering never
- *     leaves the canvas gaining floating dots the user cannot account for.
- *
- * Nothing here is a reduction the user was not told about: the element count of the result is what
- * the header renders, beside the count before it.
- */
-export function filterProjection(projection, { kindFilter = [], typeFilter = [], keep = null } = {}) {
-	if (kindFilter.length === 0 && typeFilter.length === 0) return projection;
-
-	const kept = new Map();
-	for (const node of projection.nodes) {
-		if (node.kind === 'entity' && kindFilter.length > 0) {
-			const kinds = [...node.node.kinds.keys()];
-			const matched = kinds.length === 0 ? kindFilter.includes('(not declared)') : kinds.some((kind) => kindFilter.includes(kind));
-			if (!matched) continue;
-		}
-		if (node.kind === 'memory' && typeFilter.length > 0 && !typeFilter.includes(node.memory_type)) continue;
-		kept.set(node.id, node);
-	}
-
-	const edges = projection.edges.filter((edge) => {
-		if (!kept.has(edge.source) || !kept.has(edge.target)) return false;
-		if (edge.kind === 'claim' && typeFilter.length > 0) return typeFilter.includes(edge.memory_type);
-		return true;
-	});
-
-	const attached = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
-	const nodes = [...kept.values()].filter((node) => attached.has(node.id) || node.id === keep);
-	return { ...projection, nodes, edges, elementCount: nodes.length + edges.length };
 }

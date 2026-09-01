@@ -36,6 +36,7 @@ import { call } from '../engine/call.mjs';
 import { assessCompatibility } from '../engine/compatibility.mjs';
 import { exportMemory, listMemories } from '../engine/memory.mjs';
 import { launchBlockers, preflight } from '../engine/preflight.mjs';
+import { createAskHandler } from './ask.mjs';
 import { createAssetServer } from './assets.mjs';
 import { createListingCache, selectMemories, SCOPE_UNSET, SORT_KEYS } from './cache.mjs';
 import { createDismissalStore, DismissalStoreError, MAX_DISMISSALS } from './dismissals.mjs';
@@ -221,6 +222,12 @@ export async function startSidecar({
 		requestBytes: readings.contract?.limits?.cli_request_bytes ?? null,
 		snapshots,
 	});
+
+	/**
+	 * The ranked door, behind one route and one explicit press. See the note at the top of
+	 * `ask.mjs` for the rule it replaced and the three things that enforce the narrower one.
+	 */
+	const ask = createAskHandler({ where, bodyLimit: writes.bodyLimit });
 
 	/**
 	 * The removal path, built beside the write path and sharing its spine.
@@ -591,11 +598,16 @@ export async function startSidecar({
 	/**
 	 * THE ROUTE TABLE, AND IT IS THE ALLOWLIST.
 	 *
-	 * What is not here is the design. There is no generic passthrough, no search endpoint of any
-	 * kind, no route reaching address maintenance, the ontology write modes, the consolidation
-	 * sweep or vault destruction — and no parameter naming a vault, a root, a profile or a path on
-	 * any of them. A test enumerates this array and asserts the set, so a route added in a hurry
-	 * shows up as a failing assertion rather than as a convenience.
+	 * What is not here is the design. There is no generic passthrough, no route reaching address
+	 * maintenance, the ontology write modes, the consolidation sweep or vault destruction — and no
+	 * parameter naming a vault, a root, a profile or a path on any of them. A test enumerates this
+	 * array and asserts the set, so a route added in a hurry shows up as a failing assertion rather
+	 * than as a convenience.
+	 *
+	 * THERE IS EXACTLY ONE ROUTE TO RANKED SEARCH and it is the last entry below. It was previously
+	 * absent altogether; the approved design adds it as one explicit press on one screen, and the
+	 * rule that replaced "none, ever" is narrower rather than weaker — see the comment on the route
+	 * and the note at the top of `ask.mjs`.
 	 */
 	const ROUTES = [
 		{ method: 'GET', path: '/api/preflight', handler: handlePreflight },
@@ -716,6 +728,25 @@ export async function startSidecar({
 		// to: `undo` is a third WRITE of a payload this app kept, not a rollback.
 		{ method: 'GET', path: '/api/pending-merge', handler: curation.handlePending },
 		{ method: 'POST', path: '/api/pending-merge', handler: curation.handlePendingAction, writes: true },
+
+		// ---- the ranked door: ONE ROUTE, POST ONLY, AND NOTHING CALLS IT ON ITS OWN ------------
+		//
+		// "Ask the way your agent does." The one place in this product that reaches ranked search,
+		// and the reason it is a POST rather than a GET is the whole design: a GET is what a page
+		// load, a prefetch, a poll, a link and an address-bar paste can all perform, and every one
+		// of those would write a permanent exposure row into the vault it is inspecting. A POST
+		// needs a matching Origin, a JSON content type and a body, so nothing performs one by
+		// arriving somewhere.
+		//
+		// `writes: true` because it does: the engine records an exposure row on every ranked query
+		// and refuses `ledger: false` rather than silently upgrading it. That is also why it sits
+		// behind the same compatibility gate as the other writes.
+		//
+		// The narrower rule this replaces — no ranked search anywhere on the HTTP surface — is
+		// still enforced for every OTHER route by the sweep in `test/server.test.mjs`, which walks
+		// the whole surface, asserts the count did not move, then presses this one and asserts it
+		// moved by exactly one.
+		{ method: 'POST', path: '/api/ask', handler: ask, writes: true },
 	];
 
 	// ------------------------------------------------------------------ the pipeline

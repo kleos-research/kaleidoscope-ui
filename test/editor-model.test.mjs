@@ -28,6 +28,7 @@ import {
 	compareBuffers,
 	composeBody,
 	currentVersionFromRefusal,
+	driftingFactRows,
 	duplicateFactRows,
 	emptyBuffer,
 	emptyEntityRow,
@@ -38,7 +39,10 @@ import {
 	saveBlockers,
 	toSemanticDelta,
 	undeclaredSurfaces,
+	validUntilDate,
 	vaultVocabulary,
+	withValidUntil,
+	withoutRepeatedHeading,
 } from '../src/app/editor-model.mjs';
 import { RESERVED_RELATION_NAMES, deniedRelations } from '../src/app/reserved-relations.mjs';
 import { locateEngine } from '../src/engine/locate.mjs';
@@ -506,4 +510,164 @@ test('the engine refuses every relation name this repository denies, and more be
 	for (const name of RESERVED_RELATION_NAMES) {
 		assert.ok(union.has(name), `the union dropped ${name}, which this repository refuses`);
 	}
+});
+
+// ---------------------------------------------------------------------------------------------
+// 9. THE DRIFT WARNING IS A DRIFT WARNING  (the approved editor's second mitigation)
+// ---------------------------------------------------------------------------------------------
+//
+// A save replaces the words and the structure together, so the two halves of one memory can be
+// edited apart with nothing in the engine noticing. The approved design draws the warning on the
+// fact — "No longer in the words. Remove it, or say it in the prose."
+//
+// The trap is the version of this check that is a COVERAGE check: "this endpoint is nowhere in the
+// prose" is true of a large share of perfectly good memories, because the facts are the structured
+// half precisely so that the paragraph does not have to spell them out. A warning on most rows of
+// most memories is a warning nobody reads, and it would arrive on a screen the owner already
+// rejected for saying too much. So the assertion below is that the check fires on a sentence that
+// LEFT and stays silent on one that was never there.
+
+test('a fact is flagged when the words stopped saying it, and not merely for being structured', () => {
+	const facts = [
+		{ id: 'a', subject: 'build cache', predicate: 'is keyed on', object: 'lockfile hash' },
+		{ id: 'b', subject: 'build cache', predicate: 'had delay of', object: 'two seconds' },
+		{ id: 'c', subject: 'build cache', predicate: 'powers', object: '' },
+	];
+	const baselineBody = '# Cache keys\n\nThe build cache is keyed on the lockfile hash, and it had a two seconds delay.';
+
+	const untouched = driftingFactRows({ body: baselineBody, baselineBody, facts });
+	assert.equal(untouched.size, 0, 'a memory nobody has edited raised a drift warning');
+
+	const edited = driftingFactRows({
+		body: '# Cache keys\n\nThe build cache is keyed on the lockfile hash.',
+		baselineBody,
+		facts,
+	});
+	assert.deepEqual(
+		[...edited.keys()],
+		['b'],
+		'the row whose object the rewrite deleted was not the one flagged',
+	);
+	assert.deepEqual(edited.get('b'), ['two seconds'], 'the endpoint that left was not named');
+
+	// The half of the rule that keeps it usable: a fact the prose NEVER spelled out is not drift.
+	const neverSaid = driftingFactRows({
+		body: 'Nothing here names anything.',
+		baselineBody: 'Nothing here names anything.',
+		facts,
+	});
+	assert.equal(
+		neverSaid.size,
+		0,
+		'a fact the words never spelled out was flagged as having left them. That is a coverage ' +
+			'check wearing a drift check\'s sentence, and it fires on most rows of most memories.',
+	);
+
+	// An incomplete row is being typed, not drifting.
+	const incomplete = driftingFactRows({
+		body: 'The build cache is keyed on the lockfile hash.',
+		baselineBody,
+		facts: [facts[2]],
+	});
+	assert.equal(incomplete.size, 0, 'a half-typed row was flagged');
+});
+
+// ---------------------------------------------------------------------------------------------
+// 10. THE VALIDITY WINDOW, AND THE SHAPE THE ENGINE ACTUALLY ACCEPTS
+// ---------------------------------------------------------------------------------------------
+//
+// `temporal.valid_until` is the gentler alternative to removal: an ended memory stops being served
+// and stays readable. The editor sets exactly this one key inside an object it otherwise CARRIES,
+// so two things have to hold at once — the value must be the shape the engine takes, and a record
+// that carried no window must still send none.
+//
+// THE SHAPE WAS MEASURED, NOT ASSUMED. Against kscope 0.0.5 on a clone: `"2027-01-01"` is refused
+// as `InvalidTimestamp`, `{t, grain}` is refused as `invalid type: map, expected a string`, and
+// `"2027-01-01T00:00:00Z"` commits. A date control cannot produce the third on its own, which is
+// why the composing happens in the model and is pinned here.
+
+test('an end date is composed as a timestamp, and an absent window is never invented', async () => {
+	const { fields } = await writeContract();
+
+	const record = loadedRecord();
+	const buffer = bufferFromRecord(record);
+	assert.equal(validUntilDate(buffer), null, 'a memory with an open window read as ended');
+
+	const ended = withValidUntil(buffer, '2027-01-01');
+	assert.equal(
+		ended.carried.temporal.valid_until,
+		'2027-01-01T00:00:00Z',
+		'the end date was not composed up to the RFC 3339 timestamp the engine accepts. A plain ' +
+			'date is refused as InvalidTimestamp, which the user meets as a failed save.',
+	);
+	assert.equal(validUntilDate(ended), '2027-01-01', 'the date control could not read its own value back');
+	assert.equal(
+		ended.carried.temporal.valid_from,
+		record.semantic_delta.temporal.valid_from,
+		'setting the end of a memory changed when it began',
+	);
+
+	const { delta } = toSemanticDelta(ended, fields, projectOntoContract);
+	assert.equal(delta.temporal.valid_until, '2027-01-01T00:00:00Z', 'the window was lost on the way out');
+
+	// Cleared, it goes back to what the record carried — and a record that carried nothing still
+	// carries nothing, because an invented `{valid_from: null, valid_until: null}` is a claim about
+	// a window the memory never had.
+	assert.deepEqual(
+		withValidUntil(ended, null).carried.temporal,
+		record.semantic_delta.temporal,
+		'clearing the end date did not restore the window the record arrived with',
+	);
+
+	const thin = loadedRecord();
+	delete thin.semantic_delta.temporal;
+	const bare = bufferFromRecord(thin);
+	assert.equal(validUntilDate(bare), null);
+	assert.equal(
+		'temporal' in withValidUntil(bare, null).carried,
+		false,
+		'clearing an end date on a memory that never had a window invented one',
+	);
+	assert.equal(withValidUntil(bare, '2027-01-01').carried.temporal.valid_until, '2027-01-01T00:00:00Z');
+});
+
+// ---------------------------------------------------------------------------------------------
+// 11. THE TITLE IS NOT SHOWN TWICE, AND NOTHING IS REWRITTEN TO ACHIEVE THAT
+// ---------------------------------------------------------------------------------------------
+//
+// The approved editor draws the title as an H1 across the top of both panes, so a body that opens
+// with `# ` and the same sentence would print it twice — the second time as raw Markdown, in the
+// pane that is meant to hold the prose.
+//
+// Removing it is only safe because it is EXACT: the two shapes stripped are the two shapes
+// `composeBody` produces, so a memory nobody edited is written back byte for byte. The other half
+// matters more: a heading a writer authored to differ from the title is left alone, because in a
+// meaningful share of real memories that difference is deliberate and an editor that silently
+// re-synchronised them would be changing something the user never touched.
+
+test('a heading that only repeats the title is hidden, and the round trip is byte-identical', () => {
+	const title = 'Cache keys use the lockfile hash';
+
+	for (const stored of [`# ${title}\n\nA branch-keyed cache started every branch cold.\n`, `# ${title}\n`]) {
+		const shown = withoutRepeatedHeading(stored, title);
+		assert.ok(!shown.startsWith('#'), 'the repeated heading was still in the words');
+		assert.equal(
+			composeBody({ body: shown, title }),
+			stored,
+			'putting the heading back did not reproduce the loaded bytes. A prose-only save would ' +
+				'then write a version whose only change is one the user did not make.',
+		);
+	}
+
+	// An authored heading that differs is not touched, in either direction.
+	const authored = '# What we tried first\n\nAnd why it did not hold.\n';
+	assert.equal(withoutRepeatedHeading(authored, title), authored, 'an authored heading was removed');
+	assert.equal(composeBody({ body: authored, title }), authored, 'an authored heading was rewritten');
+
+	// Neither is a near-miss: a heading that merely starts with the title stays.
+	const near = `# ${title}, not the branch name\n\nProse.\n`;
+	assert.equal(withoutRepeatedHeading(near, title), near, 'a longer heading was truncated to the title');
+
+	// And a memory with no title yet keeps whatever it has.
+	assert.equal(withoutRepeatedHeading('# Anything\n\nProse.', ''), '# Anything\n\nProse.');
 });

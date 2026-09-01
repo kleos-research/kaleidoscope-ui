@@ -21,11 +21,19 @@
 //     what is missing named rather than implied;
 //   * a traversal out of the static route does not escape the asset directory.
 //
-// The second quiet thing is the invariant. M1 asserted that the ENGINE CLIENT records no ranked
-// search. This file asserts it for the whole HTTP surface, because that is where the next caller
-// will be added: a filter box wired to the ranked door instead of to an already-fetched payload
-// writes a permanent record per keystroke, into a store nothing published reads back or removes.
-// Zero callers is the invariant, and the exposure count across every route is the instrument.
+// The second quiet thing is the invariant, and it is the one that changed shape. M1 asserted that
+// the ENGINE CLIENT records no ranked search, and this file used to assert the same for the whole
+// HTTP surface. The approved design adds the ranked door back as ONE explicit press on ONE screen,
+// so the rule is now narrower rather than absolute:
+//
+//   A ranked search happens ONLY on an explicit user action on the search screen. Never on load,
+//   never on a poll, never on a keystroke, never on a refresh, never from any other screen.
+//
+// The reason is unchanged and is why the rule is still mechanical: a filter box wired to the ranked
+// door instead of to an already-fetched payload writes a permanent record per keystroke, into a
+// store nothing published reads back or removes. The instrument is the exposure count across every
+// route — plus, and this is the new half, one press of the door that proves the count can move at
+// all. An absence is worth exactly what the instrument that measured it could have detected.
 //
 // Everything runs against a clone. A ranked search writes, so a read-shaped call is treated as a
 // write for the purpose of deciding which vault it goes to.
@@ -698,6 +706,20 @@ test('the sidecar refuses everything it is supposed to refuse', async (t) => {
 			assert.ok(csp, `${path} carries no Content-Security-Policy (PRD 0001 R27)`);
 			assert.match(csp, /default-src\s+'none'/, `${path}: the CSP does not default to none`);
 			assert.match(csp, /frame-ancestors\s+'none'/, `${path}: the CSP permits framing`);
+			// THE APP BUNDLES ITS OWN TYPEFACES AND THIS HEADER DECIDES WHETHER THEY LOAD.
+			//
+			// Both halves are asserted because both have a silent failure. Without `font-src` the
+			// directive falls back to `default-src 'none'` and every bundled font is refused — the
+			// page still renders, in the fallback stack, looking entirely reasonable, and the whole
+			// typographic design is simply absent. That is how it shipped once. And `'self'` is
+			// asserted as the ONLY source because a font host is the easiest way to put back the
+			// network call this header exists to prevent, invisible to anyone with a warm cache.
+			assert.match(csp, /font-src\s+'self'/, `${path}: the CSP refuses this app's own fonts`);
+			assert.doesNotMatch(
+				csp,
+				/font-src[^;]*https?:/,
+				`${path}: the CSP permits a font host, so the offline claim is not enforced`,
+			);
 			assert.equal(
 				response.headers['x-content-type-options'],
 				'nosniff',
@@ -1058,14 +1080,34 @@ test('an engine refusal reaches the browser as structured JSON, not as a 500', a
 // THE INVARIANT
 // =============================================================================================
 
-test('the whole HTTP surface records no ranked search', async (t) => {
-	// M1 asserted this for the four functions in the engine client. It is asserted here for the
-	// SERVER, because the server is where the next caller gets added — a filter box wired to the
-	// ranked door instead of to the payload already in the browser, or a background poll on
-	// something that records that it ran. Both are one line, both look like a feature, and both
-	// write a permanent record per keystroke into a store nothing published reads back or removes.
+test('a ranked search happens only on an explicit press, and only at one door', async (t) => {
+	// THE INVARIANT CHANGED SHAPE HERE, DELIBERATELY, AND IT DID NOT GET WEAKER.
 	//
-	// Zero callers is the invariant. This is the instrument.
+	// The old rule was "the whole HTTP surface records no ranked search" and its reason was good:
+	// there is one retrieval door, it ALWAYS records an exposure row, that row is permanent, it
+	// stores the query text verbatim, and nothing published reads it back or removes one. A filter
+	// box wired to it turns browsing into a keystroke log inside the user's own memory.
+	//
+	// The approved design adds the door back as ONE explicit action on ONE screen — "Ask the way
+	// your agent does" — because it answers the question nothing else in the product can: what
+	// would my agent actually have been given for this? The new rule is narrower and still
+	// mechanical:
+	//
+	//   A ranked search happens ONLY on an explicit user action on the search screen. Never on
+	//   load, never on a poll, never on a keystroke, never on a refresh, never from any other
+	//   screen.
+	//
+	// So this test is now in three movements, and the first two are the old test unchanged:
+	//
+	//   1. walk EVERY route and EVERY screen load, and assert the exposure count did not move;
+	//   2. assert the vault's fingerprint did not move either, which catches a read path that has
+	//      become a write path some way OTHER than a ranked query;
+	//   3. press the one door once, and assert the count moved by EXACTLY ONE.
+	//
+	// The third movement is what makes the first two mean something. A census that cannot go up is
+	// a census that passes hardest when the instrument is broken, and this file's own history is
+	// the argument: for four milestones the count was compared against a number that nothing in
+	// the product could ever have raised.
 	const { scratch, sidecar } = await openSidecarAndVault(t);
 
 	const before = countExposureRecords(scratch.root);
@@ -1143,6 +1185,13 @@ test('the whole HTTP surface records no ranked search', async (t) => {
 		// a banner about two memories is the obvious place to add "and here is what they have in
 		// common". The POST collapses onto this path and is counted as swept.
 		['GET', '/api/pending-merge'],
+		// THE RANKED DOOR, WALKED WITH GET SO IT ANSWERS 405 RATHER THAN ASKING ANYTHING.
+		//
+		// That is the point of walking it this way. The route exists, and the sweep proves that
+		// arriving at it — which is what a page load, a prefetch, a poll, a link and an address-bar
+		// paste all do — cannot perform the search. Only a POST can, and a POST needs a matching
+		// Origin, a JSON content type and a body. The third movement below presses it properly.
+		['GET', '/api/ask'],
 		// The routes a user reaches by mistake, which is where an ad-hoc "let me just look it up"
 		// fallback would live.
 		['GET', `/api/memories/${absentIdLike(id, listed)}`],
@@ -1214,9 +1263,11 @@ test('the whole HTTP surface records no ranked search', async (t) => {
 		after.records,
 		before.records,
 		`The HTTP surface wrote ${after.records - before.records} search-exposure record(s). ` +
-			`M2 has zero callers of the ranked door and this is the measurement that keeps that ` +
-			`true. A record here means some route reached ranked search: the record is permanent, ` +
-			`it stores the query text verbatim, and nothing published reads it back or removes one.`,
+			`EXACTLY ONE route may reach the ranked door — POST /api/ask, pressed by hand on the ` +
+			`search screen — and none of the routes above is it. A record here means some OTHER ` +
+			`route reached ranked search, or that arriving at /api/ask was enough to perform one: ` +
+			`the record is permanent, it stores the query text verbatim, and nothing published ` +
+			`reads it back or removes one.`,
 	);
 
 	// Strictly stronger than the count, and separate from it on purpose: a route that wrote
@@ -1230,6 +1281,63 @@ test('the whole HTTP surface records no ranked search', async (t) => {
 			`file(s) in the vault (${fingerprintBefore.files} before, ${fingerprintAfter.files} ` +
 			`after). The exposure count did not move, so this is not a ranked search — it is a read ` +
 			`path that has quietly become a write path some other way.`,
+	);
+
+	// ---- the third movement: the one door, pressed once -------------------------------------
+	//
+	// Everything above is an absence, and an absence is only worth what the instrument that
+	// measured it could have detected. This is that check, and it runs against the same census, on
+	// the same clone, in the same test — so a broken census fails here instead of passing there.
+
+	const asked = await authorised(sidecar, {
+		method: 'POST',
+		path: '/api/ask',
+		// The Origin is composed from the port this sidecar actually bound, not read off the
+		// handle: the Origin check is the thing under test two assertions down, and a header whose
+		// value came from the server's own idea of itself could not fail.
+		headers: {
+			'content-type': 'application/json',
+			origin: `http://127.0.0.1:${sidecar.port}`,
+		},
+		body: JSON.stringify({ query: 'what does this vault say about caching' }),
+	});
+	assert.equal(
+		asked.status,
+		200,
+		`The ranked door answered ${asked.status}. Nothing below can be concluded from a census ` +
+			`taken around a request that did not happen.\n${asked.body.slice(0, 400)}`,
+	);
+
+	const afterAsk = countExposureRecords(scratch.root);
+	assert.equal(
+		afterAsk.records,
+		before.records + 1,
+		`One explicit press of the ranked door moved the exposure count by ` +
+			`${afterAsk.records - before.records}, and it must move by exactly one. More than one ` +
+			`means the route asks more than once per press — a retry, a warm-up, a second call for ` +
+			`a count — and each of those is a permanent record of a read the user did not perform. ` +
+			`Zero means this whole file is measuring nothing: the census cannot see the store, and ` +
+			`the assertions above passed because the number they compared could not have changed.`,
+	);
+
+	// AND ARRIVING IS STILL NOT ASKING. The same route, reached the way a page load reaches
+	// anything, must refuse — otherwise "never on load" is a sentence in a comment rather than a
+	// property of the server. Asserted after the successful press, because a 405 from a route that
+	// does not exist would look identical.
+	const arrived = await authorised(sidecar, { method: 'GET', path: '/api/ask' });
+	assert.equal(
+		arrived.status,
+		405,
+		`GET /api/ask answered ${arrived.status}. A GET is what a page load, a prefetch, a poll, a ` +
+			`link and a pasted address all perform, and every one of them would write a permanent ` +
+			`exposure row into the vault the user is inspecting.`,
+	);
+
+	const afterArriving = countExposureRecords(scratch.root);
+	assert.equal(
+		afterArriving.records,
+		afterAsk.records,
+		`Arriving at the ranked door recorded a search.`,
 	);
 });
 

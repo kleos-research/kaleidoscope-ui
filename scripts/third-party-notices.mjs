@@ -58,6 +58,28 @@ const ALLOWED_LICENCES = new Set([
 /** Filenames a package may carry its licence text under. Checked in this order. */
 const LICENCE_FILENAMES = /^(licen[cs]e|copying|notice)(\.(md|txt))?$/i;
 
+/**
+ * Packages whose PUBLISHED TARBALL omits the licence file their repository carries.
+ *
+ * This is a real and common npm packaging gap: the licence is declared in `package.json`, the text
+ * exists upstream, and `files` simply never listed it. Refusing to attribute such a package is the
+ * right default — it is what stops a notice being invented — but refusing to SHIP it would mean
+ * dropping a library over somebody else's `.npmignore`.
+ *
+ * So the exception is an explicit, per-package table with the exact source of the text, checked in
+ * to `scripts/licences/`, and the generated file MARKS every entry that came from here. It is an
+ * allow list and it is safe to be one because it grants nothing except "look in this file instead":
+ * the licence identifier is still read from the package, still checked against ALLOWED_LICENCES,
+ * and a package added here with no file beside it still stops the build.
+ */
+const TRANSCRIBED = {
+	'react-remove-scroll-bar': {
+		file: 'react-remove-scroll-bar.LICENSE.txt',
+		source: 'https://github.com/theKashey/react-remove-scroll-bar/blob/master/LICENSE',
+		why: 'the published tarball ships README, dist and package.json only.',
+	},
+};
+
 function stop(code, message) {
 	process.stderr.write(`third-party-notices: ${message}\n`);
 	process.exit(code);
@@ -141,13 +163,30 @@ function describe(name) {
 		);
 	}
 
-	const text = readLicenceText(directory);
+	let text = readLicenceText(directory);
+	let transcribed = null;
+
+	if (!text && TRANSCRIBED[name]) {
+		const entry = TRANSCRIBED[name];
+		const path = join(ROOT, 'scripts', 'licences', entry.file);
+		if (!existsSync(path)) {
+			stop(
+				2,
+				`${name}@${manifest.version} is listed as transcribed and ${entry.file} is not in\n` +
+					'  scripts/licences/. An exception with no text behind it attributes nothing.',
+			);
+		}
+		text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').trimEnd();
+		transcribed = entry;
+	}
+
 	if (!text) {
 		stop(
 			2,
 			`${name}@${manifest.version} is ${licence} and carries no licence file, so there is no\n` +
 				'  copyright notice to reproduce. Every licence on the allow list conditions\n' +
-				'  redistribution on carrying one.',
+				'  redistribution on carrying one. If the text exists upstream and the tarball simply\n' +
+				'  omits it, add it to scripts/licences/ and name it in TRANSCRIBED.',
 		);
 	}
 
@@ -157,6 +196,7 @@ function describe(name) {
 		licence,
 		homepage: manifest.homepage ?? repositoryUrl(manifest) ?? null,
 		text,
+		transcribed,
 	};
 }
 
@@ -209,6 +249,17 @@ function render(packages) {
 		lines.push('');
 		lines.push(`Licence: ${pkg.licence}`);
 		lines.push('');
+		if (pkg.transcribed) {
+			// Said in the shipped file, not only in the generator: a reader checking this attribution
+			// against the tarball would otherwise find no such file and have no way to tell whether
+			// the text below was fetched or invented.
+			lines.push(
+				`The text below is not in this package's published tarball — ${pkg.transcribed.why} ` +
+					`It is reproduced from ${pkg.transcribed.source} and is kept in this repository at ` +
+					`\`scripts/licences/${pkg.transcribed.file}\`.`,
+			);
+			lines.push('');
+		}
 		lines.push('```');
 		lines.push(pkg.text);
 		lines.push('```');

@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #2f5d8a; } a:hover { color: #1f3f5f; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      <div style="font-size: 13.5px; color: #6a6660;">Memories</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="padding: 6px 15px; border-radius: 6px; background: #1a1917; color: #faf9f7; font-size: 13px; font-weight: 500;">Edit</div>
+      <div style="width: 32px; height: 32px; border: 1px solid #e6e2db; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="12" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="19" cy="12" r="1.4" fill="#6a6660"></circle></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; display: flex; justify-content: center; gap: 48px; padding: 34px 56px 0 56px;">
+
+    <div style="width: 620px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-family: 'Newsreader', Georgia, serif; font-size: 30px; line-height: 1.22;">Staging is a restored snapshot, not a live replica</div>
+        <div style="display: flex; align-items: center; gap: 9px; font-size: 13px; color: #94908a;">
+          <span style="padding: 2px 8px; border-radius: 4px; background: #f2f0ec; color: #6a6660; font-weight: 500; font-size: 12px;">correction</span>
+          <span>written today</span>
+        </div>
+      </div>
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 17px; line-height: 1.72; display: flex; flex-direction: column; gap: 14px;">
+        <div>Staging is restored nightly from a production snapshot. It is not a streaming replica, so anything written to production after the restore is simply absent until the next one.</div>
+      </div>
+
+      <!-- what the writer said they were fixing: prose, not a link -->
+      <div style="display: flex; flex-direction: column; gap: 11px; padding-top: 6px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">What this was fixing</div>
+          <div style="padding: 1px 7px; border-radius: 4px; background: #fbf1e5; color: #8a4a17; font-size: 11px; font-weight: 500;">a note, not a link</div>
+        </div>
+        <div style="border-left: 2px solid #f0e2cd; padding: 2px 0 2px 14px; display: flex; flex-direction: column; gap: 5px;">
+          <div style="font-size: 13px; color: #8a4a17; font-weight: 600;">staging environment</div>
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 15.5px; line-height: 1.6; color: #1a1917;">The earlier claim that staging mirrors production continuously is wrong — it is a nightly restore, so replication lag is not the right mental model.</div>
+        </div>
+        <div style="font-size: 12.5px; line-height: 1.55; color: #6a6660; background: #f2f0ec; border-radius: 6px; padding: 10px 12px;">The writer named what they were correcting in their own words. Nothing in the vault ties that to a particular memory, so this app will not pretend it does — <span style="color: #2f5d8a;">search for “staging environment”</span> to find what they meant.</div>
+      </div>
+
+      <!-- a real, stored link, in both directions -->
+      <div style="display: flex; flex-direction: column; gap: 11px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">Disagrees with</div>
+          <div style="padding: 1px 7px; border-radius: 4px; background: #eaf1f8; color: #2f5d8a; font-size: 11px; font-weight: 500;">a real link</div>
+        </div>
+        <div style="border: 1px solid #e6e2db; border-radius: 7px; padding: 12px 14px; background: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <div style="font-family: 'Newsreader', Georgia, serif; font-size: 15.5px; line-height: 1.35;">Staging mirrors production within a second</div>
+            <div style="font-size: 12px; color: #94908a;">architecture · 6 weeks ago</div>
+          </div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94908a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;">
+
+      <div style="background: #ffffff; border: 1px solid #e6e2db; border-radius: 7px; padding: 15px 16px; display: flex; flex-direction: column; gap: 11px;">
+        <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">What your agent acts on</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; line-height: 1.5;">
+          <div>staging database <span style="color: #2f5d8a; font-weight: 500;">is restored from</span> production snapshot</div>
+          <div>staging database <span style="color: #2f5d8a; font-weight: 500;">stopped using</span> streaming replication</div>
+        </div>
+      </div>
+
+      <!-- evidence: the most common thing on a memory, and a locator not a citation -->
+      <div style="background: #ffffff; border: 1px solid #e6e2db; border-radius: 7px; padding: 15px 16px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">Where this came from</div>
+          <div style="font-size: 12px; color: #94908a;">4</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <div style="padding: 1px 6px; border-radius: 4px; background: #f2f0ec; color: #6a6660; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; flex-shrink: 0; margin-top: 1px;">FILE</div>
+            <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #2f5d8a; word-break: break-all;">infra/staging/restore.nightly.yaml</div>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <div style="padding: 1px 6px; border-radius: 4px; background: #f2f0ec; color: #6a6660; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; flex-shrink: 0; margin-top: 1px;">RUN</div>
+            <div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; color: #2f5d8a;">psql -c 'select pg_last_wal_replay_lsn()'</div>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <div style="padding: 1px 6px; border-radius: 4px; background: #f2f0ec; color: #6a6660; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; flex-shrink: 0; margin-top: 1px;">PR</div>
+            <div style="font-size: 12.5px; line-height: 1.5; color: #2f5d8a;">#1184 — drop the replica, restore nightly</div>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 9px;">
+            <div style="padding: 1px 6px; border-radius: 4px; background: #f2f0ec; color: #6a6660; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; flex-shrink: 0; margin-top: 1px;">SAID</div>
+            <div style="font-size: 12.5px; line-height: 1.5; color: #1a1917;">“we killed the replica in March” — 12 Aug</div>
+          </div>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #94908a; border-top: 1px solid #f2f0ec; padding-top: 9px;">Pointers the writer left so you can check the claim. Nothing here was verified when it was written.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-top: 1px solid #e6e2db; font-size: 13.5px;">
+          <span>Named things</span><span style="color: #94908a; font-size: 12.5px;">3</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-top: 1px solid #e6e2db; border-bottom: 1px solid #e6e2db; font-size: 13.5px;">
+          <span>History and identifiers</span><span style="color: #94908a; font-size: 12.5px;">1 version</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

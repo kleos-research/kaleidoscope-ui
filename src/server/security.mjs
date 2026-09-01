@@ -183,12 +183,26 @@ export function originAllowed(req, hosts) {
  * `frame-ancestors 'none'` stops a hostile page framing the app and clickjacking a control.
  * `form-action 'none'` and `base-uri 'none'` stop injected markup from redirecting a submission or
  * rewriting where relative URLs resolve.
+ *
+ * `font-src 'self'` IS THE ONE DIRECTIVE HERE THAT WAS ADDED BECAUSE IT WAS MISSING, and the way it
+ * was missing is the reason it is worth a paragraph. The app bundles its three typefaces so it can
+ * render with no network, and every one of them was silently refused by this header: `font-src` was
+ * never set, so it fell back to `default-src 'none'`. Nothing broke. The page rendered in the
+ * fallback stack, looked entirely reasonable, and the design shipped in whatever the reader's
+ * system happened to have — which is the same class of failure as a channel that abstains quietly.
+ * It was found by reading the browser console, not by any test, and there is now an assertion for
+ * it in `test/server.test.mjs`.
+ *
+ * `'self'` and nothing else, deliberately. A font host here would be the single easiest way to
+ * reintroduce the network call the rest of this header exists to prevent, and it would be invisible
+ * to anyone who had the font cached.
  */
 export const CONTENT_SECURITY_POLICY = [
 	"default-src 'none'",
 	"script-src 'self'",
 	"style-src 'self'",
 	"img-src 'self' data:",
+	"font-src 'self'",
 	"connect-src 'self'",
 	"frame-ancestors 'none'",
 	"base-uri 'none'",

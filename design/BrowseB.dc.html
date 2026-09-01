@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #2f5d8a; } a:hover { color: #1f3f5f; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Kaleidoscope</div>
+      <div style="width: 1px; height: 20px; background: #e6e2db;"></div>
+      <div style="display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 11px; border: 1px solid #d4cfc6; border-radius: 6px; background: #ffffff; font-size: 13.5px; font-weight: 500;">
+        Payments platform
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #e6e2db; border-radius: 6px; width: 220px; background: #faf9f7;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94908a" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+        <span style="font-size: 13px; color: #94908a;">Find in these memories</span>
+      </div>
+      <div style="width: 32px; height: 32px; border: 1px solid #e6e2db; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      </div>
+      <div style="width: 32px; height: 32px; border: 1px solid #e6e2db; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="12" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="19" cy="12" r="1.4" fill="#6a6660"></circle></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; overflow: hidden;">
+
+    <!-- left: the list, compact -->
+    <div style="width: 420px; flex-shrink: 0; border-right: 1px solid #e6e2db; display: flex; flex-direction: column; background: #ffffff;">
+
+      <div style="padding: 14px 18px; border-bottom: 1px solid #e6e2db; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <div style="display: flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #d4cfc6; border-radius: 5px; font-size: 12.5px; font-weight: 500;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a1917" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Filter
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; padding: 4px 7px 4px 9px; border-radius: 5px; background: #eaf1f8; border: 1px solid #cddcea; font-size: 12px; color: #2f5d8a; font-weight: 500;">
+            correction
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2f5d8a" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: #94908a;">47</div>
+      </div>
+
+      <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; background: #eaf1f8; border-left: 2px solid #2f5d8a; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 14px; line-height: 1.4; font-weight: 500;">Cache keys use the lockfile hash, not the branch name</div>
+          <div style="font-size: 11.5px; color: #6a6660;">today · 3 facts</div>
+        </div>
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 14px; line-height: 1.4;">Staging is a restored snapshot, not a live replica</div>
+          <div style="font-size: 11.5px; color: #94908a;">today · 2 facts · <span style="color: #8a4a17;">corrects 1</span></div>
+        </div>
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 14px; line-height: 1.4;">The webhook retry budget is five attempts, then a dead letter</div>
+          <div style="font-size: 11.5px; color: #94908a;">yesterday · 4 facts</div>
+        </div>
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 14px; line-height: 1.4;">Invoice totals are computed server-side only</div>
+          <div style="font-size: 11.5px; color: #94908a;">2 days ago · 2 facts</div>
+        </div>
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 14px; line-height: 1.4;">The vendored parser was dropped in March</div>
+          <div style="font-size: 11.5px; color: #94908a;">4 days ago · 3 facts</div>
+        </div>
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 4px; opacity: 0.5;">
+          <div style="font-size: 14px; line-height: 1.4;">Retries used a fixed delay of two seconds</div>
+          <div style="font-size: 11.5px; color: #94908a;">last week · superseded</div>
+        </div>
+
+        <div style="padding: 13px 18px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 14px; line-height: 1.4;">Deploys are frozen after 14:00 on Fridays</div>
+          <div style="font-size: 11.5px; color: #94908a;">last week · 2 facts</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- right: the selected memory, read without leaving the list -->
+    <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 26px 40px 0 40px; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 7px; max-width: 620px;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 27px; line-height: 1.25; font-weight: 400;">Cache keys use the lockfile hash, not the branch name</div>
+          <div style="font-size: 12.5px; color: #94908a;">correction · today · applies to every branch</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <div style="padding: 6px 14px; border-radius: 6px; background: #1a1917; color: #faf9f7; font-size: 13px; font-weight: 500;">Edit</div>
+          <div style="width: 32px; height: 32px; border: 1px solid #e6e2db; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="12" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="19" cy="12" r="1.4" fill="#6a6660"></circle></svg>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 20px 40px 0 40px; font-family: 'Newsreader', Georgia, serif; font-size: 16.5px; line-height: 1.7; color: #1a1917; max-width: 640px;">
+        A branch-keyed cache meant every new branch started cold, and two branches with identical dependencies never shared a hit. Keying on the lockfile hash makes the cache a function of what is actually installed.
+      </div>
+
+      <div style="padding: 24px 40px 0 40px; display: flex; flex-direction: column; gap: 11px;">
+        <div style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #94908a; font-weight: 500;">What this asserts</div>
+        <div style="display: flex; flex-direction: column; gap: 7px; font-size: 14px; line-height: 1.5;">
+          <div>build cache <span style="color: #2f5d8a; font-weight: 500;">is keyed on</span> lockfile hash</div>
+          <div>build cache <span style="color: #2f5d8a; font-weight: 500;">stopped using</span> branch name</div>
+          <div>lockfile hash <span style="color: #2f5d8a; font-weight: 500;">powers</span> cross-branch cache reuse</div>
+        </div>
+      </div>
+
+      <div style="padding: 22px 40px 0 40px; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-top: 1px solid #e6e2db; font-size: 13.5px;">
+          <span>Named things</span><span style="color: #94908a;">3</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-top: 1px solid #e6e2db; font-size: 13.5px;">
+          <span>Evidence</span><span style="color: #94908a;">1</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-top: 1px solid #e6e2db; border-bottom: 1px solid #e6e2db; font-size: 13.5px;">
+          <span>History and identifiers</span><span style="color: #94908a;">2 versions</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

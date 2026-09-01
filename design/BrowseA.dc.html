@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #2f5d8a; } a:hover { color: #1f3f5f; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- top bar: project is the primary axis, vault is a name not a path -->
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Kaleidoscope</div>
+      <div style="width: 1px; height: 20px; background: #e6e2db;"></div>
+      <div style="display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 11px; border: 1px solid #d4cfc6; border-radius: 6px; background: #ffffff; font-size: 13.5px; font-weight: 500;">
+        Payments platform
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #e6e2db; border-radius: 6px; width: 220px; background: #faf9f7;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94908a" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+        <span style="font-size: 13px; color: #94908a;">Find in these memories</span>
+      </div>
+      <div style="width: 32px; height: 32px; border: 1px solid #e6e2db; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      </div>
+      <div style="width: 32px; height: 32px; border: 1px solid #e6e2db; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="12" cy="12" r="1.4" fill="#6a6660"></circle><circle cx="19" cy="12" r="1.4" fill="#6a6660"></circle></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- body -->
+  <div style="flex: 1; overflow: hidden; display: flex; justify-content: center; padding: 34px 0 0 0;">
+    <div style="width: 880px; display: flex; flex-direction: column; gap: 20px;">
+
+      <div style="display: flex; align-items: flex-end; justify-content: space-between;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 28px; font-weight: 400;">Memories</div>
+          <div style="font-size: 13px; color: #94908a;">318 in this project · 4 written today</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid #d4cfc6; border-radius: 6px; background: #ffffff; font-size: 13px; font-weight: 500;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a1917" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Filter
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid #e6e2db; border-radius: 6px; background: #ffffff; font-size: 13px; color: #6a6660;">
+            Newest first
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94908a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- an applied filter reads back as one removable chip, not a resident column -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px 11px; border-radius: 5px; background: #eaf1f8; border: 1px solid #cddcea; font-size: 12.5px; color: #2f5d8a; font-weight: 500;">
+          Type is <span style="font-weight: 600;">correction</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2f5d8a" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </div>
+        <div style="font-size: 12.5px; color: #94908a;">47 shown</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column;">
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 15px 0 16px 0; border-top: 1px solid #e6e2db;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 18.5px; line-height: 1.35; font-weight: 400;">Cache keys use the lockfile hash, not the branch name</div>
+          <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #94908a;">
+            <span style="color: #6a6660;">correction</span><span>·</span><span>today</span><span>·</span><span>3 facts</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 15px 0 16px 0; border-top: 1px solid #e6e2db;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 18.5px; line-height: 1.35; font-weight: 400;">Staging is a restored snapshot, not a live replica</div>
+          <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #94908a;">
+            <span style="color: #6a6660;">correction</span><span>·</span><span>today</span><span>·</span><span>2 facts</span>
+            <span style="padding: 1px 6px; border-radius: 4px; background: #fbf1e5; color: #8a4a17; font-size: 11.5px; font-weight: 500;">corrects 1</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 15px 0 16px 0; border-top: 1px solid #e6e2db;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 18.5px; line-height: 1.35; font-weight: 400;">The webhook retry budget is five attempts, then a dead letter</div>
+          <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #94908a;">
+            <span style="color: #6a6660;">correction</span><span>·</span><span>yesterday</span><span>·</span><span>4 facts</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 15px 0 16px 0; border-top: 1px solid #e6e2db;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 18.5px; line-height: 1.35; font-weight: 400;">Invoice totals are computed server-side only</div>
+          <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #94908a;">
+            <span style="color: #6a6660;">correction</span><span>·</span><span>2 days ago</span><span>·</span><span>2 facts</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 15px 0 16px 0; border-top: 1px solid #e6e2db;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 18.5px; line-height: 1.35; font-weight: 400;">The vendored parser was dropped in March</div>
+          <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #94908a;">
+            <span style="color: #6a6660;">correction</span><span>·</span><span>4 days ago</span><span>·</span><span>3 facts</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 15px 0 16px 0; border-top: 1px solid #e6e2db; opacity: 0.55;">
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: 18.5px; line-height: 1.35; font-weight: 400;">Retries used a fixed delay of two seconds</div>
+          <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #94908a;">
+            <span style="color: #6a6660;">correction</span><span>·</span><span>last week</span>
+            <span style="padding: 1px 6px; border-radius: 4px; background: #f2f0ec; color: #6a6660; font-size: 11.5px; font-weight: 500;">superseded</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

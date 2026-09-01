@@ -1,0 +1,34 @@
+{
+  "pages": [
+    { "id": "page-2", "name": "Your questions" },
+    { "id": "page-1", "name": "Directions" }
+  ],
+  "artboards": [
+    { "file": "Search.dc.html", "page": "page-2", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "How search works — two different things, named honestly" },
+    { "file": "BrowseScale.dc.html", "page": "page-2", "x": 1520, "y": 0, "w": 1440, "h": 900, "title": "Browse B at 612 memories — filters left, time does the grouping" },
+    { "file": "ReadEvidence.dc.html", "page": "page-2", "x": 0, "y": 1020, "w": 1440, "h": 900, "title": "Evidence and corrections — what the code actually stores" },
+    { "file": "GraphEntry.dc.html", "page": "page-2", "x": 1520, "y": 1020, "w": 1440, "h": 900, "title": "The graph at 1,094 names — the way in is a list" },
+    { "file": "GraphFocus.dc.html", "page": "page-2", "x": 0, "y": 2040, "w": 1440, "h": 900, "title": "The graph around one name — where a picture earns its place" },
+    { "file": "EditValues.dc.html", "page": "page-2", "x": 1520, "y": 2040, "w": 1440, "h": 900, "title": "Editing a value — names, relations, glosses, scope, validity" },
+
+    { "file": "Main.dc.html", "page": "page-1", "x": 0, "y": 0, "w": 1000, "h": 1400, "title": "Start here — the problems, and the two directions" },
+    { "file": "BrowseA.dc.html", "page": "page-1", "x": 1120, "y": 0, "w": 1440, "h": 900, "title": "Browse · A — One list, filters on demand" },
+    { "file": "BrowseB.dc.html", "page": "page-1", "x": 2640, "y": 0, "w": 1440, "h": 900, "title": "Browse · B — List and preview" },
+    { "file": "ReadA.dc.html", "page": "page-1", "x": 1120, "y": 1080, "w": 1440, "h": 900, "title": "Read · A — Document" },
+    { "file": "ReadB.dc.html", "page": "page-1", "x": 2640, "y": 1080, "w": 1440, "h": 900, "title": "Read · B — Prose with a rail" },
+    { "file": "EditA.dc.html", "page": "page-1", "x": 1120, "y": 2160, "w": 1440, "h": 900, "title": "Fix · A — Write, with a shelf" },
+    { "file": "EditB.dc.html", "page": "page-1", "x": 2640, "y": 2160, "w": 1440, "h": 900, "title": "Fix · B — Two panes, two things" }
+  ],
+  "annotations": [
+    { "id": "q-search", "page": "page-2", "x": 0, "y": -170, "w": 640, "text": "“How will this search generally work?”\nTwo different things share one box. One reaches only what is loaded and writes nothing. The other is your agent's own door — and using it leaves a mark, so the screen says so." },
+    { "id": "q-scale", "page": "page-2", "x": 1520, "y": -170, "w": 640, "text": "“How would someone browse five or six hundred memories?”\nProject cuts it first, filters cut it again, and time does the grouping. The count under the filters is always the honest one." },
+    { "id": "q-evidence", "page": "page-2", "x": 0, "y": 950, "w": 640, "text": "“Does that even work in the code?”\nChecked against the vault. Evidence: yes, on 57% of memories. Contradicts: yes, a real link, but only 3 of 349. Corrections: stored as free text, NOT a link — so this screen stops pretending." },
+    { "id": "q-graph", "page": "page-2", "x": 1520, "y": 950, "w": 640, "text": "“If the graph has six or seven hundred entities, how would that look?”\nLike 304 unconnected specks, which is why the whole canvas is not the default. The list is the way in." },
+    { "id": "q-graph2", "page": "page-2", "x": 0, "y": 1970, "w": 640, "text": "Pick a name and the picture is drawn around it. At a real vault's density this is legible — the busiest name here has nine connections, not nine hundred." },
+    { "id": "q-edit", "page": "page-2", "x": 1520, "y": 1970, "w": 640, "text": "“How will values be edited in each screen?”\nEvery field offers what the vault already uses and still accepts something new, because the vocabulary is open and this app must not be what stops it growing." },
+    { "id": "browse-row", "page": "page-1", "x": 1120, "y": -150, "w": 620, "text": "1 · BROWSE\nYou need to move through a few hundred memories and notice the ones that look off." },
+    { "id": "read-row", "page": "page-1", "x": 1120, "y": 930, "w": 620, "text": "2 · READ\nYou clicked a title to judge whether this memory is right. You need the claim and the facts." },
+    { "id": "edit-row", "page": "page-1", "x": 1120, "y": 2010, "w": 620, "text": "3 · FIX\nNearly every edit is a wording fix — but a save rewrites the words and the facts together." }
+  ],
+  "launch": { "view": "canvas", "page": "page-2" }
+}

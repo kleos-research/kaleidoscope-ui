@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #2f5d8a; } a:hover { color: #1f3f5f; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="font-size: 13.5px; color: #6a6660;">Editing a memory</div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #94908a;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94908a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16"></line><circle cx="12" cy="7.8" r="0.9" fill="#94908a" stroke="none"></circle></svg>
+        What a save sends
+      </div>
+      <div style="width: 1px; height: 20px; background: #e6e2db;"></div>
+      <div style="padding: 6px 13px; border: 1px solid #e6e2db; border-radius: 6px; background: #ffffff; font-size: 13px; color: #6a6660;">Cancel</div>
+      <div style="padding: 6px 16px; border-radius: 6px; background: #1a1917; color: #faf9f7; font-size: 13px; font-weight: 500;">Save</div>
+    </div>
+  </div>
+
+  <!-- the page is the words -->
+  <div style="flex: 1; overflow: hidden; display: flex; justify-content: center; padding: 46px 0 0 0;">
+    <div style="width: 720px; display: flex; flex-direction: column; gap: 22px;">
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 34px; line-height: 1.22; font-weight: 400; border-bottom: 1px dashed #d4cfc6; padding-bottom: 10px;">Cache keys use the lockfile hash, not the branch name</div>
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 17.5px; line-height: 1.72; color: #1a1917; display: flex; flex-direction: column; gap: 15px;">
+        <div>A branch-keyed cache meant every new branch started cold, and two branches with identical dependencies never shared a hit.</div>
+        <div>Keying on the lockfile hash makes the cache a function of what is actually installed, so a branch that changes no dependencies inherits every entry.<span style="display: inline-block; width: 1.5px; height: 19px; background: #2f5d8a; vertical-align: -3px; margin-left: 1px;"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- the shelf: facts stay readable while you type, because a save rewrites both -->
+  <div style="flex-shrink: 0; border-top: 1px solid #d4cfc6; background: #ffffff;">
+
+    <div style="padding: 11px 28px; background: #fbf1e5; border-bottom: 1px solid #f0e2cd; display: flex; align-items: center; gap: 9px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a4a17" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><circle cx="12" cy="17" r="0.9" fill="#8a4a17" stroke="none"></circle></svg>
+      <div style="font-size: 13px; color: #8a4a17;">You removed <strong style="font-weight: 600;">two seconds</strong> from the words, but a fact still says it. Facts are what your agent acts on.</div>
+    </div>
+
+    <div style="padding: 15px 28px 18px 28px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+          <div style="font-size: 13px; font-weight: 500;">3 facts</div>
+          <div style="font-size: 13px; color: #94908a;">and 3 named things</div>
+        </div>
+        <div style="font-size: 12.5px; color: #2f5d8a; font-weight: 500;">Add a fact</div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <div style="flex: 1; border: 1px solid #e6e2db; border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.45; background: #faf9f7;">build cache <span style="color: #2f5d8a; font-weight: 500;">is keyed on</span> lockfile hash</div>
+        <div style="flex: 1; border: 1px solid #f0e2cd; border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.45; background: #fbf1e5;">build cache <span style="color: #8a4a17; font-weight: 500;">had delay of</span> two seconds</div>
+        <div style="flex: 1; border: 1px solid #e6e2db; border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.45; background: #faf9f7;">lockfile hash <span style="color: #2f5d8a; font-weight: 500;">powers</span> cross-branch reuse</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

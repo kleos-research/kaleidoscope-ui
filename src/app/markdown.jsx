@@ -194,15 +194,46 @@ export function parseMarkdown(source) {
 }
 
 /**
- * @param {{source: string, headingOffset?: number}} props
+ * The write contract asks a memory body to open with an H1, and that H1 is almost always the
+ * memory's title said again. Every reading mockup draws the title once, in Newsreader, above the
+ * words — so a page that also renders the body's own H1 shows the same sentence twice in two sizes,
+ * which reads as a rendering fault rather than as a convention.
+ *
+ * The test is deliberately narrow: only the FIRST block, only a heading, and only when it says the
+ * same thing as the title once the writer's inline marks are taken off. A body whose opening
+ * heading differs from the title is saying something the title does not, and it is kept.
+ */
+function saysTheSameThing(a, b) {
+	if (typeof a !== 'string' || typeof b !== 'string') return false;
+	const flatten = (text) =>
+		text
+			.replace(/[`*_]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.replace(/[.:;,]+$/, '')
+			.toLowerCase();
+	const left = flatten(a);
+	return left.length > 0 && left === flatten(b);
+}
+
+/**
+ * @param {{source: string, headingOffset?: number, title?: string｜null}} props
  *   `headingOffset` demotes the body's headings so a body that opens with an H1 — which the write
  *   contract asks for — does not compete with the page's own title for the top of the hierarchy.
+ *   `title` is what the screen already printed above these words; see `saysTheSameThing`.
  */
-export function Markdown({ source, headingOffset = 1 }) {
-	const blocks = parseMarkdown(source);
+export function Markdown({ source, headingOffset = 1, size = 'md', title = null }) {
+	const parsed = parseMarkdown(source);
+	const blocks =
+		title !== null && parsed[0]?.type === 'heading' && saysTheSameThing(parsed[0].text, title)
+			? parsed.slice(1)
+			: parsed;
 
 	return (
-		<div className="md">
+		// `size="lg"` is the memory's OWN page, which reads at 17.5px; every other surface that shows
+		// a memory — the preview, a quoted memory in a merge — reads at 16.5. One element, one class,
+		// because the reading size is a property of the screen and not of the renderer.
+		<div className={size === 'lg' ? 'md md-lg' : 'md'}>
 			{blocks.map((block, index) => {
 				const key = `b${index}`;
 				if (block.type === 'heading') {
