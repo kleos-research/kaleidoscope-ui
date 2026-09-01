@@ -108,13 +108,16 @@ export function parseWriteContract(text) {
 	return { fields, closed, known, denied };
 }
 
-/** The direct children of one field path — what a projection onto that object may carry. */
-export function childFieldNames(fields, parent) {
-	const prefix = `${parent}.`;
-	return Object.keys(fields)
-		.filter((path) => path.startsWith(prefix) && !path.slice(prefix.length).includes('.'))
-		.map((path) => path.slice(prefix.length));
-}
+/**
+ * Re-exported, not defined here.
+ *
+ * The projection this belongs to has to run on BOTH sides of the wire — the browser composes a
+ * payload, the sidecar projects it again on the way out — so it lives in `shared/`, which imports
+ * nothing and can be bundled into a page. It is re-exported from here because this is the module
+ * that produces the `fields` map it reads, and a caller that has one should not have to know where
+ * the other half went.
+ */
+export { childFieldNames } from '../shared/contract.mjs';
 
 /**
  * A reading that did not arrive is a failure, not a null. Both of the next two functions exist to

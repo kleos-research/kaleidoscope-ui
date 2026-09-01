@@ -15,7 +15,7 @@
 // The one case not provoked here is named in docs/M1-STATUS.md rather than quietly implied.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -29,7 +29,7 @@ import {
 import { locateEngine } from '../src/engine/locate.mjs';
 import { listMemories, loadForEdit, readMemory, writeMemory } from '../src/engine/memory.mjs';
 import { parseWriteContract } from '../src/engine/preflight.mjs';
-import { fingerprintVault, openScratchVault } from './helpers/vault.mjs';
+import { fingerprintVault, movedBetween, openScratchVault, stampVault, warmVault } from './helpers/vault.mjs';
 
 /**
  * A field name the write contract cannot possibly accept.
@@ -309,6 +309,85 @@ test('exit 4: a licensing refusal is reported as licensing, with stdout never pa
 
 		// "Your vault is intact" is a claim the engine makes on this path. It is checkable.
 		assert.equal(fingerprintVault(scratch.root).digest, before.digest);
+	} finally {
+		scratch.close();
+	}
+});
+
+/**
+ * Opening a vault converges, touches no record, and the instrument can see it when it does not.
+ *
+ * WHY THIS TEST EXISTS. Every other fingerprint assertion in this suite is taken against a WARMED
+ * clone — see `warmVault` — and this is the test that makes that legitimate rather than convenient.
+ *
+ * WHAT IS AND IS NOT ASSERTED, because the difference cost a red run to learn. The first call that
+ * opens a copy of a vault MAY rewrite one file of derived state. Whether it does is a property of
+ * how the SOURCE vault was last left, not of the engine: a source whose last writer exited cleanly
+ * clones into something that opens with no write at all. An earlier version of this test asserted
+ * that the first open moves exactly one file, and it went red the moment an unrelated process wrote
+ * to the source between two runs. That assertion was measuring the age of the clone.
+ *
+ * So the claim here is the one that is always true and is the one the absorption actually rests on:
+ * **whatever the first open does, it converges, and it never touches a record.** The count is a
+ * diagnostic, not an assertion.
+ *
+ * AND IT IS NOT VACUOUS. A convergence test whose subject never moved would pass while proving
+ * nothing, so the third step plants a file inside the clone's own record store and asserts the same
+ * instrument, on the same code path, reports exactly that file — which is the proof that a run
+ * reporting "nothing moved" is capable of reporting the opposite.
+ */
+test('opening a vault converges, touches no record, and is watched by an instrument that can see one', async (t) => {
+	const scratch = openScratchVault({ enginePath: engine.path, label: 'kscope-ui-warm', warm: false });
+	const where = { enginePath: engine.path, root: scratch.root };
+	try {
+		const first = warmVault({ enginePath: engine.path, root: scratch.root });
+
+		// Whatever it moved, none of it holds a memory. This is what the ritual's absorption rests
+		// on, and the day a first open rewrites a record, this names the path.
+		assert.deepEqual(
+			first.moved.filter((path) => path.includes('/records/')),
+			[],
+			`opening a vault rewrote something inside a record store: ${first.moved.join(', ')}`,
+		);
+
+		// It converges. A door that wrote on every call would still move this one.
+		const second = warmVault({ enginePath: engine.path, root: scratch.root });
+		assert.deepEqual(
+			second.moved,
+			[],
+			'the runtime state does not converge; something is rewritten on every call',
+		);
+
+		// THE POSITIVE CONTROL. Without it, a run in which the engine happened to move nothing is a
+		// test that asserted two empty lists and learned nothing. The planted file goes inside a
+		// record store precisely because that is the class the assertions above declare they can
+		// see, and it is compared with `movedBetween` — the same comparison `warmVault` makes, over
+		// a change this test made itself, so what is being shown is the instrument and not a mock.
+		const stores = readdirSync(scratch.root, { recursive: true, withFileTypes: true }).filter(
+			(entry) =>
+				entry.isDirectory() &&
+				entry.name === 'records' &&
+				(entry.parentPath ?? entry.path).includes('workspaces'),
+		);
+		assert.ok(stores.length > 0, 'no record store was found in the clone, so nothing can be planted in one');
+		const planted = join(stores[0].parentPath ?? stores[0].path, stores[0].name, 'planted-by-a-test');
+
+		const beforePlant = stampVault(scratch.root);
+		writeFileSync(planted, 'not a record; a control\n');
+		assert.deepEqual(
+			movedBetween(beforePlant, stampVault(scratch.root)),
+			[planted.slice(scratch.root.length)],
+			'the instrument did not report a file planted inside a record store, so its silence above ' +
+				'was not evidence of anything',
+		);
+		rmSync(planted);
+
+		const after = await listMemories(where);
+		assert.ok(after.memory_count > 0, 'the cloned vault holds no memories, so this asserts nothing');
+		t.diagnostic(
+			`first open moved ${first.moved.length} file(s), none of them a record; converged on the ` +
+				`second; the instrument saw a planted one; ${after.memory_count} memories readable`,
+		);
 	} finally {
 		scratch.close();
 	}

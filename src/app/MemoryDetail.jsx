@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { fetchLineage } from './api.mjs';
 import { Markdown } from './markdown.jsx';
 import { scopeAxes } from './records.mjs';
+import { ESCALATION_TITLE, REMOVE_LABEL } from './removal-model.mjs';
 import { Chip, Disclosure, Identifier, NotRecorded, ScopeLine } from './ui.jsx';
 
 /**
@@ -30,7 +31,17 @@ const lineageCache = new Map();
 
 const has = (list) => Array.isArray(list) && list.length > 0;
 
-export function MemoryDetail({ row, relations, rows, strippedFields, onOpen, onBack }) {
+export function MemoryDetail({
+	row,
+	relations,
+	rows,
+	strippedFields,
+	onOpen,
+	onBack,
+	onEdit,
+	onRemove,
+	onShowLimits,
+}) {
 	const record = row.record;
 	const semantic = record?.semantic ?? {};
 	const axes = scopeAxes([record]);
@@ -48,6 +59,49 @@ export function MemoryDetail({ row, relations, rows, strippedFields, onOpen, onB
 				<button type="button" className="link-button" onClick={onBack}>
 					‹ Memories
 				</button>
+				{/*
+				  The way in to the editor, and the ONLY one. What is on this page came from the
+				  door that displays a memory, which does not carry its entity declarations — so
+				  nothing here is handed onwards as the thing a save is built from. The editor
+				  re-loads the memory through the door that does, on every open.
+				*/}
+				{onEdit ? (
+					<button type="button" className="button" onClick={() => onEdit(row.memory_id)}>
+						Edit
+					</button>
+				) : null}
+
+				{/*
+				  THE SAME LABEL AS EVERYWHERE ELSE, AND NO TRASH ICON.
+				
+				  A trash icon is a picture of incineration and this action is not one: it hides the
+				  memory from everything that reads, and the text stays on disk. The word is what
+				  carries that, so the word is what appears — here, in the overflow, in the bulk bar
+				  and in the report. Nothing is sent from this button; it opens the confirmation.
+				*/}
+				{onRemove ? (
+					<button
+						type="button"
+						className="button"
+						onClick={() => onRemove(row)}
+						title={REMOVE_LABEL}
+					>
+						{REMOVE_LABEL}
+					</button>
+				) : null}
+
+				{/*
+				  "Make this count for more" rather than "Promote". The word promote implies a rank,
+				  and the store has no field for one — no priority, no importance, no pin. What the
+				  screen behind this link offers is the four edits that DO change where and how long a
+				  memory applies, each named for the field it changes, and it says the negative half
+				  first.
+				*/}
+				<a className="button" href={`#/m/${encodeURIComponent(row.memory_id)}/promote`}>
+					Make this count for more…
+				</a>
+
+				{onShowLimits ? <OverflowMenu row={row} onShowLimits={onShowLimits} /> : null}
 			</nav>
 
 			<header className="detail-head">
@@ -171,6 +225,44 @@ export function MemoryDetail({ row, relations, rows, strippedFields, onOpen, onB
 
 			<RawRecord record={record} strippedFields={strippedFields} />
 		</article>
+	);
+}
+
+/**
+ * The overflow menu, which exists for exactly one entry.
+ *
+ * "What removal cannot do" is reachable from here and from the removal confirmation, and from
+ * nowhere else. It is NOT a checkbox on the confirmation: a checkbox would say the product has a
+ * stronger removal to offer if you tick it, and it does not. This is a different activity with a
+ * different outcome, so it is a different screen — and the menu is how a person who already knows
+ * that gets to it without opening a dialog first.
+ *
+ * `<details>` rather than a popover: it closes on Escape, it is keyboard-reachable with nothing
+ * bound here, and it needs no state that could get stuck open.
+ */
+function OverflowMenu({ row, onShowLimits }) {
+	return (
+		<details className="overflow">
+			<summary aria-label="More about this memory">⋯</summary>
+			<div className="overflow-body">
+				{/*
+				  The way in to the merge composition, and it is in the overflow rather than in the nav
+				  for the same reason the escalation is: it is a two-memory action started from a
+				  one-memory page, and it opens a screen where the other memory is named before anything
+				  is composed. Nothing is written from this click.
+				*/}
+				<a className="link-button" href={`#/m/${encodeURIComponent(row.memory_id)}/merge`}>
+					Merge this into another memory…
+				</a>
+				<button
+					type="button"
+					className="link-button"
+					onClick={() => onShowLimits(row.memory_id)}
+				>
+					{ESCALATION_TITLE}
+				</button>
+			</div>
+		</details>
 	);
 }
 

@@ -13,9 +13,10 @@
  * which to add exactly one later, behind a screen that names the record before the button is pressed.
  */
 
+import { projectOntoContract } from '../shared/contract.mjs';
 import { call, run } from './call.mjs';
 import { EnginePartialError } from './errors.mjs';
-import { childFieldNames, parseWriteContract } from './preflight.mjs';
+import { parseWriteContract } from './preflight.mjs';
 
 /**
  * The large derived per-memory fields, dropped before the payload leaves this module.
@@ -27,41 +28,6 @@ import { childFieldNames, parseWriteContract } from './preflight.mjs';
  * emitted stops being claimed.
  */
 const DERIVED_FIELDS_TO_STRIP = ['embedding', 'normalized_tokens'];
-
-/**
- * A repeated field's children are declared once; an open-key map declares a placeholder instead.
- * Meeting one of those means "any key is allowed here", so the projection stops rather than
- * emptying the object.
- */
-const isOpenKeyPlaceholder = (name) => name.startsWith('<');
-
-/**
- * Keep only what the write contract accepts at this path, recursively.
- *
- * The engine refuses an unknown field on `semantic_delta` by failing deserialization, which happens
- * before any item is written and costs the whole call. The record a read door returns carries more
- * than the write door accepts — derived values, ordering keys, the fold's own arithmetic — so a
- * round trip has to project, and it has to project against the contract read at runtime rather than
- * against a list someone typed here once.
- */
-function project(value, path, fields, dropped) {
-	if (value === null || typeof value !== 'object') return value;
-
-	if (Array.isArray(value)) return value.map((item) => project(item, path, fields, dropped));
-
-	const accepted = childFieldNames(fields, path);
-	if (accepted.length === 0 || accepted.some(isOpenKeyPlaceholder)) return value;
-
-	const kept = {};
-	for (const [key, child] of Object.entries(value)) {
-		if (!accepted.includes(key)) {
-			dropped.add(`${path}.${key}`);
-			continue;
-		}
-		kept[key] = project(child, `${path}.${key}`, fields, dropped);
-	}
-	return kept;
-}
 
 async function contractFieldsFor(options) {
 	if (options.contractFields) return options.contractFields;
@@ -127,6 +93,43 @@ export async function listMemories({ enginePath, root, timeoutMs = 120_000 } = {
 }
 
 /**
+ * One memory, as a portable export. THE SNAPSHOT DOOR. Writes nothing.
+ *
+ * The same door `listMemories` uses, addressed at one memory instead of the whole vault. It is a
+ * separate function rather than an argument to that one because the two have opposite shapes:
+ * `listMemories` returns a listing this app has reshaped and stripped, and this returns the
+ * engine's envelope UNTOUCHED — the payload, its digest, its declared kind, its omissions, all of
+ * it. A snapshot that had been reshaped on the way in is a copy of what this app understood rather
+ * than of what the vault held.
+ *
+ * A removed memory is omitted from the payload entirely, so a caller that asked for one gets an
+ * envelope with an empty `memories` array and exit 0. That is an answer, not a record, and every
+ * caller here has to say so rather than filing it.
+ *
+ * **IT RETURNS THE BYTES AS WELL AS THE OBJECT, AND THE BYTES ARE THE ARTEFACT.**
+ *
+ * The envelope carries a digest over the payload AS THE ENGINE SERIALISED IT, and the import door
+ * checks it. A JSON round trip through this runtime does not preserve that serialisation — a `0.0`
+ * comes back as `0` — so an export this app parsed and re-emitted is refused with
+ * `memory export payload digest does not match`. Measured, on the way to writing the snapshot
+ * store; `test/restore.test.mjs` asserts it, because it is the reason the store keeps text rather
+ * than an object and nothing about the code makes that obvious.
+ *
+ * @param {string} memoryId
+ * @param {object} [options]
+ * @returns {Promise<{envelope: object, text: string}>} the parsed envelope, and the engine's own
+ *          bytes beside it. Keep the text; the object is for reading.
+ */
+export async function exportMemory(memoryId, { enginePath, root, timeoutMs } = {}) {
+	const result = await call(
+		'memory_lifecycle',
+		{ mode: 'export', memory_id: requireId(memoryId) },
+		{ enginePath, root, timeoutMs, keepStdout: true },
+	);
+	return { envelope: result.data, text: result.stdout };
+}
+
+/**
  * One memory, addressed by id, for display. Writes nothing — no ranked query runs, so no record of
  * having read it is kept.
  *
@@ -176,7 +179,7 @@ export async function loadForEdit(memoryId, options = {}) {
 
 	const record = lineage.data?.memory ?? {};
 	const dropped = new Set();
-	const semantic_delta = project(record, 'semantic_delta', fields, dropped);
+	const semantic_delta = projectOntoContract(record, 'semantic_delta', fields, dropped);
 
 	return {
 		memory_id: memoryId,

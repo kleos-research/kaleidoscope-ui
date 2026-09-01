@@ -1,5 +1,9 @@
 # PRD index — what this repository builds, who owns which requirement, and the order it lands in
 
+> **Status (2026-09-01).** Seven PRDs, all eight milestones landed — see §4 for what that does
+> and does not mean. The paragraph below is the editorial pass as written on 2026-08-31 and is kept
+> as it stood.
+>
 > **Status (2026-08-31).** Seven PRDs, none started. They were written in parallel and had not read each
 > other; this document is the editorial pass over them. It states the product boundary a newcomer needs
 > first, says what each PRD owns and deliberately does not, resolves every overlap and contradiction
@@ -319,7 +323,26 @@ number, and four of those descriptions name no existing document. **Every PRD ci
 Eight milestones. The rule that sets the order: **the first one proves the seam whose failure is silent
 and irreversible, and it has no user interface in it at all.** Everything visible comes after.
 
-### M1 — The round trip · no browser, no framework
+> **What has landed (2026-09-01).** All eight milestones are built and passing: **264 tests across 18
+> files** against `kscope 0.0.5` and a clone of a 344-memory vault, a clean boundary check, a browser
+> bundle of 995.1 kB, and a 411.9 kB tarball that installs into a scratch directory and serves a page
+> from there. Each milestone below carries its status and the document that reports it. **A milestone
+> marked landed is not a milestone with no gaps** — every status document ends in an honest-gaps
+> section, and the requirements those sections name as unbuilt are listed under M8 rather than being
+> counted as delivered.
+>
+> | milestone | status | reported in |
+> | --- | --- | --- |
+> | M1 The round trip | **landed** | `docs/M1-STATUS.md` |
+> | M2 See everything | **landed** | `docs/M2-STATUS.md` |
+> | M3 Fix one memory | **landed** | `docs/M3-STATUS.md` |
+> | M4 Remove, honestly | **landed** | `docs/M4-M6-STATUS.md` |
+> | M5 The backlog | **landed** | `docs/M4-M6-STATUS.md` |
+> | M6 Curation transactions | **landed** | `docs/M4-M6-STATUS.md` |
+> | M7 The reconstructed graph | **landed**, and photographed in a browser | `docs/M7-HUB-STATUS.md`, `docs/M7-M8-STATUS.md` |
+> | M8 Ship it | **landed except three requirements**, named below | `docs/M7-M8-STATUS.md` |
+
+### M1 — The round trip · no browser, no framework · **landed**
 **0001** (the engine client and the call contract) · **0007** (discovery + the boundary gate only) ·
 **0003 R1** (the assertion, not the screen).
 
@@ -334,7 +357,7 @@ committed, successful-looking write that has quietly deleted data. *Why the boun
 public git history cannot be un-pushed, and the check must exist before the first push, not before the
 first release. *Why no browser:* a screen would let the round trip pass for the wrong reason.
 
-### M2 — See everything
+### M2 — See everything · **landed**
 **0001** (the HTTP server with the complete security posture from the first commit) · **0002**.
 
 *Edge from M1:* the export cache and its index become the single source every later screen reads; building
@@ -342,21 +365,21 @@ any screen on a second source creates a disagreement no test will catch. *Why th
 whole here rather than later:* retrofitting a Host check is how it gets half-done, and the token-holding
 origin has total read/write over the user's most sensitive local store.
 
-### M3 — Fix one memory
+### M3 — Fix one memory · **landed**
 **0004's snapshot store** (from §3.3(a)), then **0003**.
 
 *Edge from M2:* the editor is entered from a row and needs the vocabulary tier from the preflight.
 *Edge inside the milestone:* the snapshot is the only undo in the product, so it precedes the first write
 button; a Save with no visible snapshot is asking for trust the user has no way to check.
 
-### M4 — Remove, honestly
+### M4 — Remove, honestly · **landed**
 **0004's removal flow**, the escalation screen, the copy check.
 
 *Edge from M3:* removal shares stale-version handling and the receipt shape with the editor's save path
 and should reuse them, not re-derive them. *Gate, not a task:* the copy carries legal weight and needs the
 owner's signature before merge, not a reviewer's approval.
 
-### M5 — The backlog
+### M5 — The backlog · **landed**
 **0006's rail** (absorbed from 0005 §3.4). No graph library.
 
 *Edge from M3:* every card routes into the editor's save path and inherits every guard on it, so the
@@ -364,13 +387,13 @@ editor must exist first. *Why before the canvas:* this is the highest-value capa
 several hundred weakly-ordered findings are a list, not a picture. It is also the first surface anywhere
 that lets a writer see which relation names already exist before coining another.
 
-### M6 — Curation transactions
+### M6 — Curation transactions · **landed**
 **0006's merge, rename, split and named intents**, with the pending-merge record.
 
 *Edge from M4:* every merge ends in a removal and borrows its copy. *Edge from M5:* the candidates come
 from the rail; a merge screen with no candidate generator has nothing to act on.
 
-### M7 — The reconstructed graph
+### M7 — The reconstructed graph · **landed**
 **0005**: the canvas, three lenses, the encoding, the scale ladder, the fidelity strip, the hub path and
 its synthetic hub fixture.
 
@@ -378,13 +401,45 @@ its synthetic hub fixture.
 into a rendering job rather than a computation one. *Edge from M3:* every node must terminate in a verb,
 and the verb is the editor.
 
-### M8 — Ship it
+*What landed:* all three lenses as projections of one model with C as the default, the encoding, the
+scale ladder, the permanent fidelity strip with both sets of counts, view state in the URL including
+the reductions, and the whole hub programme — regime detection, the `max(20, p99 × 4)` threshold, the
+compound meta-node, the virtualized claim list and "absorb into context". The hub path runs in CI
+against a generated 100,000-edge graph, and `scripts/synthetic-vault.mjs --hub` now writes a **vault**
+whose busiest name clears the threshold, so the collapse has also been driven through a browser and
+photographed. *Still open:* nothing renders in a test, so PRD 0005 R24 is argued rather than asserted;
+the singleton fraction is computed and no screen reads it.
+
+### M8 — Ship it · **landed, with three requirements outstanding**
 **0007's packaging half**: the tarball, the files allowlist, the offline launch, the third-party notices,
 provenance publication.
 
 *Edge from everything:* the release test installs the packed tarball into a scratch directory and runs it
 against the synthetic vault. It is the only test that catches a wrong `files` array, which is the most
 common way a prebuilt package ships broken — and it can only run once there is something to pack.
+
+*What landed:* the tarball (411.9 kB packed, 28 files, `dependencies: {}`), the files allowlist and its
+denial list, the offline scan over `dist/`, generated third-party notices diffed in CI, the four-step
+engine discovery with its three distinguishable launch failures, and the digest-keyed compatibility
+tier with Tier A and Tier B driven from perturbed fixtures. The release test runs end to end: pack,
+`--offline` install into a scratch directory, launch, serve real data from a vault this repository
+generated, and shut down on SIGTERM.
+
+*Outstanding, and not to be counted as delivered:*
+
+- **R33** — the boundary gate has no committed falsifiability self-test. It has been demonstrated to
+  fail by hand on all six mechanical classes; that is evidence it is live, not a control.
+- **R13** — the engine-discovery order is implemented and tested, and not against the shared golden
+  fixture the sibling clients assert against, so their agreement is a claim rather than a falsifiable
+  one.
+- **R28** — the licence allowlist gate over the **build-time** dependency tree is not wired. Scoping
+  it to production dependencies would inspect an empty set and pass trivially, which is the failure
+  the requirement itself names.
+- **R29** — provenance publication has never been exercised; nothing has been published.
+
+A boundary control the packaging PRD did not ask for was added in its place: `test/boundary-vault.test.mjs`
+compares the vault against the tree and catches the leak no text scanner can — a real entity surface
+used as an illustration. It found four, in this repository's own source, fixtures and documents.
 
 ---
 

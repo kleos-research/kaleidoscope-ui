@@ -21,8 +21,11 @@
  * posture that looks complete and has a hole in the middle: checking `Origin` without checking
  * `Host` is precisely that shape, and it stops nothing.
  *
- * M2 IS READ-ONLY. Every route below is a GET. Nothing here can write to the vault, and the method
- * allowlist is what enforces it rather than a comment saying so.
+ * **M3 ADDS THE THREE WRITE ROUTES, AND THE METHOD ALLOWLIST IS STILL WHAT ENFORCES THE SHAPE.**
+ * `POST` is accepted, `OPTIONS` is still answered 405, and everything else is still refused before
+ * routing. The write routes are non-GET on purpose: `originAllowed` requires a matching `Origin`
+ * header on any method that is not GET or HEAD, so a page on another origin cannot reach them even
+ * with a token — the check was written in M2 for exactly the routes that did not exist yet.
  */
 
 import { createServer } from 'node:http';
@@ -30,11 +33,18 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { call } from '../engine/call.mjs';
-import { listMemories } from '../engine/memory.mjs';
+import { assessCompatibility } from '../engine/compatibility.mjs';
+import { exportMemory, listMemories } from '../engine/memory.mjs';
 import { launchBlockers, preflight } from '../engine/preflight.mjs';
 import { createAssetServer } from './assets.mjs';
 import { createListingCache, selectMemories, SCOPE_UNSET, SORT_KEYS } from './cache.mjs';
+import { createDismissalStore, DismissalStoreError, MAX_DISMISSALS } from './dismissals.mjs';
+import { createCurationHandlers } from './merge.mjs';
+import { createPendingMergeStore } from './pending.mjs';
+import { createRemovalHandlers } from './removal.mjs';
 import { envelope, guard, sendBare, sendJson, sendSidecarError } from './respond.mjs';
+import { createSnapshotStore } from './snapshots.mjs';
+import { createWriteHandlers, readJsonBody } from './write.mjs';
 import {
 	allowedHosts,
 	bearerToken,
@@ -97,6 +107,8 @@ const readHealth = (where) => call('doctor', { mode: 'inspect' }, where);
  * @param {number} [options.ceiling]    the vault size above which the listing is refused
  * @param {number} [options.idleTimeoutMs]
  * @param {() => void} [options.onIdle]
+ * @param {string} [options.snapshotsDir] where the snapshot store goes. Absent means the platform's
+ *        state directory for this app — never inside the vault, under any value.
  *
  * The readings may be handed in or taken here, but the DECISION they lead to is not made here
  * either way. The preflight can find conditions that stop a launch — a shut licence gate, a build
@@ -116,6 +128,7 @@ export async function startSidecar({
 	idleTimeoutMs = DEFAULT_IDLE_MS,
 	onIdle,
 	appVersion = null,
+	snapshotsDir,
 } = {}) {
 	if (!LOOPBACK.has(host)) {
 		throw new TypeError(
@@ -132,6 +145,16 @@ export async function startSidecar({
 	// Reported, never acted on. See the note above the signature.
 	const blockers = launchBlockers(readings);
 
+	/**
+	 * Which engine this is, relative to the one this build was tested against.
+	 *
+	 * Computed ONCE, here, from the readings — it is a pure function of them, so it cannot disagree
+	 * with what the footer displays or with what the write gate below enforces. Three consumers, one
+	 * value: a screen that showed a tier the gate did not use would be the worst of the three
+	 * failures this ladder exists to prevent.
+	 */
+	const compatibility = assessCompatibility(readings);
+
 	const enginePath = readings.engine.path;
 	const where = { enginePath, root };
 	const startedAt = new Date().toISOString();
@@ -146,6 +169,104 @@ export async function startSidecar({
 		load: () => listMemories({ enginePath, root, timeoutMs: LISTING_TIMEOUT_MS }),
 		health: () => readHealth(where),
 		ceiling,
+	});
+
+	/**
+	 * The write path. THREE routes, and each one is here rather than behind a generic passthrough
+	 * for the reason at the top of this file: adding an operation means adding a route, in a diff a
+	 * reviewer can see.
+	 *
+	 * It is handed the cache so a committed write drops the snapshot the list is rendered from. A
+	 * write that did not invalidate would leave every screen showing the row as it was before the
+	 * edit, which is the same failure as a stale read and harder to notice because the user just
+	 * changed it themselves.
+	 */
+	/**
+	 * The snapshot spine, opened before the write handlers, because they refuse to be built
+	 * without it.
+	 *
+	 * It lives OUTSIDE the vault, keyed by the vault identity this launch resolved, so two vaults
+	 * never share a store and nothing this app keeps ever appears in the user's own memory list.
+	 * The export door is injected rather than imported inside the store, which keeps the one-spawner
+	 * rule intact — every child process this product starts still goes through `call.mjs` — and
+	 * lets a test drive the failure path without breaking an engine.
+	 */
+	const snapshots = createSnapshotStore({
+		vault: readings.vault ?? {},
+		exportMemory: (memoryId) => exportMemory(memoryId, where),
+		directory: snapshotsDir,
+		engineVersion: readings.engine?.version ?? null,
+	});
+
+	/**
+	 * The curation backlog's "these two really are different things", beside the snapshots.
+	 *
+	 * Same state directory, same vault key, same reason: it is this app's own opinion about the
+	 * user's vault and it must not be written INTO the vault, where it would be exported, retrieved
+	 * by their agents and counted in every number this product reports about their memory.
+	 *
+	 * It is opened here rather than lazily on first use so that a store this launch cannot key —
+	 * no resolved vault identity — fails at startup, where the launcher can say so, rather than on
+	 * the first click of a button that then appears to do nothing.
+	 */
+	const dismissals = createDismissalStore({
+		vault: readings.vault ?? {},
+		directory: snapshotsDir,
+	});
+
+	const writes = createWriteHandlers({
+		where,
+		cache,
+		vocabulary: readings.vocabulary,
+		requestBytes: readings.contract?.limits?.cli_request_bytes ?? null,
+		snapshots,
+	});
+
+	/**
+	 * The removal path, built beside the write path and sharing its spine.
+	 *
+	 * It is a separate module rather than a fourth handler on `write.mjs` because the two answer
+	 * different questions. A write asks what was stored; a removal asks whether the memory is
+	 * actually gone from the doors that serve it, which costs a second non-writing read per item
+	 * and is the whole point of the flow. It is handed the same cache, the same snapshot store and
+	 * the same vocabulary, so neither path can drift from the other on the things they share.
+	 */
+	const removals = createRemovalHandlers({
+		where,
+		cache,
+		vocabulary: readings.vocabulary,
+		snapshots,
+		requestBytes: readings.contract?.limits?.cli_request_bytes ?? null,
+	});
+
+	/**
+	 * The half-finished-merge record, beside the snapshots and the dismissals.
+	 *
+	 * A merge is two writes with no transaction underneath, so the window between them is a state
+	 * the vault can be left in — and it has to survive a crash rather than only an exception, or
+	 * the recovery is a screen that exists only while the process that needed it is still running.
+	 */
+	const pendingMerges = createPendingMergeStore({
+		vault: readings.vault ?? {},
+		directory: snapshotsDir,
+	});
+
+	/**
+	 * Curation: unify a spelling across N memories, and merge two memories into one.
+	 *
+	 * NEITHER IS AN ENGINE OPERATION. The published surface has no merge, no rename and no split —
+	 * the operation whose modes read like curation reports that it applied and leaves both memories
+	 * exactly as they were — so both runs here are composed out of `remember` update and `remember`
+	 * delete, and this app owns the ordering and the recovery. No route in the table below reaches
+	 * that operation in any mode, and a test asserts it.
+	 */
+	const curation = createCurationHandlers({
+		where,
+		cache,
+		vocabulary: readings.vocabulary,
+		snapshots,
+		pending: pendingMerges,
+		requestBytes: readings.contract?.limits?.cli_request_bytes ?? null,
 	});
 
 	// Concurrent health reads share one child process. This is single-flighting, not caching: the
@@ -181,6 +302,11 @@ export async function startSidecar({
 			model: readings.model,
 			vault: readings.vault,
 			contract: readings.contract,
+			// Which engine this is, relative to the one this build was tested against, and what
+			// that costs. Published rather than derived in the browser: the tier decides whether
+			// the write routes below answer at all, and a browser that computed its own could
+			// disagree with the server about what it is allowed to do.
+			compatibility,
 			// The open registries, as the engine printed them a moment ago. Every option list in
 			// this product is built from this. Nothing is transcribed into a control, a filter or a
 			// palette, because a value written down here drifts from the engine without anyone
@@ -191,6 +317,16 @@ export async function startSidecar({
 			// screen that says so is the same screen either way.
 			launch_blockers: blockers,
 			cache: cache.status(),
+			// Where this app keeps its copies, and the rule that bounds them. Published rather than
+			// buried: a retention rule nobody can read is a rule a user discovers by loss, and a
+			// directory nobody can find is a safety net nobody can check.
+			snapshots: {
+				directory: snapshots.directory,
+				vault_key: snapshots.vault_key,
+				retention: snapshots.retention,
+				// The finding, on the readings themselves. See docs/RESTORE-EXPERIMENT.md.
+				restore_available: false,
+			},
 			app: {
 				version: appVersion,
 				started_at: startedAt,
@@ -199,8 +335,20 @@ export async function startSidecar({
 				// test can assert nothing was added quietly. Published as method-and-path rather
 				// than as one string, because a caller that has to split a string to find the path
 				// is a caller that will match the wrong thing.
-				routes: ROUTES.map(({ method, path, alias_of = null }) => ({ method, path, alias_of })),
+				routes: ROUTES.map(({ method, path, alias_of = null, writes = false }) => ({
+					method,
+					path,
+					alias_of,
+					// Whether this route can change the VAULT. It is what the compatibility gate
+					// reads, and it is published so a test can enumerate the set rather than
+					// trusting that whoever added the last route remembered to mark it.
+					writes,
+				})),
 				sort_keys: SORT_KEYS,
+				// The cap on one removal run, published rather than transcribed into a control.
+				// A limit the browser writes down is a limit that drifts from the server that
+				// enforces it, and the user meets the difference at item 101.
+				removal: { max_items: removals.max_items },
 				scope_unset_value: SCOPE_UNSET,
 			},
 			checked_at: readings.checked_at,
@@ -372,6 +520,75 @@ export async function startSidecar({
 	}
 
 	/**
+	 * A dismissal store failure, as a sentence rather than a stack.
+	 *
+	 * Split by CAUSE, not by convenience: a request this server will not accept is the caller's to
+	 * fix and answers 400, and a store it cannot read or write is this machine's and answers 500.
+	 * Collapsing them sends a user to check their disk over a typo, or the reverse.
+	 */
+	function sendDismissalError(res, error) {
+		const bad = new Set(['missing-key', 'field-too-long', 'store-full']);
+		return sendSidecarError(
+			res,
+			bad.has(error.kind) ? 400 : 500,
+			error.kind ?? 'dismissal-store-failed',
+			error.message,
+			{ store: dismissals.file, limit: error.kind === 'store-full' ? MAX_DISMISSALS : null },
+		);
+	}
+
+	/** What this vault's owner has already said is not a problem. Reads a file; spawns nothing. */
+	async function handleDismissals(req, res) {
+		try {
+			const listing = await dismissals.list();
+			sendJson(res, 200, { outcome: 'listed', ...listing, limit: MAX_DISMISSALS });
+		} catch (error) {
+			if (error instanceof DismissalStoreError) return sendDismissalError(res, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Dismiss a finding, or put one back.
+	 *
+	 * A POST that writes NOTHING TO THE VAULT — it writes one file in this app's own state
+	 * directory — and it is a POST rather than a GET for exactly that reason: it changes something,
+	 * and this server's Origin check treats non-GET as state-changing. Both directions are on one
+	 * route with an `action`, because they are one decision and its inverse over one file, and a
+	 * user who can hide a finding must be able to unhide it through the same door.
+	 */
+	async function handleDismissalWrite(req, res) {
+		let body;
+		try {
+			body = await readJsonBody(req, { limit: writes.bodyLimit });
+		} catch (error) {
+			return sendSidecarError(res, 400, error.kind ?? 'bad-request', error.message, {
+				limit: error.limit ?? null,
+			});
+		}
+
+		const action = typeof body?.action === 'string' ? body.action : 'dismiss';
+		if (action !== 'dismiss' && action !== 'restore') {
+			return sendSidecarError(
+				res,
+				400,
+				'unknown-action',
+				`This route takes "dismiss" or "restore" and was asked for "${action}". Nothing was ` +
+					`changed.`,
+			);
+		}
+
+		try {
+			const result =
+				action === 'restore' ? await dismissals.restore(body?.key) : await dismissals.dismiss(body);
+			sendJson(res, 200, { ...result, store: dismissals.file, limit: MAX_DISMISSALS });
+		} catch (error) {
+			if (error instanceof DismissalStoreError) return sendDismissalError(res, error);
+			throw error;
+		}
+	}
+
+	/**
 	 * THE ROUTE TABLE, AND IT IS THE ALLOWLIST.
 	 *
 	 * What is not here is the design. There is no generic passthrough, no search endpoint of any
@@ -405,6 +622,100 @@ export async function startSidecar({
 			pattern: /^\/api\/memories\/([^/]+)\/lineage$/,
 			handler: handleLineage,
 		},
+
+		// ---- the editor's load door -------------------------------------------------------
+		//
+		// SEPARATE FROM `/api/memories/:memory_id` ON PURPOSE, and the difference is the whole
+		// reason M1 exists. That route answers from the cache, for display. This one goes to the
+		// engine, through the LINEAGE door, because the display door does not return a memory's
+		// entity declarations and the write requires them: an editor that round-trips what the
+		// display door returned commits successfully and deletes every named thing the memory
+		// declared. Two routes, because they are two different records, and a screen that used the
+		// wrong one would look right until the graph emptied.
+		{
+			method: 'GET',
+			path: '/api/memories/:memory_id/edit',
+			pattern: /^\/api\/memories\/([^/]+)\/edit$/,
+			handler: writes.handleEditLoad,
+		},
+
+		// ---- the two writes ---------------------------------------------------------------
+		{ method: 'POST', path: '/api/memories', handler: writes.handleCreate, writes: true },
+		{
+			method: 'POST',
+			path: '/api/memories/:memory_id',
+			pattern: /^\/api\/memories\/([^/]+)$/,
+			handler: writes.handleUpdate,
+			writes: true,
+		},
+
+		// ---- the removal run: ONE ROUTE FOR ONE MEMORY AND FOR MANY -------------------------
+		//
+		// There is no batch delete in the engine, so a run of twelve is twelve separate calls, each
+		// carrying its own expected version. One route, because a single removal that took a
+		// different path from a bulk one would be a second implementation of the version re-read,
+		// the snapshot and the verification — and the two would drift.
+		//
+		// It is a POST at a collection rather than a DELETE at a memory, and that is deliberate: a
+		// run is a thing with a report, not an idempotent statement about one resource, and half of
+		// what it returns is what it did NOT do.
+		{ method: 'POST', path: '/api/removals', handler: removals.handleRemovals, writes: true },
+
+		// ---- the snapshot store: THREE READS AND NO WRITE ----------------------------------
+		//
+		// There is no restore route here and its absence is the finding, not an omission. A
+		// snapshot cannot be imported back into the vault it came from — the import door refuses a
+		// per-memory export outright, refuses a whole-workspace export over a vault that already
+		// holds the record, and refuses any destination holding memories the package does not
+		// carry. `docs/RESTORE-EXPERIMENT.md` has the run and the exact refusals, and
+		// `test/restore.test.mjs` asserts them, so a build that starts permitting a restore turns
+		// the suite red — which is what authorises the copy change, rather than the reverse.
+		//
+		// What these three do serve is the bytes, which is the honest and still useful half: a
+		// person can see what a write was about to overwrite and save it to a file.
+		{ method: 'GET', path: '/api/snapshots', handler: writes.handleSnapshots },
+		{
+			method: 'GET',
+			path: '/api/snapshots/:snapshot_id',
+			pattern: /^\/api\/snapshots\/([^/]+)$/,
+			handler: writes.handleSnapshot,
+		},
+		{
+			method: 'GET',
+			path: '/api/memories/:memory_id/snapshots',
+			pattern: /^\/api\/memories\/([^/]+)\/snapshots$/,
+			handler: writes.handleSnapshots,
+		},
+
+		// ---- the curation backlog's dismissals: THIS APP'S STATE, NOT THE VAULT'S --------------
+		//
+		// The only POST in this table that reaches no engine at all. It writes one JSON file beside
+		// the snapshot store, keyed by the same vault digest, and the screen that calls it says in
+		// words that it only changes what this app shows you. There is no vault-side dismissal to
+		// route it to — no published operation records "a person decided these two names are
+		// different" — and inventing one here would be a mechanism reporting a state nothing holds.
+		{ method: 'GET', path: '/api/dismissals', handler: handleDismissals },
+		{ method: 'POST', path: '/api/dismissals', handler: handleDismissalWrite },
+
+		// ---- curation: the merge the engine does not have --------------------------------------
+		//
+		// Four routes and not one of them reaches the operation that is NAMED as though it merged.
+		// That operation reports `applied` with mass conserved and leaves both memories present,
+		// readable and served — so a button wired to it ships green and changes nothing the user
+		// can see. Both runs below are composed from `remember` update and `remember` delete, which
+		// are the only writes whose effects this app has observed.
+		//
+		// A rename is a POST at a collection for the same reason a removal run is: it is a thing
+		// with a report, it stops at the first refusal, and half of what it returns is what it did
+		// NOT do.
+		{ method: 'POST', path: '/api/renames', handler: curation.handleRenames, writes: true },
+		{ method: 'POST', path: '/api/merges', handler: curation.handleMerge, writes: true },
+		// The half-finished merge — the state between the two writes. Read at launch to raise the
+		// banner, and posted to with `finish` or `undo`, which are the only two things a person can
+		// do about it. There is no third action, because there is no engine operation to route one
+		// to: `undo` is a third WRITE of a payload this app kept, not a rollback.
+		{ method: 'GET', path: '/api/pending-merge', handler: curation.handlePending },
+		{ method: 'POST', path: '/api/pending-merge', handler: curation.handlePendingAction, writes: true },
 	];
 
 	// ------------------------------------------------------------------ the pipeline
@@ -447,16 +758,24 @@ export async function startSidecar({
 		//    Answering OPTIONS at all is the first half of granting one.
 		const method = (req.method ?? 'GET').toUpperCase();
 		if (method === 'OPTIONS') return sendBare(res, 405);
-		if (method !== 'GET' && method !== 'HEAD') return sendBare(res, 405);
+		if (method !== 'GET' && method !== 'HEAD' && method !== 'POST') return sendBare(res, 405);
 
-		// 4. Nothing in this milestone reads a request body, so a request carrying one is either a
-		//    client this app did not write or a write route that does not exist yet.
-		if (Number.parseInt(req.headers['content-length'] ?? '0', 10) > 0) return sendBare(res, 400);
-		req.resume();
+		// 4. A body is read on exactly one method. GET and HEAD carrying one are either a client
+		//    this app did not write or an attempt to smuggle a payload past a route that does not
+		//    read it, and both are refused rather than ignored — a request whose body is silently
+		//    dropped looks, to whoever adds the next route, like a request whose body was read.
+		if (method !== 'POST') {
+			if (Number.parseInt(req.headers['content-length'] ?? '0', 10) > 0) return sendBare(res, 400);
+			req.resume();
+		}
 
 		const url = new URL(target, 'http://sidecar.invalid');
 
 		if (!url.pathname.startsWith('/api/')) {
+			// The static route serves files and reads no body. A POST at it is refused here rather
+			// than answered with the page, so the only methods that reach the asset server are the
+			// two it can answer.
+			if (method === 'POST') return sendBare(res, 405);
 			// The prebuilt page and its assets. Deliberately NOT token-gated: the browser cannot
 			// send an Authorization header on the navigation that loads the page, which is the whole
 			// reason the token travels in the URL fragment instead. These files are this
@@ -496,21 +815,69 @@ export async function startSidecar({
 			}
 		}
 
+		// THE PATH IS MATCHED FIRST, THE METHOD SECOND, and they are two passes rather than one.
+		//
+		// One pass reads better and is wrong from the moment a path carries two methods, which it
+		// does the instant a read route grows a write beside it: the first route with the right path
+		// and the wrong method answers 405 and the correct handler is never reached. The failure is
+		// a working GET beside a POST that is refused on every request, and it looks like a broken
+		// write path rather than a broken router.
+		const onPath = [];
 		for (const route of ROUTES) {
 			const match = route.pattern ? route.pattern.exec(url.pathname) : null;
 			if (!match && route.path !== url.pathname) continue;
-			if (route.method !== method && !(route.method === 'GET' && method === 'HEAD')) {
-				return sendBare(res, 405);
+			onPath.push({ route, match });
+		}
+
+		if (onPath.length > 0) {
+			const chosen =
+				onPath.find(({ route }) => route.method === method) ??
+				(method === 'HEAD' ? onPath.find(({ route }) => route.method === 'GET') : undefined);
+
+			// The path exists and the method does not. That is a 405 and not a 404, which is the
+			// true statement and the one a client can act on.
+			if (!chosen) return sendBare(res, 405);
+
+			// THE COMPATIBILITY GATE, and it is here rather than inside each handler.
+			//
+			// Tier A means something structural is wrong with this engine relative to this build —
+			// an unrecognised contract envelope, or an operation this app is built on that the
+			// engine does not have. Reads still work and every reading is still on the screen; what
+			// is refused is anything that would change the vault, because a write composed against
+			// a contract this app cannot read is a write whose losses nobody can predict.
+			//
+			// `/api/dismissals` is a POST and is deliberately NOT gated: it writes one file in this
+			// app's own state directory and reaches no engine at all. The flag is on the route, so
+			// which side of that line a route is on is a decision visible in the table above rather
+			// than a condition buried in a handler.
+			if (chosen.route.writes && !compatibility.writes_permitted) {
+				return sendSidecarError(
+					res,
+					409,
+					'engine-not-compatible',
+					`${compatibility.headline}\n\n` +
+						compatibility.reasons.map((reason) => reason.message).join('\n\n') +
+						`\n\nYour vault is untouched. Reading it still works, and every reading this app ` +
+						`took is on the screen.`,
+					{
+						tier: compatibility.tier,
+						digest: compatibility.digest,
+						tested_digests: compatibility.tested_digests,
+						missing_operations: compatibility.missing_operations,
+						retired_operations: compatibility.retired_operations,
+					},
+				);
 			}
+
 			let captured;
-			if (match) {
+			if (chosen.match) {
 				try {
-					captured = decodeURIComponent(match[1]);
+					captured = decodeURIComponent(chosen.match[1]);
 				} catch {
 					return sendBare(res, 400);
 				}
 			}
-			return guard(res, () => route.handler(req, res, url, captured));
+			return guard(res, () => chosen.route.handler(req, res, url, captured));
 		}
 
 		sendSidecarError(res, 404, 'no-such-route', `No route for ${method} ${url.pathname}.`);
@@ -574,11 +941,24 @@ export async function startSidecar({
 		 * the token exists in exactly one place, which is the tab the user is looking at.
 		 */
 		launchUrl: `${origin}/#token=${token}`,
-		routes: ROUTES.map(({ method, path, alias_of = null }) => ({ method, path, alias_of })),
+		routes: ROUTES.map(({ method, path, alias_of = null, writes = false }) => ({
+			method,
+			path,
+			alias_of,
+			writes,
+		})),
 		readings,
 		launch_blockers: blockers,
+		compatibility,
 		cache,
 		assets,
+		// The store itself, on the handle, so a launcher can print where it is and a test can
+		// assert against the same object the write path uses rather than a second one it built.
+		snapshots,
+		// The same reasoning for the half-finished-merge record: a test that built its own store
+		// would be asserting against a second file, and the interesting question is what is in the
+		// one the merge route actually wrote.
+		pending_merges: pendingMerges,
 		server,
 		async close() {
 			clearTimeout(idleTimer);

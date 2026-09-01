@@ -127,6 +127,8 @@ function parseOrCrash(raw, { operation, kind = 'unparseable' }) {
  * @param {string} options.enginePath   the canonical path from `locateEngine`
  * @param {string} [options.root]       pins the vault for this call
  * @param {number} [options.timeoutMs]
+ * @param {boolean} [options.keepStdout] also return the engine's stdout VERBATIM. Only a caller
+ *        that must preserve the engine's own bytes needs it; see the note where it is attached.
  * @returns {Promise<{outcome: string, exit_code: number, data: object|null, results: Array|null, refusal: null, reason: null, provenance: string|null, duration_ms: number}>}
  *
  * Exit 0 and exit 3 return. Exit 2 and exit 4 throw, because neither one produced a result the
@@ -138,7 +140,7 @@ function parseOrCrash(raw, { operation, kind = 'unparseable' }) {
  * @throws {EngineUnlicensedError} exit 4
  * @throws {EngineCrashedError}    any other exit code, a timeout, or a spawn failure
  */
-export async function call(operation, request, { enginePath, root, timeoutMs } = {}) {
+export async function call(operation, request, { enginePath, root, timeoutMs, keepStdout } = {}) {
 	if (typeof operation !== 'string' || operation.length === 0) {
 		throw new TypeError('call() needs a named operation.');
 	}
@@ -180,6 +182,19 @@ export async function call(operation, request, { enginePath, root, timeoutMs } =
 				reason: null,
 				provenance,
 				duration_ms: raw.durationMs,
+				// OFF BY DEFAULT, and the one caller that asks for it has a measured reason.
+				//
+				// The export door signs its payload: the envelope carries a digest over the bytes
+				// the ENGINE serialised, and the import door checks it. A JSON round trip through
+				// this runtime does not preserve those bytes — `0.0` comes back as `0`, and the
+				// digest stops matching. The refusal is
+				// `memory export payload digest does not match`, and it is what a snapshot handed
+				// back to the engine earns if this app ever re-serialised it.
+				//
+				// So a client that intends to KEEP an export has to keep the bytes, not the object.
+				// Every other caller gets `data` and this stays undefined, because carrying a second
+				// copy of every response is a cost with no reader.
+				stdout: keepStdout ? raw.stdout : undefined,
 			};
 		}
 

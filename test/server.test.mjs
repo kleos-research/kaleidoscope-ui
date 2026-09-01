@@ -1094,9 +1094,55 @@ test('the whole HTTP surface records no ranked search', async (t) => {
 		['GET', '/api/memories?refresh=1'],
 		['GET', `/api/memories/${encodeURIComponent(id)}`],
 		['GET', `/api/memories/${encodeURIComponent(id)}/lineage`],
+		// The editor's load door, added in M3. It reads through the lineage door and is the most
+		// likely place for a "what else is like this?" call to be added, because it is the one read
+		// that happens while a person is typing.
+		//
+		// The WRITE routes are matched here by path alone — `POST /api/memories` collapses onto the
+		// listing's path — so they are counted as swept by this test and are not measured by it.
+		// The measurement that covers them is the same count taken across a whole create, edit,
+		// conflict and partial-save session in `test/editor.test.mjs`, where a write is expected to
+		// move the vault and this test's fingerprint assertion could not hold.
+		['GET', `/api/memories/${encodeURIComponent(id)}/edit`],
 		['GET', '/api/health'],
 		['GET', '/api/vocabulary'],
+		// The snapshot store's three read doors. They are here for the same reason as everything
+		// else on this list — each is a place a "what else is like this?" call could be added — and
+		// for one more: this sweep runs against a machine that has never taken a snapshot, so it is
+		// also the assertion that LISTING an empty store neither creates it nor spawns anything.
 		['GET', '/api/snapshots'],
+		['GET', '/api/snapshots/20200101T000000000Z-abcdef012345'],
+		['GET', `/api/memories/${encodeURIComponent(id)}/snapshots`],
+		// The curation backlog's dismissal store, added in M5. It reads a file in this app's own
+		// state directory and reaches no engine at all — which is exactly why it belongs on this
+		// list: a screen that shows several hundred findings about a vault is the most tempting
+		// place in the product to add "and here is what a real search would say about them", and
+		// that call would write an exposure row per finding. The POST collapses onto this path and
+		// is counted as swept; its own behaviour is asserted in `test/backlog.test.mjs`.
+		['GET', '/api/dismissals'],
+		// The removal run, walked with GET so it answers 405 rather than removing anything.
+		//
+		// That is a real exercise of the PATH, which is what this sweep is about: it proves the route
+		// exists, that the method allowlist refuses everything but the one method it publishes, and —
+		// the point of the whole list — that nothing reachable at that path spawns a ranked query. What
+		// the route DOES is measured where a write is expected to move the vault and this test's
+		// fingerprint assertion could not hold: `test/removal.test.mjs`, which counts the exposure
+		// records across a whole run.
+		['GET', '/api/removals'],
+		// The two curation runs, added in M6, walked the same way and for a sharper version of the
+		// same reason. Neither is an engine operation — the published surface has no merge and no
+		// rename — so both are composed here out of N updates and a delete, and BOTH are one line
+		// away from the tempting mistake this sweep exists to catch: a "find the memories that are
+		// probably duplicates of this one" call, which is a ranked query per memory against the
+		// vault it is about to rewrite. What the routes DO is measured in `test/merge.test.mjs`,
+		// which counts exposure records across a whole preview, run, resume and merge.
+		['GET', '/api/renames'],
+		['GET', '/api/merges'],
+		// The half-finished-merge record. It reads a file in this app's own state directory and
+		// reaches no engine at all — and, like the dismissal store, that is exactly why it is here:
+		// a banner about two memories is the obvious place to add "and here is what they have in
+		// common". The POST collapses onto this path and is counted as swept.
+		['GET', '/api/pending-merge'],
 		// The routes a user reaches by mistake, which is where an ad-hoc "let me just look it up"
 		// fallback would live.
 		['GET', `/api/memories/${absentIdLike(id, listed)}`],

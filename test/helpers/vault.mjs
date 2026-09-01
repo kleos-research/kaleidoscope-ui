@@ -25,10 +25,12 @@ const ROOT_ENV = 'KSCOPE_ROOT';
 // contents.
 const EXPOSURE_STORE = 'exposure';
 
-function run(binary, args, env) {
+function run(binary, args, env, input) {
   const child = spawnSync(binary, args, {
     encoding: 'utf8',
     shell: false,
+    input,
+    maxBuffer: 256 * 1024 * 1024,
     env: { ...process.env, ...env },
   });
   if (child.error) throw child.error;
@@ -146,6 +148,29 @@ export function cloneVault({ source, label = 'kaleidoscope-ui' }) {
 }
 
 /**
+ * Point this APP's own state directory somewhere disposable, and hand back the
+ * undo.
+ *
+ * The vault is not the only thing a test can write to by accident. The snapshot
+ * spine keeps a copy of every memory it is about to change, outside the vault,
+ * under the platform's state directory for this app — so a suite that started a
+ * sidecar with default options would file the contents of a cloned vault into
+ * the developer's own home, every run, and prune it against a retention rule
+ * nobody asked for. That is the same class of mistake as writing to the source
+ * vault, one directory over, and it is fixed in the same place: here, so no test
+ * file has to remember.
+ */
+export function useAppStateDir(directory) {
+  const KEY = 'KALEIDOSCOPE_UI_STATE_DIR';
+  const previous = process.env[KEY];
+  process.env[KEY] = directory;
+  return function restore() {
+    if (previous === undefined) delete process.env[KEY];
+    else process.env[KEY] = previous;
+  };
+}
+
+/**
  * Point the engine at a vault for the duration of a test, and hand back the
  * undo. The engine reads this from the environment, so the restore matters:
  * leaking it into a later test is how a test writes somewhere nobody meant.
@@ -157,6 +182,84 @@ export function useVaultRoot(root) {
     if (previous === undefined) delete process.env[ROOT_ENV];
     else process.env[ROOT_ENV] = previous;
   };
+}
+
+/**
+ * Every file in a vault as `relative path → size@mtime`.
+ *
+ * The same reading `fingerprintVault` digests, kept open so a caller can ask WHICH path moved
+ * rather than only whether the whole tree did. Metadata rather than content, for the same reason
+ * as the digest: a vault's contents are the one thing this repository may not read into a test.
+ */
+export function stampVault(root) {
+  const stamps = new Map();
+  walk(root, (entry, path) => {
+    if (!entry.isFile()) return;
+    let stats;
+    try {
+      stats = statSync(path);
+    } catch {
+      return;
+    }
+    stamps.set(path.slice(root.length), `${stats.size}\0${stats.mtimeMs}`);
+  });
+  return stamps;
+}
+
+/**
+ * Open the vault's runtime state once, and hand back what that cost.
+ *
+ * WHY THIS EXISTS, because it looks like a test being made to pass. The engine keeps derived
+ * runtime state beside the records. The FIRST call that opens that state on a given copy of a
+ * vault rewrites one file — a checkpoint, and it happens on a call that reads, on a call that
+ * refuses, and on a call that does nothing else at all. Every call after it leaves that file
+ * alone. It is one-time and it converges.
+ *
+ * That single write is enough to move a whole-vault fingerprint, so "looking at a vault does not
+ * change it" was being measured across the moment the store is opened for the first time — which
+ * is the one moment at which it is not true, and never true again. Fingerprinting from there
+ * measures the clone's age rather than the read path, and a suite that did it inconsistently would
+ * go red or green according to how the SOURCE vault was last left rather than according to
+ * anything this repository did.
+ *
+ * So the ritual absorbs it, deliberately and in one place. The property that matters is untouched
+ * and is in fact now sharper: a door that writes on EVERY call still moves the fingerprint on the
+ * second call, and that is what every later test measures. Only a strictly-once convergence is
+ * absorbed here, and `test/call-contract.test.mjs` demonstrates that it IS strictly once, that it
+ * touches no memory record, and that the engine's own export is byte-identical either side of it.
+ * An absorbed phenomenon nobody asserts is an excuse; this one is asserted.
+ *
+ * The call used is the health reading the app already polls on every screen: ungated by the
+ * licence check, and not the ranked door, so it records no search exposure.
+ */
+export function warmVault({ enginePath, root }) {
+  const before = stampVault(root);
+  const { code, stdout, stderr } = run(enginePath, ['call', 'doctor'], { [ROOT_ENV]: root }, '{"mode":"inspect"}');
+  if (code !== 0) {
+    throw new Error(
+      `The engine would not open the clone's runtime state: it exited ${code} and said:\n` +
+        `${(stdout + stderr).trim()}\n` +
+        `Refusing to continue: every later assertion about what a call wrote would be measured ` +
+        `across a state this one never reached.`,
+    );
+  }
+  const moved = movedBetween(before, stampVault(root));
+  return { moved, count: moved.length };
+}
+
+/**
+ * Which paths differ between two `stampVault` readings.
+ *
+ * Separate from `warmVault` so a test can drive the SAME comparison over a change it made itself.
+ * That is the only way to show that a `warmVault` result of "nothing moved" is a reading rather
+ * than a blind spot: an instrument that reports nothing is indistinguishable from one that cannot
+ * see, until it is shown reporting something.
+ */
+export function movedBetween(before, after) {
+  const moved = [];
+  for (const [path, stamp] of after) if (before.get(path) !== stamp) moved.push(path);
+  for (const path of before.keys()) if (!after.has(path)) moved.push(path);
+  return moved.sort();
 }
 
 /**
@@ -290,31 +393,51 @@ export function countExposureRecords(root) {
  * Every failure in here throws. There is deliberately no fallback: a test that
  * quietly runs against the vault a person uses is worse than a test that does
  * not run at all.
+ *
+ * The ritual also WARMS the clone — see `warmVault` for why, and for the test that keeps that from
+ * being a way of making a red test green. `warm: false` opts out, and exists so the one test that
+ * measures the warming itself can see the cold state.
  */
-export function openScratchVault({ enginePath, label = 'kaleidoscope-ui' }) {
+export function openScratchVault({ enginePath, label = 'kaleidoscope-ui', warm = true }) {
   const source = resolveSourceVault({ enginePath });
   const clone = cloneVault({ source: source.root, label });
 
+  // The app's own state, redirected beside the clone rather than into the
+  // developer's home. See useAppStateDir: the snapshot spine writes a copy of
+  // every memory a test changes, and by default it writes it there.
+  const state = mkdtempSync(join(tmpdir(), `${label}-state-`));
+
   let restore;
+  let restoreState;
   try {
     restore = useVaultRoot(clone.root);
+    restoreState = useAppStateDir(state);
     const reading = requireEngineResolves({
       enginePath,
       root: clone.root,
       forbidden: source.root,
     });
+    // After the address gate, never before it: this is the first call that touches the clone's
+    // runtime state, and it must not run until the engine has said which vault it resolved.
+    const warming = warm ? warmVault({ enginePath, root: clone.root }) : null;
     return {
       root: clone.root,
       source: source.root,
+      state_dir: state,
       reading,
+      warming,
       close() {
         restore();
+        restoreState();
         clone.remove();
+        rmSync(state, { recursive: true, force: true });
       },
     };
   } catch (error) {
     if (restore) restore();
+    if (restoreState) restoreState();
     clone.remove();
+    rmSync(state, { recursive: true, force: true });
     throw error;
   }
 }

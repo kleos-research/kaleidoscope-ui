@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { SORTS, scopeAxes } from './records.mjs';
+import { bulkBarLabel } from './removal-model.mjs';
 import { NotRecorded, ScopeLine } from './ui.jsx';
 
 /** How many rows are put in the DOM before the reader asks for more. */
@@ -29,10 +30,22 @@ export function MemoryList({
 	setSort,
 	relations,
 	onOpen,
+	// The removal selection lives in the app rather than here, so a trip into a memory and back
+	// does not silently drop what the reader had ticked.
+	selection = null,
+	onToggle = null,
+	onToggleMany = null,
+	onRemoveSelected = null,
+	maxSelectable = null,
 }) {
 	const [visible, setVisible] = useState(PAGE);
 	const axes = scopeAxes(rows.map((row) => row.record));
 	const filterInput = useRef(null);
+	const selectAll = useRef(null);
+
+	// Selection is offered only when the app handed down somewhere to put it. A checkbox column
+	// with nothing behind it is worse than none: it reads as a feature that does nothing.
+	const selectable = selection !== null && typeof onToggle === 'function';
 
 	// A narrowed list starts at the top; keeping a deep window open across a filter change leaves
 	// the reader looking at rows that are no longer the ones they asked for.
@@ -53,6 +66,17 @@ export function MemoryList({
 	}, []);
 
 	const shown = rows.slice(0, visible);
+	const selectedHere = selectable ? shown.filter((row) => selection.has(row.memory_id)) : [];
+	const allHere = selectable && shown.length > 0 && selectedHere.length === shown.length;
+
+	// `indeterminate` is a PROPERTY and not an attribute, so JSX cannot set it. Written here, on the
+	// node itself, because a header checkbox that shows "none selected" while three rows are ticked
+	// is a control lying about the thing it is about to act on.
+	useEffect(() => {
+		if (selectAll.current) {
+			selectAll.current.indeterminate = selectedHere.length > 0 && !allHere;
+		}
+	});
 
 	return (
 		<div className="list">
@@ -95,6 +119,44 @@ export function MemoryList({
 				</div>
 			</div>
 
+			{/*
+			  The bulk bar, and it appears ONLY when something is selected. It carries the count in
+			  words rather than saying "remove selected", because the number is the thing the user is
+			  authorising and a bar that hides it is a bar they cannot check.
+			*/}
+			{selectable && selection.size > 0 ? (
+				<div className="bulk-bar" role="region" aria-label="Selected memories">
+					<span className="bulk-count">{selection.size} selected</span>
+					<button
+						type="button"
+						className="link-button"
+						onClick={() => onToggleMany?.([...selection.values()], false)}
+					>
+						Clear the selection
+					</button>
+					{onRemoveSelected ? (
+						<button
+							type="button"
+							className="button"
+							onClick={onRemoveSelected}
+							disabled={maxSelectable !== null && selection.size > maxSelectable}
+							title={bulkBarLabel(selection.size)}
+						>
+							{bulkBarLabel(selection.size)}
+						</button>
+					) : null}
+					{maxSelectable !== null && selection.size > maxSelectable ? (
+						// The cap comes from the server's own readings rather than from a number written
+						// down here, so a control and the thing that enforces it cannot drift apart.
+						<span className="bulk-note">
+							One run carries at most {maxSelectable}. Each removal is a separate call, so a
+							very long run mostly stops partway — several shorter runs are the same work with a
+							report you can read.
+						</span>
+					) : null}
+				</div>
+			) : null}
+
 			<p className="list-count" aria-live="polite">
 				{rows.length === total
 					? `${total} memories`
@@ -102,7 +164,18 @@ export function MemoryList({
 			</p>
 
 			<div className="rows" role="table" aria-label="Memories">
-				<div className="row row-head" role="row">
+				<div className={`row row-head${selectable ? ' is-selectable' : ''}`} role="row">
+					{selectable ? (
+						<span role="columnheader" className="cell-select">
+							<input
+								ref={selectAll}
+								type="checkbox"
+								checked={allHere}
+								onChange={(event) => onToggleMany?.(shown, event.target.checked)}
+								aria-label={`Select the ${shown.length} memories in view`}
+							/>
+						</span>
+					) : null}
 					<span role="columnheader">Title</span>
 					<span role="columnheader">Type</span>
 					<span role="columnheader">Applies to</span>
@@ -113,7 +186,16 @@ export function MemoryList({
 				</div>
 
 				{shown.map((row) => (
-					<Row key={row.memory_id} row={row} axes={axes} relations={relations} onOpen={onOpen} />
+					<Row
+						key={row.memory_id}
+						row={row}
+						axes={axes}
+						relations={relations}
+						onOpen={onOpen}
+						selectable={selectable}
+						selected={selectable && selection.has(row.memory_id)}
+						onToggle={onToggle}
+					/>
 				))}
 			</div>
 
@@ -131,14 +213,14 @@ export function MemoryList({
 	);
 }
 
-function Row({ row, axes, relations, onOpen }) {
+function Row({ row, axes, relations, onOpen, selectable = false, selected = false, onToggle }) {
 	const entry = relations.get(row.memory_id);
 	const corrected = (entry?.corrected_by ?? []).length;
 	const contradicted = (entry?.contradicted_by ?? []).length;
 
 	return (
 		<div
-			className="row row-memory"
+			className={`row row-memory${selectable ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
 			role="row"
 			tabIndex={0}
 			onClick={() => onOpen(row.memory_id)}
@@ -149,6 +231,24 @@ function Row({ row, axes, relations, onOpen }) {
 				}
 			}}
 		>
+			{selectable ? (
+				// The click on the row opens the memory, so the click on the checkbox must not. Without
+				// this, ticking a row navigates away from the list the user is building a selection in.
+				<span
+					className="cell cell-select"
+					role="cell"
+					onClick={(event) => event.stopPropagation()}
+					onKeyDown={(event) => event.stopPropagation()}
+				>
+					<input
+						type="checkbox"
+						checked={selected}
+						onChange={(event) => onToggle?.(row, event.target.checked)}
+						aria-label={`Select ${row.title ?? row.memory_id}`}
+					/>
+				</span>
+			) : null}
+
 			<span className="cell cell-title" role="cell">
 				{row.title ?? <NotRecorded what="title" />}
 				{/*

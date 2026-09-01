@@ -13,5 +13,29 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
       - run: node scripts/check-boundary.mjs
+
+  # The two packaging properties that can be checked WITHOUT the engine, so they can run on a
+  # public runner where no vault and no `kscope` exist.
+  #
+  # What is deliberately not here: the release test. It installs the packed tarball and runs it,
+  # which needs the engine, and the engine is closed source and not installable from this workflow.
+  # Saying so is better than a job that silently skips — a checker that cannot go red is a
+  # sentiment with a filename. The release test is a local gate before a publish, and the publish
+  # workflow is where it belongs once there is a runner that has an engine on it.
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # The build has to run first: both checks below read `dist/`, and the notices file is
+      # generated from the record the build writes of what actually landed in it.
+      - run: npm run build
+      # Offline (no CDN, no font host, no update check) and THIRD_PARTY_NOTICES.md being current.
+      # A stale notices file fails the build here rather than shipping an attribution that is a
+      # version out of date.
+      - run: node --test test/packaging.test.mjs
