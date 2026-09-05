@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { fetchLineage } from './api.mjs';
 import { useFocusActions } from './focus-actions.mjs';
 import { Markdown } from './markdown.jsx';
-import { axisCopy, scopeAxes } from './records.mjs';
+import { axisCopy, scopeAxes, shortenScope } from './records.mjs';
 import { ESCALATION_TITLE, REMOVE_LABEL } from './removal-model.mjs';
 import { exact, written } from './when.mjs';
 import {
@@ -188,7 +188,13 @@ export function MemoryDetail({
 					*/}
 					<span className="reading-meta-scope">
 						<span aria-hidden="true">·</span>{' '}
-						<ScopeLine scope={row.scope} axes={axes} phrase={axisCopy} only="set" />
+						<ScopeLine
+							scope={row.scope}
+							axes={axes}
+							phrase={axisCopy}
+							only="set"
+							shorten={shortenScope}
+						/>
 					</span>
 				</div>
 			</header>

@@ -32,17 +32,19 @@ import {
 	duplicateFactRows,
 	emptyBuffer,
 	emptyEntityRow,
+	headingReading,
 	knownName,
 	mentionedSurfaces,
 	refusalsByRow,
 	refusedSurfaces,
 	saveBlockers,
+	saysTheSameThing,
+	splitLeadingHeading,
 	toSemanticDelta,
 	undeclaredSurfaces,
 	validUntilDate,
 	vaultVocabulary,
 	withValidUntil,
-	withoutRepeatedHeading,
 } from '../src/app/editor-model.mjs';
 import { RESERVED_RELATION_NAMES, deniedRelations } from '../src/app/reserved-relations.mjs';
 import { locateEngine } from '../src/engine/locate.mjs';
@@ -636,38 +638,93 @@ test('an end date is composed as a timestamp, and an absent window is never inve
 // ---------------------------------------------------------------------------------------------
 //
 // The approved editor draws the title as an H1 across the top of both panes, so a body that opens
-// with `# ` and the same sentence would print it twice — the second time as raw Markdown, in the
-// pane that is meant to hold the prose.
+
+// ---------------------------------------------------------------------------------------------
+// 9. THE HEADING NEVER REACHES THE PANE, AND THE ROUND TRIP IS BYTE-IDENTICAL
+// ---------------------------------------------------------------------------------------------
 //
-// Removing it is only safe because it is EXACT: the two shapes stripped are the two shapes
-// `composeBody` produces, so a memory nobody edited is written back byte for byte. The other half
-// matters more: a heading a writer authored to differ from the title is left alone, because in a
-// meaningful share of real memories that difference is deliberate and an editor that silently
-// re-synchronised them would be changing something the user never touched.
+// The editor draws the title as an H1 across the top of both panes. A body that opens with `# ` and
+// a sentence used to print that sentence twice — the second time as raw Markdown, in the pane that
+// is meant to hold the prose — whenever the heading was not the title character for character,
+// which on a real vault is most of the time: a backtick around a name is enough.
+//
+// So the heading is split off WHATEVER it says, kept as the exact bytes it came as, and put back at
+// save. The two properties that make that safe: a memory nobody edited is written back byte for
+// byte, and a heading the writer authored to differ from the title is never rewritten — in a
+// meaningful share of real memories that difference is deliberate. The one thing that moves is a
+// heading that WAS the title, when the title changes: it follows.
 
-test('a heading that only repeats the title is hidden, and the round trip is byte-identical', () => {
+test('the heading is split off whatever it says, and an untouched memory is written back byte for byte', () => {
 	const title = 'Cache keys use the lockfile hash';
+	const shapes = [
+		`# ${title}\n\nA branch-keyed cache started every branch cold.\n`,
+		`# ${title}\n`,
+		`# ${title}`,
+		`# ${title}\nNo blank line under the heading.\n`,
+		`# ${title}\n\n\nTwo blank lines under it.\n`,
+		// The title again, with the writer's marks on it. This is the common case on a real vault.
+		`# Cache keys use the \`lockfile hash\`\n\nProse.\n`,
+		// An authored heading that says something the title does not.
+		`# What we tried first\n\nAnd why it did not hold.\n`,
+		// A near-miss: a heading that merely starts with the title is its own sentence.
+		`# ${title}, not the branch name\n\nProse.\n`,
+	];
 
-	for (const stored of [`# ${title}\n\nA branch-keyed cache started every branch cold.\n`, `# ${title}\n`]) {
-		const shown = withoutRepeatedHeading(stored, title);
-		assert.ok(!shown.startsWith('#'), 'the repeated heading was still in the words');
+	for (const stored of shapes) {
+		const { heading, body } = splitLeadingHeading(stored, title);
+		assert.ok(heading, `no heading was split off ${JSON.stringify(stored)}`);
+		assert.ok(!body.startsWith('#'), `the heading was still in the words: ${JSON.stringify(body)}`);
 		assert.equal(
-			composeBody({ body: shown, title }),
+			composeBody({ body, title, heading }),
 			stored,
-			'putting the heading back did not reproduce the loaded bytes. A prose-only save would ' +
-				'then write a version whose only change is one the user did not make.',
+			`putting the heading back did not reproduce the loaded bytes for ${JSON.stringify(stored)}. ` +
+				'A prose-only save would then write a version whose only change is one the user did not make.',
 		);
 	}
 
-	// An authored heading that differs is not touched, in either direction.
-	const authored = '# What we tried first\n\nAnd why it did not hold.\n';
-	assert.equal(withoutRepeatedHeading(authored, title), authored, 'an authored heading was removed');
-	assert.equal(composeBody({ body: authored, title }), authored, 'an authored heading was rewritten');
+	// A body with no heading is left whole, and the save composes one from the title.
+	assert.deepEqual(splitLeadingHeading('Just prose.', title), { heading: null, body: 'Just prose.' });
+	assert.equal(composeBody({ body: 'Just prose.', title, heading: null }), `# ${title}\n\nJust prose.`);
+});
 
-	// Neither is a near-miss: a heading that merely starts with the title stays.
-	const near = `# ${title}, not the branch name\n\nProse.\n`;
-	assert.equal(withoutRepeatedHeading(near, title), near, 'a longer heading was truncated to the title');
+test('a heading that was the title follows a retitle; a heading the writer authored does not', () => {
+	const title = 'Cache keys use the lockfile hash';
 
-	// And a memory with no title yet keeps whatever it has.
-	assert.equal(withoutRepeatedHeading('# Anything\n\nProse.', ''), '# Anything\n\nProse.');
+	// The title again, marks and all.
+	const repeated = splitLeadingHeading(`# Cache keys use the \`lockfile hash\`\n\nProse.\n`, title);
+	assert.equal(repeated.heading.repeatsTitle, true, 'a heading that only marks up the title was read as authored');
+	assert.equal(
+		composeBody({ ...repeated, title: 'Cache keys use the lockfile digest' }),
+		'# Cache keys use the lockfile digest\n\nProse.\n',
+		'the heading did not follow the new title',
+	);
+	assert.equal(
+		composeBody({ ...repeated, title }),
+		`# Cache keys use the \`lockfile hash\`\n\nProse.\n`,
+		'an unchanged title rewrote the heading it had been read as',
+	);
+
+	// Authored: kept in both directions, whatever the title does.
+	const authored = splitLeadingHeading('# What we tried first\n\nAnd why it did not hold.\n', title);
+	assert.equal(authored.heading.repeatsTitle, false);
+	assert.equal(
+		composeBody({ ...authored, title: 'A completely different title' }),
+		'# What we tried first\n\nAnd why it did not hold.\n',
+		'an authored heading was rewritten to match the title',
+	);
+
+	// And the Details sheet's one-word reading of each case.
+	assert.equal(headingReading({ ...repeated, title }).kind, 'title');
+	assert.equal(headingReading({ ...repeated, title: 'Retitled' }).kind, 'follows');
+	assert.equal(headingReading({ ...authored, title }).kind, 'authored');
+	assert.equal(headingReading({ heading: null, body: 'Prose.', title }).kind, 'composed');
+	assert.equal(headingReading({ ...authored, title }).line, '# What we tried first');
+});
+
+test('the one comparison the renderer and the editor share is narrow', () => {
+	assert.ok(saysTheSameThing('Cache keys use the `lockfile hash`', 'Cache keys use the lockfile hash'));
+	assert.ok(saysTheSameThing('**Cache keys** use the lockfile hash.', 'cache keys use the lockfile hash'));
+	assert.ok(!saysTheSameThing('Cache keys use the lockfile hash, not the branch name', 'Cache keys use the lockfile hash'));
+	assert.ok(!saysTheSameThing('', ''));
+	assert.ok(!saysTheSameThing(null, 'x'));
 });

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { cx } from './cx.mjs';
 
 /**
@@ -64,12 +66,15 @@ export function Display({ level = 2, size = 'md', children, className, ...rest }
 /**
  * "applies to every branch", "project Payments platform · every file".
  *
- * @param scope  the record's scope object.
- * @param axes   which axes to render, in order. Supplied by the caller, because which axes exist is
- *               a property of the loaded records rather than a list this repository writes down.
- * @param phrase (axis) => ({ label, every }) — the words for an axis and for its absence.
- * @param only   'set' renders ONLY the axes this memory actually narrows, falling back to the first
- *               axis's "every …" phrase when it narrows none.
+ * @param scope   the record's scope object.
+ * @param axes    which axes to render, in order. Supplied by the caller, because which axes exist
+ *                is a property of the loaded records rather than a list this repository writes down.
+ * @param phrase  (axis) => ({ label, every }) — the words for an axis and for its absence.
+ * @param only    'set' renders ONLY the axes this memory actually narrows, falling back to the
+ *                first axis's "every …" phrase when it narrows none.
+ * @param shorten (value) => string | null — the short form of a value for a headline, or null to
+ *                draw it whole. Supplied by the caller for the same reason `phrase` is; a screen
+ *                that reads a value in full passes nothing.
  *
  * WHY `only` EXISTS. Every axis is worth saying somewhere, and the complete reading is under "Where
  * it applies" on the same page. On the HEADLINE, "project kaleidoscope · every branch · every file"
@@ -78,7 +83,7 @@ export function Display({ level = 2, size = 'md', children, className, ...rest }
  * have it. File. I have no idea, and it's too long"). An unset axis is the default; the default is
  * what a headline leaves out.
  */
-export function ScopeLine({ scope, axes, phrase, only = null }) {
+export function ScopeLine({ scope, axes, phrase, only = null, shorten = null }) {
 	const narrowed = axes.filter((axis) => (scope?.[axis] ?? null) !== null);
 	let shown = axes;
 	if (only === 'set') {
@@ -99,26 +104,44 @@ export function ScopeLine({ scope, axes, phrase, only = null }) {
 						) : (
 							<>
 								<span className="faint">{copy.label} </span>
-								{/*
-								  THE VALUE IS CAPPED IN WIDTH, and this is the one place in the product
-								  where a string is shortened for looks. The owner read a scope line on the
-								  rejected build and said of the file axis: "I have no idea. And it's too
-								  long — it just goes on and on and on." A repository path is 60 characters
-								  that push the date, the type and the project off the line and tell a
-								  reader nothing they were looking for.
-								  It is the METADATA line, not an identifier being compared: the exact value
-								  is on hover, and it is shown in full and editable under "Where it applies"
-								  in the editor, which is the screen that exists to change it.
-								*/}
-								<span className="scope-value" title={String(value)}>
-									{value}
-								</span>
+								<ScopeValue value={value} short={shorten ? shorten(value) : null} />
 							</>
 						)}
 					</span>
 				);
 			})}
 		</span>
+	);
+}
+
+/**
+ * One scope value on a metadata line — whole, or cut short with the whole value one press away.
+ *
+ * The owner read a scope line on the rejected build and said of the file axis: "I have no idea.
+ * And it's too long — it just goes on and on and on." A repository path is sixty characters that
+ * push the date, the type and the project off the line and tell a reader nothing they were looking
+ * for, so the headline draws the short form the caller supplies.
+ *
+ * THE SHORT FORM IS A BUTTON, NOT A TOOLTIP. It used to be a CSS ellipsis with the whole value on
+ * hover, which is a value a touch screen cannot reach and a keyboard cannot ask for. Now the cut
+ * value is a control: press it and the whole value is drawn in its place, wrapping as it needs to,
+ * and press again to fold it. The dotted underline is what says there is more; the whole value is
+ * also shown in full and editable under "Where it applies", which is the screen that exists to
+ * change it.
+ */
+export function ScopeValue({ value, short = null }) {
+	const [open, setOpen] = useState(false);
+	if (short === null) return <span className="scope-value">{value}</span>;
+	return (
+		<button
+			type="button"
+			className={cx('scope-value', 'scope-value-cut', open && 'scope-value-open')}
+			aria-expanded={open}
+			aria-label={open ? undefined : `${short} — show the whole value`}
+			onClick={() => setOpen(!open)}
+		>
+			{open ? value : short}
+		</button>
 	);
 }
 

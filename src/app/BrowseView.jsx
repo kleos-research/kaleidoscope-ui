@@ -14,7 +14,7 @@ import {
 	wordFor,
 } from './browse-model.mjs';
 import { Markdown } from './markdown.jsx';
-import { axisCopy, SORTS } from './records.mjs';
+import { axisCopy, shortenScope, SORTS } from './records.mjs';
 import { ago, written } from './when.mjs';
 import {
 	BulkBar,
@@ -38,6 +38,7 @@ import {
 	OverflowMenu,
 	Preview,
 	PreviewBlock,
+	ScopeValue,
 	PreviewHead,
 	ReadingPair,
 	Readings,
@@ -553,21 +554,19 @@ function MemoryPreview({ row, relations, strippedFields, onOpen, onEdit, onMerge
 
 	// "correction · today · every branch" — the type, when it was written, and the honest reading of
 	// its scope. An omitted axis matches everything, so it is a phrase and never a blank.
-	// A VALUE IS AN ELEMENT, NOT A STRING, so a repository path can be capped in width. Joined as
-	// text, a scope line reading `file infra/staging/restore.nightly.yaml` pushed the type and
-	// the date off the line — which is the reading the owner gave of the rejected build: "it's too
-	// long, it just goes on and on and on". `.scope-value` caps it and keeps the whole value on
-	// hover.
+	// A VALUE IS AN ELEMENT, NOT A STRING, so a repository path can be cut short. Joined as text, a
+	// scope line reading `file infra/staging/restore.nightly.yaml` pushed the type and the date off
+	// the line — which is the reading the owner gave of the rejected build: "it's too long, it just
+	// goes on and on and on". `shortenScope` keeps the end that names the file, and `ScopeValue`
+	// draws the cut form as a control that shows the whole value on a press — not on hover, which a
+	// touch screen does not have.
 	const scopeWords = Object.keys(semantic.scope ?? {})
 		.filter((axis) => axis !== 'project')
 		.map((axis) => {
 			const value = semantic.scope[axis];
 			return value ? (
 				<span key={axis}>
-					{wordFor(axis)}{' '}
-					<span className="scope-value" title={String(value)}>
-						{value}
-					</span>
+					{wordFor(axis)} <ScopeValue value={value} short={shortenScope(value)} />
 				</span>
 			) : (
 				<span key={axis}>{axisCopy(axis).every}</span>

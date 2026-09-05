@@ -25,7 +25,7 @@ export { cx } from './cx.mjs';
 
 /* Controls */
 export { Button, IconButton } from './button.jsx';
-export { Field, FindInput, Input, Textarea, TitleInput, UnsetField } from './field.jsx';
+export { Field, FindInput, Input, ProseField, Textarea, TitleInput, UnsetField } from './field.jsx';
 export { Select, SelectGroup, SelectItem, SelectSeparator } from './select.jsx';
 export { Combobox, isNewValue, matchOptions } from './combobox.jsx';
 export { Checkbox, ChoiceRow } from './choice.jsx';
@@ -90,7 +90,18 @@ export { AskBox, AskLayout, RankedResult, ResultBlock, ResultList } from './sear
 
 /* Marks and text */
 export { Badge, Chip, EvidenceTag, RankBadge, RelationBadge } from './badge.jsx';
-export { Card, Display, Eyebrow, Identifier, KindLegend, Meter, NotRecorded, Rule, ScopeLine } from './text.jsx';
+export {
+	Card,
+	Display,
+	Eyebrow,
+	Identifier,
+	KindLegend,
+	Meter,
+	NotRecorded,
+	Rule,
+	ScopeLine,
+	ScopeValue,
+} from './text.jsx';
 export * as Icon from './icons.jsx';
 
 /* The states a screen can be in instead of itself */

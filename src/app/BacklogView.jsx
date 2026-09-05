@@ -186,7 +186,7 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 		<div className="page">
 			<PageHead
 				title="Needs a decision"
-				subtitle={`${backlog.counts.findings.toLocaleString()} outstanding · ${backlog.ranking.short}`}
+				subtitle={`${backlog.counts.findings.toLocaleString()} things to decide · ordered by ${backlog.ranking.short}`}
 				actions={
 					onShowGraph ? (
 						<Button onClick={onShowGraph}>See these names</Button>
@@ -211,17 +211,20 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 				title="Everything else"
 				count={groups.reduce((total, group) => total + group.counts.findings, 0).toLocaleString()}
 			>
-				{/*
-				  THE ORDER, IN THE SAME WORDS THE SORT USED. A list in an unexplained order is read as
-				  a priority list, and then the bottom of it is never read at all. Saying the rule is
-				  cheaper than earning that trust, and it is checkable: both sentences come from
-				  `RANKING`, beside the comparator that implements them.
-				*/}
-				<Note>
-					<strong>The order:</strong> {backlog.ranking.sentence} {backlog.ranking.groups}
-				</Note>
-
 				<DetailRows>
+					{/*
+					  THE ORDER, IN THE SAME WORDS THE SORT USED. A list in an unexplained order is read
+					  as a priority list, and then the bottom of it is never read at all. Saying the rule
+					  is cheaper than earning that trust, and it is checkable: both sentences come from
+					  `RANKING`, beside the comparator that implements them. The subtitle carries the
+					  short form; the whole rule is one closed row, first, so it is read by whoever asks
+					  and costs nothing to whoever does not.
+					*/}
+					<DetailRow label="How this list is ordered">
+						<p className="copy">{backlog.ranking.sentence}</p>
+						<p className="copy">{backlog.ranking.groups}</p>
+					</DetailRow>
+
 					{groups.map((group, index) => (
 						<DetailRow
 							key={group.kind.id}

@@ -2573,9 +2573,19 @@
 }
 
 .runbar-what {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
 	font-size: var(--text-ui);
 	color: var(--muted);
 	min-width: 0;
+}
+
+/* What the confirmation says about getting this back, in the bar and never scrolled away from. */
+.runbar-note {
+	font-size: var(--text-small);
+	line-height: var(--leading-snug);
+	color: var(--warn);
 }
 
 .runbar-actions {
@@ -2748,23 +2758,84 @@
 }
 
 /*
- * The words. Borderless and full-height, because this is not a field on a form — it is the memory,
- * being written where it will be read, at the size the reading screen will read it at.
+ * THE WORDS, drawn as EditB draws them: Newsreader at 17px on a 1.72 leading, at the width the
+ * memory's own page reads them at, with a caret in the accent.
+ *
+ * Two layers in one grid cell — see `ProseField`. Every property that moves a glyph is set here,
+ * on the field, and both layers inherit it; the two rules under this one take away only what a
+ * user agent adds to a textarea that a div does not have. A value set on one layer and not the
+ * other is the bug this shape exists to make impossible.
  */
-.edit-prose {
-	flex: 1;
-	min-height: 0;
+.prose-field {
+	display: grid;
+	width: 100%;
+	max-width: var(--column-read);
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-prose);
+	font-size: var(--prose-edit);
+	line-height: var(--leading-prose);
+	letter-spacing: normal;
+	color: var(--text);
+}
+
+.prose-field > * {
+	grid-area: 1 / 1;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	margin: 0;
+	padding: var(--space-2) 0 var(--space-14);
 	border: 0;
 	border-radius: 0;
 	background: transparent;
-	font-size: var(--prose-lg);
-	padding: var(--space-2) var(--pane-pad, var(--space-14)) var(--space-14);
-	resize: none;
+	font: inherit;
+	letter-spacing: inherit;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	word-break: normal;
+	hyphens: none;
+	tab-size: 4;
 }
 
-.edit-prose:focus {
+/*
+ * The control. Its text is transparent because the drawn copy under it is the text; its caret is
+ * not, and is the one accent mark on the pane. It never scrolls itself and never resizes — the cell
+ * is as tall as the words, and the pane around it does the scrolling.
+ */
+.prose-field-input {
+	color: transparent;
+	caret-color: var(--accent);
+	resize: none;
+	overflow: hidden;
+	outline: none;
+	min-height: 0;
+}
+
+.prose-field-input::placeholder {
+	color: var(--faint);
+}
+
+.prose-field-input:focus {
 	border: 0;
 	margin: 0;
+	outline: none;
+}
+
+/* The drawn copy: the same words in ink, under the pointer's reach so the textarea takes the click. */
+.prose-field-ink {
+	pointer-events: none;
+	user-select: none;
+	color: var(--text);
+}
+
+/*
+ * A character that is Markdown syntax rather than a word — `#`, `**`, a backtick, `- `, a link's
+ * target. Drawn in `--faint`, exactly as EditB draws the pane's own label, so the marks sit behind
+ * the prose without leaving it. Never hidden: a writer saving a Markdown document needs to see the
+ * mechanism, and a mark that vanished would put the caret one glyph out from the words.
+ */
+.md-mark {
+	color: var(--faint);
 }
 
 /* The side pane's fixed measure: what an agent acts on, beside the words rather than under them. */
@@ -3842,17 +3913,38 @@
 }
 
 /*
- * A SCOPE VALUE IN A METADATA LINE. See `ScopeLine` in `ui/text.jsx` for why this is the one string
- * in the product that is allowed to end in an ellipsis. `28ch` is about the width of a two-segment
- * path, which is where a reader stops reading a path and starts skipping it.
+ * A SCOPE VALUE IN A METADATA LINE. See `ScopeValue` in `ui/text.jsx`: the short form is computed
+ * by the screen, not by an ellipsis here, and it is a BUTTON that draws the whole value in its place
+ * when pressed — so the whole value is reachable from a touch screen and a keyboard, not only from
+ * a pointer that can hover. Whole or cut, it wears the line's own face; the dotted rule is the only
+ * thing that says there is more.
  */
 .scope-value {
-	display: inline-block;
-	max-width: 28ch;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	vertical-align: bottom;
+	display: inline;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+
+.scope-value-cut {
+	cursor: pointer;
+	text-decoration: underline dotted var(--line-strong);
+	text-underline-offset: 3px;
+}
+
+.scope-value-cut:hover {
+	color: var(--text);
+	text-decoration-color: var(--faint);
+}
+
+.scope-value-open {
+	text-decoration: none;
+	color: var(--text);
 }
 
 /* The scope phrase and the separator in front of it are one wrapping unit. See `MemoryDetail`. */
@@ -3874,17 +3966,6 @@
 }
 
 /* ---------------------------------------------------------------- the merge screens */
-
-/*
- * The line that says which two memories are being merged, above the composition.
- *
- * It is a `.page` of its own so it is held to the same measure as the panel under it — pinned to
- * the window's left edge above a centred column, it reads as two screens rather than one — and it
- * carries no bottom padding because the composition immediately follows it.
- */
-.merge-context {
-	padding-bottom: 0;
-}
 
 /* The tick column of a table whose rows are chosen rather than read. As narrow as its control. */
 .table-tick {
@@ -4148,4 +4229,62 @@
 	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- a merge, composed */
+
+/*
+ * THE FACTS OF A MERGE, in the rail beside the words, each one a tick.
+ *
+ * The composition wears ReadB's shape — the words in the column, what the agent acts on in the
+ * rail — because a merged memory is a memory, and a reader checking one should be looking at the
+ * object they read every day rather than at a table. The tick is what this rail has that the
+ * reading rail does not: every fact can be dropped before the write, and a dropped one stays on the
+ * page, struck through, so the list still says what the two memories carried.
+ */
+.merge-facts {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.merge-fact {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-7);
+}
+
+.merge-fact .checkbox {
+	flex-shrink: 0;
+	margin-top: 3px;
+}
+
+.merge-fact .fact {
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-snug);
+}
+
+.merge-fact-dropped .fact {
+	color: var(--faint);
+	text-decoration: line-through;
+	text-decoration-color: var(--line-strong);
+}
+
+/* Which of the two memories wrote it. A word, not a colour: three sources is too many hues. */
+.merge-fact-from {
+	font-size: var(--text-caption);
+	color: var(--faint);
+	white-space: nowrap;
+	margin-left: auto;
+	padding-left: var(--space-6);
+}
+
+/* The one control in the head of the composition: name a different second memory. */
+.reading-meta .btn-quiet {
+	height: auto;
+	padding: 0;
+	font-size: inherit;
 }

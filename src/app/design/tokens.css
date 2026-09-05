@@ -101,6 +101,7 @@
 	--prose-sm: 15.5px; /* a quoted memory inside another screen */
 	--prose-md: 16.5px; /* the reading size in a two-pane preview */
 	--prose-lg: 17.5px; /* the reading size on the memory's own page */
+	--prose-edit: 17px; /* the words, being written: EditB draws the editor's pane at this size */
 
 	--display-xs: 21px;
 	--display-sm: 24px;

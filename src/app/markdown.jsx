@@ -19,6 +19,9 @@
  * the two places that would have broken it.
  */
 
+import { saysTheSameThing } from './editor-model.mjs';
+import { BULLET, FENCE, HEADING, INLINE, ORDERED, QUOTE, RULE } from './markdown-syntax.mjs';
+
 /** Only these become a real link. Everything else is shown, not linked. */
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:'];
 
@@ -32,15 +35,6 @@ function safeHref(raw) {
 		return null;
 	}
 }
-
-/**
- * The four inline constructs, in one pass.
- *
- * Every alternative below is anchored on a NEGATED character class, so none of them can backtrack:
- * a pathological body cannot make this loop take super-linear time. That is worth the slightly
- * blunter matching — a nested emphasis renders as literal asterisks rather than hanging the tab.
- */
-const INLINE = /`([^`\n]+)`|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\n]+)\*|\[([^\]\n]*)\]\(([^)\s]+)\)/g;
 
 function renderInline(source, keyPrefix) {
 	const out = [];
@@ -83,13 +77,6 @@ function renderInline(source, keyPrefix) {
 	if (cursor < source.length) out.push(source.slice(cursor));
 	return out;
 }
-
-const HEADING = /^(#{1,6})\s+(.*)$/;
-const BULLET = /^\s{0,3}[-*+]\s+(.*)$/;
-const ORDERED = /^\s{0,3}(\d{1,9})[.)]\s+(.*)$/;
-const RULE = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
-const QUOTE = /^\s{0,3}>\s?(.*)$/;
-const FENCE = /^\s{0,3}(```|~~~)(.*)$/;
 
 /**
  * Block-level parse. Deliberately small: headings, paragraphs, lists, fenced and indented code,
@@ -193,28 +180,14 @@ export function parseMarkdown(source) {
 	return blocks;
 }
 
-/**
+/*
  * The write contract asks a memory body to open with an H1, and that H1 is almost always the
  * memory's title said again. Every reading mockup draws the title once, in Newsreader, above the
  * words — so a page that also renders the body's own H1 shows the same sentence twice in two sizes,
- * which reads as a rendering fault rather than as a convention.
- *
- * The test is deliberately narrow: only the FIRST block, only a heading, and only when it says the
- * same thing as the title once the writer's inline marks are taken off. A body whose opening
- * heading differs from the title is saying something the title does not, and it is kept.
+ * which reads as a rendering fault rather than as a convention. The first block is dropped when it
+ * says the same thing as the title, by the ONE comparison the editor also uses to decide whether a
+ * heading is the title again: see `saysTheSameThing` in `editor-model.mjs`.
  */
-function saysTheSameThing(a, b) {
-	if (typeof a !== 'string' || typeof b !== 'string') return false;
-	const flatten = (text) =>
-		text
-			.replace(/[`*_]/g, '')
-			.replace(/\s+/g, ' ')
-			.trim()
-			.replace(/[.:;,]+$/, '')
-			.toLowerCase();
-	const left = flatten(a);
-	return left.length > 0 && left === flatten(b);
-}
 
 /**
  * @param {{source: string, headingOffset?: number, title?: string｜null}} props

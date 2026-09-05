@@ -120,3 +120,35 @@ test('two rows this app cannot date compare without producing NaN', () => {
 	);
 	assert.equal(timeBucket(null, NOW).key, 'undated');
 });
+
+// ---------------------------------------------------------------------------------------------
+// The one string the product shortens, and the rule it keeps
+// ---------------------------------------------------------------------------------------------
+//
+// A scope value on a headline used to be cut by a CSS ellipsis with the whole value on hover. It
+// is now cut in code — from the front of a path, whole segments at a time, so the part that names
+// the file survives — and drawn as a control that shows the whole value on a press. The shortener
+// is the half that can be driven here; the control's job is only to draw what it returns.
+
+test('a scope value is cut from the end that says least, and a short one is not cut at all', async () => {
+	const { shortenScope } = await import('../src/app/records.mjs');
+
+	assert.equal(shortenScope('ferry-timetable'), null, 'a value that fits was shortened');
+	assert.equal(shortenScope('a'.repeat(28)), null, 'a value exactly at the limit was shortened');
+
+	// A path keeps its tail: the file, then as many parent segments as fit under the limit.
+	assert.equal(shortenScope('services/harbour/timetable/crossings/winter.yaml'), '…/crossings/winter.yaml');
+	assert.equal(shortenScope('services/harbour/timetable/crossings/winter.yaml', 20), '…/winter.yaml');
+	assert.equal(shortenScope('services/harbour/timetable/crossings/winter.yaml', 12), '…/winter.yaml');
+	assert.equal(
+		shortenScope('deploy/a-file-name-longer-than-the-whole-limit.yaml'),
+		'…/a-file-name-longer-than-the-whole-limit.yaml',
+		'a tail longer than the limit is still the tail — it is the part that names the file',
+	);
+
+	// Anything that is not a path is cut from the end, with the cut marked.
+	const long = 'the winter timetable for the north jetty crossings';
+	const cut = shortenScope(long);
+	assert.ok(cut.endsWith('…') && cut.length <= 28, `cut to ${JSON.stringify(cut)}`);
+	assert.ok(long.startsWith(cut.slice(0, -1)), 'the kept part is not the start of the value');
+});

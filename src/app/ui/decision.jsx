@@ -94,10 +94,19 @@ export function Rewrite({ before, after }) {
  * Sticky inside the flow rather than fixed to the viewport, because a bar fixed to the viewport
  * covers the last row of the table above it — and on this screen the last row is a cluster.
  */
-export function RunBar({ what, children, className }) {
+export function RunBar({ what, note = null, children, className }) {
 	return (
 		<div className={cx('runbar', className)}>
-			<div className="runbar-what">{what}</div>
+			<div className="runbar-what">
+				{what}
+				{/*
+				  The standing condition of the write, under the sentence that names it: what the
+				  confirmation for this action says about getting it back. It is here rather than in a
+				  panel above the list because the bar is the one thing on screen at the moment the
+				  button is pressed, and a sentence that scrolled away is one the reader met once.
+				*/}
+				{note ? <div className="runbar-note">{note}</div> : null}
+			</div>
 			<div className="runbar-actions">{children}</div>
 		</div>
 	);

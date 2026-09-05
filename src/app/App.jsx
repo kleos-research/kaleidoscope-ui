@@ -748,7 +748,9 @@ export function App() {
 					*/
 					<div className="screen">
 						{report ? (
-							<RemovalReport report={report} onBack={backToList} onOpen={openMemory} />
+							<div className="prompt-stage">
+								<RemovalReport report={report} onBack={backToList} onOpen={openMemory} />
+							</div>
 						) : (
 							<RemovalLimits
 								session={session}
@@ -800,22 +802,24 @@ export function App() {
 					*/
 					report ? (
 						<div className="screen">
-							<RemovalReport
-								report={report}
-								onBack={backToList}
-								onOpen={openMemory}
-								onEscalate={() => showLimits(null)}
-							/>
+							<div className="prompt-stage">
+								<RemovalReport
+									report={report}
+									onBack={backToList}
+									onOpen={openMemory}
+									onEscalate={() => showLimits(null)}
+								/>
+							</div>
 						</div>
 					) : confirm ? (
 						/*
-						  HELD TO THE PAGE'S OWN MEASURE. `.prompt` is 620px wide and has no margin of its
-						  own, so dropped straight into the scroll region it sat against the window's left
-						  edge while every screen it appears over is a centred column — which reads as a
-						  panel belonging to something else rather than to the thing being removed.
+						  CENTRED, ON ITS OWN STAGE. `.prompt` is 620px wide and has no margin of its own,
+						  so dropped straight into the scroll region it sat against the window's left edge;
+						  in a page column it sat against the column's. Standing alone where the list was,
+						  the question is the page, and the page is centred.
 						*/
 						<div className="screen">
-							<div className="page page-narrow">
+							<div className="prompt-stage">
 								{/*
 								  A run that never got an answer is NOT a run that did nothing, and this is the
 								  message that says so. Telling the user it failed would invite them to press
@@ -902,19 +906,26 @@ export function App() {
 							) : null}
 
 							{confirm ? (
-								/* See the note on the other render of this: the prompt is 620px and unmargined. */
-								<div className="page page-narrow">
-									<RemovalConfirm
-										selection={confirm.selection}
-										busy={removing}
-										onCancel={() => setConfirm(null)}
-										onConfirm={() => runRemoval(confirm.selection)}
-										onEscalate={() =>
-											showLimits(
-												confirm.selection.length === 1 ? confirm.selection[0].memory_id : null,
-											)
-										}
-									/>
+								/*
+								  ABOVE THE MEMORY IT IS ABOUT, on the memory's own column. The question takes
+								  the reading column's left edge and measure, so it and the title under it share
+								  a line down the page; a 620px panel at a different centre read as a panel
+								  belonging to something else rather than to the thing being removed.
+								*/
+								<div className="reading-inner reading-inner-ask">
+									<div className="reading-column">
+										<RemovalConfirm
+											selection={confirm.selection}
+											busy={removing}
+											onCancel={() => setConfirm(null)}
+											onConfirm={() => runRemoval(confirm.selection)}
+											onEscalate={() =>
+												showLimits(
+													confirm.selection.length === 1 ? confirm.selection[0].memory_id : null,
+												)
+											}
+										/>
+									</div>
 								</div>
 							) : null}
 
@@ -925,12 +936,14 @@ export function App() {
 							  with a row that is simply missing.
 							*/}
 							{report ? (
-								<RemovalReport
-									report={report}
-									onBack={backToList}
-									onOpen={openMemory}
-									onEscalate={() => showLimits(null)}
-								/>
+								<div className="prompt-stage">
+									<RemovalReport
+										report={report}
+										onBack={backToList}
+										onOpen={openMemory}
+										onEscalate={() => showLimits(null)}
+									/>
+								</div>
 							) : route.name === 'search' ? (
 								/*
 								  THE SEARCH SCREEN, and the ONE place in this product that can reach the

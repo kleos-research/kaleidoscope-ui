@@ -13,11 +13,13 @@ import {
 	emptyBuffer,
 	emptyEntityRow,
 	emptyFactRow,
+	headingReading,
 	knownName,
 	mentionedSurfaces,
 	refusalsByRow,
 	refusedSurfaces,
 	saveBlockers,
+	splitLeadingHeading,
 	toSemanticDelta,
 	undeclaredSurfaces,
 	validUntilDate,
@@ -25,6 +27,7 @@ import {
 	withValidUntil,
 } from './editor-model.mjs';
 import { useFocusActions } from './focus-actions.mjs';
+import { markSyntax } from './markdown-syntax.mjs';
 import { axisCopy } from './records.mjs';
 import { deniedRelations, reservedRelationAdvice } from './reserved-relations.mjs';
 import {
@@ -48,6 +51,7 @@ import {
 	PaneFoot,
 	PaneHead,
 	Prompt,
+	ProseField,
 	PromptList,
 	PromptNote,
 	PromptSentence,
@@ -122,6 +126,14 @@ const AMBER_AT = 0.85;
 const UNSET = '\u0000unset';
 
 const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/**
+ * The body a save sends, from a buffer: the prose in the pane with its heading put back — the one
+ * that was split off at load, or one composed from the title. Every reading of "the words" below
+ * goes through this, so the byte counter, the drift detector and the payload all measure the same
+ * bytes.
+ */
+const composeOf = (buffer) => composeBody({ body: buffer.body, title: buffer.title, heading: buffer.heading });
 
 /** A stable, order-independent signature of the structure, for "has anything but prose changed". */
 function structureSignature(buffer) {
@@ -320,13 +332,24 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 		[buffer],
 	);
 
+	/*
+	  THE WORDS AN AGENT WILL READ, not only the words in the pane. The heading never reaches the
+	  pane — see `splitLeadingHeading` — so it is composed back on before either half is measured,
+	  and the drift detector compares what the save would send with what the load actually held.
+	*/
+	const composed = useMemo(() => (buffer ? composeOf(buffer) : ''), [buffer]);
+	const composedBaseline = useMemo(() => (baseline ? composeOf(baseline) : ''), [baseline]);
+
 	const drifted = useMemo(
 		() =>
 			buffer && baseline
-				? driftingFactRows({ body: buffer.body, baselineBody: baseline.body, facts: buffer.facts })
+				? driftingFactRows({ body: composed, baselineBody: composedBaseline, facts: buffer.facts })
 				: new Map(),
-		[buffer, baseline],
+		[buffer, baseline, composed, composedBaseline],
 	);
+
+	/** Which characters of the prose are Markdown syntax, for the pane to draw in the quieter ink. */
+	const segments = useMemo(() => markSyntax(buffer?.body ?? ''), [buffer?.body]);
 
 	const reservedRows = useMemo(() => {
 		if (!buffer) return new Map();
@@ -338,10 +361,6 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 		return hits;
 	}, [buffer, denied]);
 
-	const composed = useMemo(
-		() => (buffer ? composeBody({ body: buffer.body, title: buffer.title }) : ''),
-		[buffer],
-	);
 	const bytes = useMemo(() => bodyBytes(composed), [composed]);
 	const byteCeiling = session?.contract?.limits?.cli_request_bytes ?? null;
 	const overCeiling = Boolean(byteCeiling && bytes > byteCeiling);
@@ -560,9 +579,11 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 			// Committed. The version has moved, so a follow-up save — including a re-save from a
 			// partial receipt — guards against the version this write returned, not the loaded one.
 			if (write.version_id) setExpectedVersion(write.version_id);
+			// What is on disk now is the composed body, so the baseline is that body split the way a
+			// fresh load would split it: the heading beside the prose, never in it.
 			const savedBuffer = {
 				...sentBuffer,
-				body: composeBody({ body: sentBuffer.body, title: sentBuffer.title }),
+				...splitLeadingHeading(composeOf(sentBuffer), sentBuffer.title),
 			};
 			setBaseline(savedBuffer);
 			setBuffer((current) => (current === sentBuffer ? savedBuffer : current));
@@ -631,7 +652,7 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 			setResult(null);
 			try {
 				const { delta } = toSemanticDelta(sent, fields, projectOntoContract);
-				const content_md = composeBody({ body: sent.body, title: sent.title });
+				const content_md = composeOf(sent);
 				const submitted = delta.facts?.length ?? 0;
 
 				const body = creating
@@ -873,17 +894,24 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 			) : null}
 
 			<div className="screen-split">
-				{/* LEFT: exactly one thing — the words. */}
+				{/*
+				  LEFT: exactly one thing — the words. The heading is not among them: it is the title,
+				  edited above as its own H1, and it is composed back onto the prose at save. What the
+				  pane holds is everything after it, drawn as EditB draws it — a document with a caret
+				  in it — with the Markdown marks in the quieter ink so the prose reads as prose.
+				*/}
 				<section className="pane pane-bordered pane-reading" aria-label="The words">
 					<PaneHead label="The words" />
-					<textarea
-						className="textarea textarea-prose edit-prose"
-						value={buffer.body}
-						spellCheck="true"
-						aria-label="The memory, in your own words"
-						placeholder="What happened, and what it means for next time."
-						onChange={(event) => patch({ body: event.target.value })}
-					/>
+					<PaneBody>
+						<ProseField
+							value={buffer.body}
+							segments={segments}
+							spellCheck="true"
+							aria-label="The memory, in your own words"
+							placeholder="What happened, and what it means for next time."
+							onChange={(event) => patch({ body: event.target.value })}
+						/>
+					</PaneBody>
 					{overCeiling || (byteCeiling && bytes > byteCeiling * AMBER_AT) ? (
 						<PaneFoot className={overCeiling ? 'warn-text' : undefined}>
 							{overCeiling
@@ -1000,7 +1028,7 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 					record={record}
 					creating={creating}
 					expectedVersion={expectedVersion}
-					headingComposed={composed !== buffer.body}
+					heading={headingReading(buffer)}
 					onPatch={patch}
 					onPatchEntity={patchEntity}
 					onAddEntity={() => requestEntity('')}
@@ -1368,7 +1396,7 @@ function DetailsSheet({
 	record,
 	creating,
 	expectedVersion,
-	headingComposed,
+	heading,
 	onPatch,
 	onPatchEntity,
 	onAddEntity,
@@ -1558,12 +1586,36 @@ function DetailsSheet({
 							the words and the structure together, in one call. There is no body-only write, which
 							is why the facts are beside the words rather than behind a tab.
 						</ReadingPair>
-						{headingComposed ? (
-							<ReadingPair term="Heading">
-								a <code className="identifier">#</code> line is composed from the title, because the
-								engine refuses a note that does not begin with one. Your words are not changed.
-							</ReadingPair>
-						) : null}
+						{/*
+						  WHAT HAPPENS TO THE NOTE'S FIRST LINE. The pane never shows it — the title above is
+						  the H1 — so this is where the save says what it will write there: the title, or
+						  the heading the note came with, kept as it was.
+						*/}
+						<ReadingPair term="Heading">
+							{heading.kind === 'composed' ? (
+								<>
+									a <code className="identifier">#</code> line is composed from the title, because
+									the engine refuses a note that does not begin with one. Your words are not
+									changed.
+								</>
+							) : heading.kind === 'title' ? (
+								<>
+									the note opens with the title as a <code className="identifier">#</code> line. It
+									is written back exactly as it came, and it follows the title if you change it.
+								</>
+							) : heading.kind === 'follows' ? (
+								<>
+									the note opened with the old title as a <code className="identifier">#</code>{' '}
+									line. It follows the title, so the new one is written in its place.
+								</>
+							) : (
+								<>
+									the note opens with its own heading —{' '}
+									<code className="identifier">{heading.line}</code> — which is not the title. It is
+									kept exactly as written; changing the title does not rewrite it.
+								</>
+							)}
+						</ReadingPair>
 						{carriedKeys.length > 0 ? (
 							<ReadingPair term="Carried through">
 								{carriedKeys.join(', ')} — this version has no control for{' '}

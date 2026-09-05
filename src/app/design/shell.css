@@ -454,3 +454,48 @@
 	gap: var(--space-6);
 	padding-top: var(--space-2);
 }
+
+/*
+ * WHERE AN INLINE QUESTION STANDS WHEN IT STANDS ALONE.
+ *
+ * A removal confirmation and its report are `Prompt`s: 620px wide, no margin of their own, and
+ * designed to stand ON a page rather than over it. On the list route they replace the list, and a
+ * 620px panel against the left edge of a 1080px column read as a panel belonging to something else.
+ * This is the page column with the panel centred in it — one class, so the two places the flow
+ * stands cannot centre it two different ways.
+ */
+.prompt-stage {
+	width: min(var(--column-page), 100%);
+	margin: 0 auto;
+	padding: var(--space-18) var(--space-20) var(--space-20);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-13);
+}
+
+.prompt-stage > .state {
+	margin-block: 0;
+}
+
+/*
+ * The same question, asked ABOVE a memory being read. It takes the reading column's own left edge
+ * and its measure, so the question and the title under it share a line down the page, and it gives
+ * up its bottom padding because the memory's own layout supplies the gap.
+ *
+ * `.reading-inner` centres whatever it holds, and it holds the column AND the rail; this holds the
+ * column alone, so centring it would put the question 208px to the right of the title under it.
+ * The left padding is the memory's own arithmetic — half of what the column, the gap and the rail
+ * leave over — and it applies only where the rail sits beside the column. Under 1100px the memory
+ * stacks and centres, and so does this.
+ */
+.reading-inner-ask {
+	padding-bottom: 0;
+}
+
+@media (min-width: 1101px) {
+	.reading-inner-ask {
+		justify-content: flex-start;
+		padding-left: calc((100% - var(--column-read) - var(--space-22) - var(--rail-facts)) / 2);
+	}
+}

@@ -325,3 +325,33 @@ export function withinProject(rows, project) {
 		return value === null || value === project;
 	});
 }
+
+/**
+ * A scope value short enough for a metadata line, or `null` when the whole value already is.
+ *
+ * THE ONE STRING IN THIS PRODUCT THAT IS SHORTENED, and it is shortened here, in code, rather than
+ * by an ellipsis in a stylesheet — so the part that is kept is the part that says something. A
+ * repository path is cut from the front, whole segments at a time, because its tail is the file
+ * and its head is the tree every file in the project shares: `…/crossings/winter.yaml` tells a
+ * reader which file, and `infra/staging/restore.ni…` tells them which directory. Anything else is
+ * cut from the end.
+ *
+ * The screen that draws the short form draws it as a control that shows the whole value on a
+ * press, which is what makes cutting it honest: nothing is recoverable only by hovering.
+ */
+export function shortenScope(value, max = 28) {
+	const whole = String(value ?? '');
+	if (whole.length <= max) return null;
+
+	const segments = whole.split('/').filter((part) => part.length > 0);
+	if (segments.length > 1) {
+		let tail = segments[segments.length - 1];
+		for (let index = segments.length - 2; index >= 1; index -= 1) {
+			const longer = `${segments[index]}/${tail}`;
+			if (longer.length + 2 > max) break;
+			tail = longer;
+		}
+		return `…/${tail}`;
+	}
+	return `${whole.slice(0, max - 1).trimEnd()}…`;
+}

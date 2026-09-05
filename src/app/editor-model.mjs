@@ -70,11 +70,14 @@ export function bufferFromRecord(record) {
 		if (!EDITED_KEYS.includes(key)) carried[key] = value;
 	}
 
+	const { heading, body } = splitLeadingHeading(record?.content_md, delta.title);
+
 	return {
 		title: text(delta.title),
 		memory_type: text(delta.memory_type),
 		scope: { ...(delta.scope ?? {}) },
-		body: withoutRepeatedHeading(record?.content_md, delta.title),
+		body,
+		heading,
 		facts: (delta.facts ?? []).map((fact) => factRow(fact)),
 		entities: (delta.entities ?? []).map((entity) => ({
 			id: newRowId(),
@@ -127,6 +130,7 @@ export const emptyBuffer = (axes = []) => ({
 	memory_type: '',
 	scope: Object.fromEntries(axes.map((axis) => [axis, null])),
 	body: '',
+	heading: null,
 	facts: [emptyFactRow()],
 	entities: [],
 	carried: {},
@@ -140,53 +144,121 @@ export const emptyBuffer = (axes = []) => ({
 const LEADING_HEADING = /^#\s+\S/;
 
 /**
- * Take the heading off the words WHEN IT IS THE TITLE AGAIN, and only then.
+ * Whether two strings say the same thing once a writer's inline marks are taken off.
  *
- * The editor draws the title as an H1 across the top of both panes, so a body that opens with the
- * same sentence shows it twice — once as the memory's title and once as `# ` and the same words, in
- * the pane that is supposed to hold the prose. The approved design draws paragraphs there.
- *
- * IT IS EXACT, IN BOTH DIRECTIONS, OR IT DOES NOT HAPPEN. Only the two shapes `composeBody`
- * produces are removed — `# title\n\nrest` and a heading-only `# title\n` — so putting the heading
- * back reproduces the loaded bytes character for character. A body whose heading is authored prose
- * that DIFFERS from the title is left completely alone, because in a meaningful share of real
- * memories that difference is deliberate, and an editor that quietly rewrote it would be changing
- * something the user never touched.
+ * The one comparison the renderer and the editor share. A body's opening heading is almost always
+ * the memory's title said again — often with a backtick or two around a name the title spells
+ * plain — and both screens have to recognise that as "the title again" rather than as a different
+ * sentence. It is deliberately narrow: marks, whitespace, trailing punctuation and case, and nothing
+ * else. "Cache keys use the lockfile hash, not the branch name" is NOT the same thing as "Cache keys
+ * use the lockfile hash", and a looser rule would swallow the second half of a heading.
  */
-export function withoutRepeatedHeading(body, title) {
-	const words = text(body);
-	const heading = trimmed(title);
-	if (heading.length === 0) return words;
-	if (words === `# ${heading}\n`) return '';
-	const prefix = `# ${heading}\n\n`;
-	return words.startsWith(prefix) ? words.slice(prefix.length) : words;
+export function saysTheSameThing(a, b) {
+	if (typeof a !== 'string' || typeof b !== 'string') return false;
+	const flatten = (value) =>
+		value
+			.replace(/[`*_]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.replace(/[.:;,]+$/, '')
+			.toLowerCase();
+	const left = flatten(a);
+	return left.length > 0 && left === flatten(b);
 }
+
+/**
+ * Take the leading heading off the words, WHATEVER IT SAYS, and remember it whole.
+ *
+ * The editor draws the title as an H1 across the top of both panes and the words under it, so a
+ * body that opens with `# ` and a sentence is showing the reader a second title in raw Markdown, in
+ * the pane the approved design draws as paragraphs. The heading therefore never reaches the pane:
+ * the pane holds everything after it, and the heading travels beside the buffer as `heading`.
+ *
+ * IT IS KEPT AS BYTES, NOT AS WORDS. `prefix` is the exact run of characters that came before the
+ * prose — the line, its newline, and the one blank line the write contract's shape puts under it —
+ * so that putting it back reproduces the loaded body character for character. A prose-only save
+ * must not write a version whose only change is one the user did not make, and the difference
+ * between `# T\n\n` and `# T\n` is exactly that kind of change.
+ *
+ * `repeatsTitle` is the reading that decides what happens on a retitle; see `composeBody`. It is
+ * taken here, against the title the record was loaded with, because that is the only moment both
+ * are known to be the stored pair.
+ *
+ * A body that does not begin with a heading is returned as it is, with `heading: null`, and the
+ * save composes one from the title.
+ */
+export function splitLeadingHeading(body, title) {
+	const words = text(body);
+	if (!LEADING_HEADING.test(words)) return { heading: null, body: words };
+
+	const newline = words.indexOf('\n');
+	let end = newline === -1 ? words.length : newline + 1;
+	if (words[end] === '\n') end += 1;
+	const line = words.slice(0, newline === -1 ? words.length : newline);
+
+	return {
+		heading: {
+			prefix: words.slice(0, end),
+			line,
+			of: trimmed(title),
+			repeatsTitle: saysTheSameThing(line.replace(/^#\s+/, ''), trimmed(title)),
+		},
+		body: words.slice(end),
+	};
+}
+
+/** A heading line and the words under it, in the shape the write contract asks for. */
+const withHeading = (heading, rest) => (rest.length === 0 ? `# ${heading}\n` : `# ${heading}\n\n${rest}`);
 
 /**
  * Compose the body the write actually carries, and guarantee its leading heading.
  *
  * The engine refuses a body that does not begin with a Markdown H1. **The editor composes the body,
- * so it guarantees the heading and the human never meets the rule.**
+ * so it guarantees the heading and the human never meets the rule.** Three cases, and the order
+ * they are tried in is the rule:
  *
+ *   - A heading that was split off at load (`heading`) goes back EXACTLY as it came, bytes and all
+ *     — unless it was the title said again and the title has since been changed, in which case it
+ *     follows the title. A heading that was the title should still be the title; a heading the
+ *     writer authored to say something else is theirs, and an editor that re-synchronised it would
+ *     be changing something the user never touched. "They differ" is a normal state and raises no
+ *     warning anywhere in this app.
  *   - A body that already begins with a heading gets NOTHING prepended. No double headings.
  *   - A body that does not gets one built from the required title field. Nothing is scraped and
  *     nothing is invented — the title is a declared field the form already holds.
- *   - The heading and the title are NOT kept in sync afterwards. In a meaningful share of real
- *     memories the heading is authored prose that deliberately differs from the title; editing the
- *     title seeds a new heading and never rewrites an existing one. "They differ" is a normal state
- *     and raises no warning anywhere in this app.
  *
  * Leading blank lines are removed before the check, because the requirement is that the body
  * BEGINS with the heading and a blank first line fails it. That removes whitespace and nothing else.
  */
-export function composeBody({ body, title }) {
+export function composeBody({ body, title, heading = null }) {
+	const now = trimmed(title);
+
+	if (heading?.prefix) {
+		const retitled = now.length > 0 && now !== heading.of;
+		if (heading.repeatsTitle && retitled) return withHeading(now, text(body));
+		return heading.prefix + text(body);
+	}
+
 	const withoutLeadingBlanks = text(body).replace(/^(?:[ \t]*\r?\n)+/, '');
 	if (LEADING_HEADING.test(withoutLeadingBlanks)) return withoutLeadingBlanks;
+	if (now.length === 0) return withoutLeadingBlanks; // Save is blocked on a missing title before this matters.
+	return withHeading(now, withoutLeadingBlanks);
+}
 
-	const heading = trimmed(title);
-	const rest = withoutLeadingBlanks;
-	if (heading.length === 0) return rest; // Save is blocked on a missing title before this matters.
-	return rest.length === 0 ? `# ${heading}\n` : `# ${heading}\n\n${rest}`;
+/**
+ * What the save will do about the heading, in one word, for the Details sheet to say in a sentence.
+ *
+ *   composed  there was no heading; one is built from the title
+ *   title     the note opens with the title, and it goes back as it came
+ *   follows   it opened with the old title, and the new one is written in its place
+ *   authored  it opens with its own sentence, which is kept and never rewritten
+ */
+export function headingReading(buffer) {
+	const heading = buffer?.heading ?? null;
+	if (!heading?.prefix) return { kind: 'composed', line: null };
+	const now = trimmed(buffer.title);
+	if (!heading.repeatsTitle) return { kind: 'authored', line: heading.line };
+	return { kind: now.length > 0 && now !== heading.of ? 'follows' : 'title', line: heading.line };
 }
 
 /** What the composed body costs against the engine's published request ceiling. */
