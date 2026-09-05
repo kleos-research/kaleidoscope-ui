@@ -2612,6 +2612,69 @@
 
 .head-titles {
 	display: flex;
+/*
+ * THE MEMORIES BEHIND A FINDING, one row each: the title, the way to read it first, and under them
+ * what this memory contributed — the kind it declared, the sentence it wrote about the name.
+ *
+ * It used to be two lists: the sentences in quotes, then the memories, each with two accent
+ * controls and a "show more" of its own. Read together they were the heap the owner rejected —
+ * "I just put everything together at one place". A row carries ONE accent thing, the title, which
+ * is the way out; "read it first" is a quieter way in, and the evidence sits under the title of
+ * the memory that wrote it, which is the only place it can answer "which one called it a tool".
+ */
+.decision-memories {
+	gap: var(--space-6);
+}
+
+.decision-memories .decision-source {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: baseline;
+	column-gap: var(--space-8);
+	row-gap: var(--space-1);
+}
+
+.decision-memories .decision-source-note {
+	grid-column: 1 / -1;
+	line-height: var(--leading-snug);
+}
+
+/*
+ * A title that opens the editor. It wraps — a memory's title is a sentence, not a control label —
+ * and it hangs from the left: `.btn` centres its words and a grid cell stretches the button to the
+ * column, which together put every title in the middle of the row under nothing.
+ */
+.decision-source-open {
+	justify-self: start;
+	justify-content: flex-start;
+	white-space: normal;
+	text-align: left;
+	line-height: var(--leading-title);
+}
+
+/* The quieter way in. Not accent — one accent thing per row — and never a second button. */
+.decision-source-read {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: var(--text-caption);
+	color: var(--faint);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.decision-source-read:hover {
+	color: var(--accent);
+	text-decoration: underline;
+}
+
+/* What the memory said the name was, quoted, in the note's line and a shade darker than it. */
+.decision-source-gloss {
+	color: var(--muted);
+}
+
 	flex-direction: column;
 	gap: var(--space-2);
 	min-width: 0;

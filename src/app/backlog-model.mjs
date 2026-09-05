@@ -211,12 +211,19 @@ function memoriesFrom(entries) {
 			// declared, the relation it coined. Rendered beside the title, because "open this one"
 			// is a much easier decision when the row says what is in it.
 			notes: [],
+			// The sentence this memory wrote about the name when it declared it. It travels WITH
+			// the memory rather than in a list of its own on the finding, because a kind conflict
+			// is decided by reading what each memory said the thing was — and a gloss separated
+			// from the memory that wrote it cannot answer "which one called it a tool".
+			glosses: [],
 		};
 		if (!held.title && text(entry?.title)) held.title = text(entry.title);
 		if (!held.memory_type && text(entry?.memory_type)) held.memory_type = text(entry.memory_type);
 		held.facts += entry?.facts ?? 0;
 		const note = text(entry?.note);
 		if (note && !held.notes.includes(note)) held.notes.push(note);
+		const gloss = text(entry?.gloss);
+		if (gloss && !held.glosses.includes(gloss)) held.glosses.push(gloss);
 		byId.set(id, held);
 	}
 	return [...byId.values()].sort(
@@ -383,6 +390,7 @@ function kindConflictFindings(graph) {
 					memory_type: null,
 					facts: 0,
 					note: `declared here as ${declaration.kind}`,
+					gloss: declaration.gloss,
 				})),
 			),
 		};
@@ -451,6 +459,7 @@ function declaredNeverUsedFindings(graph) {
 				memory_type: null,
 				facts: 0,
 				note: declaration.kind ? `declared here as ${declaration.kind}` : 'declared here',
+				gloss: declaration.gloss,
 			})),
 		),
 	}));

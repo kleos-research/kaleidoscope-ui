@@ -33,9 +33,6 @@ const PAGE = 25;
 /** How many of a finding's memories are on screen before the rest are one press away. */
 const SOURCES = 4;
 
-/** The same, for the sentences a memory wrote about a name. */
-const GLOSSES = 3;
-
 /**
  * NEEDS A DECISION.
  *
@@ -398,7 +395,17 @@ function Group({ group, busyKey, onEdit, onOpen, onDismiss }) {
 	);
 }
 
-/** One finding: what it is, what is at stake, where it came from, and the way to answer it. */
+/**
+ * One finding, and it is ONE OBJECT WITH THREE PARTS rather than an inventory of what is known.
+ *
+ * First, the claim: the name, and what the two sides say it is. Second, the memories to open —
+ * every one of them a row that opens the editor, with what that memory contributed written under
+ * its title. Third, the way to answer it. The sentences a memory wrote about the name are not a
+ * list of their own any more: they sit under the memory that wrote them, because "which of these
+ * called it a tool" is the question a kind conflict is decided on, and a quotation separated from
+ * its memory cannot answer it. Two lists, two "show more" controls and two accent links per row
+ * were the heap the owner described as "just put everything together at one place".
+ */
 function Finding({ finding, busy, onEdit, onOpen, onDismiss }) {
 	const [asking, setAsking] = useState(false);
 	const [reason, setReason] = useState('');
@@ -473,7 +480,13 @@ function Finding({ finding, busy, onEdit, onOpen, onDismiss }) {
 }
 
 /**
- * The memories one finding comes from, with a ceiling on how many are on screen at once.
+ * The memories one finding comes from, one row each, with a ceiling on how many are on screen.
+ *
+ * A ROW IS: the title, which opens the editor; a quieter "read it first"; and under them what this
+ * memory contributed — the kind it declared, the spelling it used, and the sentence it wrote about
+ * the name, quoted. The title is the only accent thing on the row, because it is the way out:
+ * every finding here is resolved by changing a memory, and a route that landed on a read-only page
+ * would make the reader find the same memory a second time through a different door.
  *
  * THE CEILING IS THE WHOLE REASON THIS IS A COMPONENT. A name declared under two kinds in nine
  * memories renders nine rows, and twenty-seven such findings render two hundred and forty — which
@@ -487,23 +500,34 @@ function Memories({ memories, onEdit, onOpen }) {
 
 	return (
 		<>
-			<Sources>
+			<Sources className="decision-memories">
 				{shown.map((memory) => (
 					<Source key={memory.memory_id}>
-						{/*
-						  THE EDITOR, not the reading page. Every finding here is resolved by changing a
-						  memory, and a route that lands on a read-only page makes the reader find the
-						  same memory a second time through a different door.
-						*/}
-						<button type="button" className="btn btn-quiet" onClick={() => onEdit(memory.memory_id)}>
+						<button
+							type="button"
+							className="btn btn-quiet decision-source-open"
+							onClick={() => onEdit(memory.memory_id)}
+						>
 							{memory.title ?? memory.memory_id}
 						</button>
-						{memory.notes.length > 0 ? (
-							<span className="decision-source-note">{memory.notes.join(' · ')}</span>
-						) : null}
-						<button type="button" className="btn btn-quiet" onClick={() => onOpen(memory.memory_id)}>
+						<button
+							type="button"
+							className="decision-source-read"
+							onClick={() => onOpen(memory.memory_id)}
+						>
 							read it first
 						</button>
+						{memory.notes.length > 0 || memory.glosses.length > 0 ? (
+							<span className="decision-source-note">
+								{memory.notes.join(' · ')}
+								{memory.glosses.map((gloss) => (
+									<span key={gloss}>
+										{' · '}
+										<span className="decision-source-gloss">“{gloss}”</span>
+									</span>
+								))}
+							</span>
+						) : null}
 					</Source>
 				))}
 			</Sources>
@@ -518,21 +542,24 @@ function Memories({ memories, onEdit, onOpen }) {
 	);
 }
 
-/** The evidence, per kind. Enough to decide without opening anything. */
+/**
+ * The claim itself, per kind: what the sides say, or the one fact in question.
+ *
+ * The evidence is not here. The sentences each memory wrote about the name are drawn under that
+ * memory in `Memories`, so this is only the summary a reader checks the rows against — "artifact
+ * in four, tool in two" — and the fact, whole, where the finding is about one.
+ */
 function Detail({ finding }) {
 	if (finding.kind === 'kind-conflict') {
 		return (
-			<>
-				<div className="decision-lead">
-					<span className="meta">Declared as</span>
-					{finding.detail.kinds.map((entry) => (
-						<Badge key={entry.kind} tone="warn">
-							{entry.kind} · {entry.count}
-						</Badge>
-					))}
-				</div>
-				<Glosses glosses={finding.detail.glosses} />
-			</>
+			<div className="decision-lead">
+				<span className="meta">Declared as</span>
+				{finding.detail.kinds.map((entry) => (
+					<Badge key={entry.kind} tone="warn">
+						{entry.kind} · {entry.count}
+					</Badge>
+				))}
+			</div>
 		);
 	}
 
@@ -550,56 +577,17 @@ function Detail({ finding }) {
 
 	if (finding.kind === 'declared-never-used') {
 		return (
-			<>
-				<div className="decision-lead">
-					<span className="meta">Declared</span>
-					{finding.detail.kinds.map((kind) => (
-						<Badge key={kind}>{kind}</Badge>
-					))}
-					<span className="meta">and never written into a fact.</span>
-				</div>
-				<Glosses glosses={finding.detail.glosses} />
-			</>
+			<div className="decision-lead">
+				<span className="meta">Declared</span>
+				{finding.detail.kinds.map((kind) => (
+					<Badge key={kind}>{kind}</Badge>
+				))}
+				<span className="meta">and never written into a fact.</span>
+			</div>
 		);
 	}
 
 	return null;
-}
-
-/**
- * THE SENTENCES SOMEBODY WROTE ABOUT THIS NAME, one per line and capped.
- *
- * They are the evidence a kind conflict actually turns on: "is this a tool or a project" is
- * answered by reading what the two memories said it was, not by comparing two kind labels. Side by
- * side in a wrapping row they read as one run-on sentence, which is how the previous version of
- * this screen made its most useful evidence unreadable — so they are a list.
- *
- * Capped, because a name declared in nine memories carries nine of them and the row stops being a
- * row. The cap says how many it is hiding, which is the difference between deferring and losing.
- */
-function Glosses({ glosses }) {
-	const [all, setAll] = useState(false);
-	if (glosses.length === 0) return null;
-	const shown = all ? glosses : glosses.slice(0, GLOSSES);
-
-	return (
-		<>
-			<Sources>
-				{shown.map((gloss) => (
-					<Source key={gloss}>
-						<span className="meta">“{gloss}”</span>
-					</Source>
-				))}
-			</Sources>
-			{glosses.length > GLOSSES ? (
-				<button type="button" className="btn btn-quiet" onClick={() => setAll(!all)}>
-					{all
-						? 'Show fewer of these sentences'
-						: `Show the other ${(glosses.length - GLOSSES).toLocaleString()}`}
-				</button>
-			) : null}
-		</>
-	);
 }
 
 /**

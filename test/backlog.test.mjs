@@ -651,3 +651,31 @@ test('the dismissal routes reach the store, and writing one does not touch the v
 		'The curation surface recorded a ranked search.',
 	);
 });
+
+test('a kind conflict carries, beside each memory, the kind it declared and the sentence it wrote', () => {
+	// The evidence a kind conflict is decided on is what each memory SAID the thing was, and it is
+	// only evidence while it is still attached to the memory that said it. A flat list of glosses on
+	// the finding cannot answer "which of these called it a service", so the gloss rides on the
+	// memory row — and the flat list stays, because the finding's summary is drawn from it.
+	const backlog = backlogOf();
+	const finding = findingsOfKind(backlog, 'kind-conflict').find((entry) => entry.label === 'control plane');
+	assert.ok(finding, 'the planted kind conflict on "control plane" was not found');
+
+	const byId = new Map(finding.memories.map((entry) => [entry.memory_id, entry]));
+	assert.deepEqual(byId.get('mem-3')?.glosses, ['the deploy surface']);
+	assert.deepEqual(byId.get('mem-4')?.glosses, ['a hosted API']);
+	assert.ok(byId.get('mem-3')?.notes.some((note) => note.includes('tool')), 'mem-3 does not say it declared a tool');
+	assert.ok(byId.get('mem-4')?.notes.some((note) => note.includes('service')), 'mem-4 does not say it declared a service');
+	assert.deepEqual([...finding.detail.glosses].sort(), ['a hosted API', 'the deploy surface']);
+
+	// The same for a declaration nothing ever used: its one memory carries its one sentence.
+	const unused = findingsOfKind(backlog, 'declared-never-used').find((entry) => entry.label === 'never mentioned');
+	assert.ok(unused, 'the planted unused declaration was not found');
+	assert.deepEqual(unused.memories.map((entry) => entry.glosses), [['a name with no facts']]);
+
+	// A memory that declared a name with no gloss has an empty list, never a missing field: the row
+	// reads it without a guard.
+	for (const entry of backlog.findings.flatMap((f) => f.memories)) {
+		assert.ok(Array.isArray(entry.glosses), `${entry.memory_id} carries no glosses list`);
+	}
+});

@@ -37,6 +37,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { composeBody, splitLeadingHeading } from '../src/app/editor-model.mjs';
 import { locateEngine } from '../src/engine/locate.mjs';
 import { childFieldNames } from '../src/engine/preflight.mjs';
 import { startSidecar } from '../src/server/index.mjs';
@@ -961,4 +962,42 @@ test('a merge writes the survivor first, and a refused first write leaves two me
 		assert.equal(after.stores, beforeExposure.stores);
 		assert.equal(after.records, beforeExposure.records, 'a merge wrote an exposure record');
 	});
+});
+
+test('the composition keeps the heading out of the words pane and writes it back byte for byte', () => {
+	// The composed body opens with the survivor's `# ` line and the screen draws that title as its
+	// H1, so the pane holds everything after the heading — the same rule the editor keeps — and the
+	// write puts the heading back exactly as it came. A composition nobody edited must not write a
+	// version whose only change is one the user did not make.
+	const plan = merge.planMemoryMerge(
+		{
+			memory_id: 'survivor',
+			content_md: '# S\n\nleft.\n',
+			semantic_delta: { title: 'S', entities: [], facts: [] },
+		},
+		{
+			memory_id: 'duplicate',
+			content_md: '# D\n\nright.\n',
+			semantic_delta: { title: 'D', entities: [], facts: [] },
+		},
+	);
+	const split = splitLeadingHeading(plan.content_md, plan.semantic_delta.title);
+	assert.ok(split.heading, 'the composed body does not open with a heading to split off');
+	assert.doesNotMatch(split.body, /^#/, 'the heading reached the words pane');
+	assert.match(split.body, /^left\./, 'the words pane does not open with the survivor’s first paragraph');
+	assert.equal(
+		composeBody({ body: split.body, title: plan.semantic_delta.title, heading: split.heading }),
+		plan.content_md,
+		'putting the heading back did not reproduce the composed body byte for byte',
+	);
+
+	// And the screen goes through that composition. The words the pane holds are never sent raw,
+	// because a body without its heading is one the engine refuses on its first line.
+	const screen = readFileSync(join(ROOT, 'src', 'app', 'MergeFlow.jsx'), 'utf8')
+		.replace(/\/\*[\s\S]*?\*\//g, '')
+		.split('\n')
+		.filter((line) => !line.trim().startsWith('//'))
+		.join('\n');
+	assert.match(screen, /content_md: composeBody\(\{ body, title: survivorTitle, heading \}\)/);
+	assert.doesNotMatch(screen, /content_md: body[,\s]/, 'the merge screen sends the pane’s words without their heading');
 });

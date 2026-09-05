@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchEditRecord, runMerge } from './api.mjs';
+import { composeBody, splitLeadingHeading } from './editor-model.mjs';
 import { markSyntax } from './markdown-syntax.mjs';
 import {
 	MERGE_STEPS,
@@ -111,6 +112,10 @@ import {
 /** The word for where a fact came from, beside the fact. Three sources is too many for a colour. */
 const FROM = { survivor: 'survivor', duplicate: 'duplicate', both: 'both' };
 
+/** The composed body, cut into the heading the page draws as its H1 and the words the pane edits. */
+const wordsOf = (plan, fallbackTitle) =>
+	splitLeadingHeading(plan.content_md, plan.semantic_delta?.title ?? fallbackTitle);
+
 /**
  * Two memories that say the same thing, composed into one.
  *
@@ -142,7 +147,8 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 				]);
 				if (!live) return;
 				setLoaded({ survivor, duplicate });
-				setBody(planMemoryMerge(survivor, duplicate).content_md);
+				const composed_ = planMemoryMerge(survivor, duplicate);
+				setBody(wordsOf(composed_, survivorId).body);
 			} catch (cause) {
 				if (live) setLoadError(cause);
 			}
@@ -156,6 +162,16 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 		() => (loaded ? planMemoryMerge(loaded.survivor, loaded.duplicate) : null),
 		[loaded],
 	);
+
+	/*
+	  THE HEADING NEVER REACHES THE PANE. The composed body opens with the survivor's own `# ` line,
+	  and this screen already draws that title as the page's H1 — so a pane that held the whole
+	  body showed the reader a second title in raw Markdown, at the top of the words, which is the
+	  exact thing the editor stopped doing. The heading is split off as the bytes it came as and
+	  put back at the write, so a composition nobody edited is written byte for byte, and one that
+	  has no heading gets one composed from the title rather than a refusal on its first line.
+	*/
+	const heading = useMemo(() => (plan ? wordsOf(plan, survivorId).heading : null), [plan, survivorId]);
 
 	const composed = useMemo(() => {
 		if (!plan) return null;
@@ -324,7 +340,7 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 								survivor: {
 									memory_id: survivorId,
 									seen_version_id: loaded.survivor.expected_version_id,
-									content_md: body,
+									content_md: composeBody({ body, title: survivorTitle, heading }),
 									semantic_delta: composed,
 								},
 								duplicate: {
