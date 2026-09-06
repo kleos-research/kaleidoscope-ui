@@ -191,7 +191,7 @@ export const Rule = () => <hr className="rule" />;
  * The count of what is not in the legend is printed rather than omitted: "and 88 more kinds" is the
  * finding that the kind vocabulary has sprawled, and it is the only place on these screens it shows.
  */
-export function KindLegend({ palette, limit = 5 }) {
+export function KindLegend({ palette, limit = 5, otherWord = 'more kinds' }) {
 	const named = palette?.named?.slice(0, limit) ?? [];
 	const rest = (palette?.named?.length ?? 0) - named.length + (palette?.otherCount ?? 0);
 	return (
@@ -205,7 +205,7 @@ export function KindLegend({ palette, limit = 5 }) {
 			{rest > 0 ? (
 				<span className="kind-legend-item">
 					<span className="kind-legend-dot" style={{ background: 'var(--k-other)' }} />
-					{rest.toLocaleString()} more kinds
+					{rest.toLocaleString()} {otherWord}
 				</span>
 			) : null}
 		</span>

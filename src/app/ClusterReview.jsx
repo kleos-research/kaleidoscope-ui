@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchSnapshot, runRename } from './api.mjs';
 import {
@@ -84,6 +84,7 @@ export function ClusterReview({
 	onOpen,
 	onEdit,
 	onDone,
+	focusName = null,
 }) {
 	const [stage, setStage] = useState('review');
 	const [ticked, setTicked] = useState(() => new Set());
@@ -334,13 +335,16 @@ export function ClusterReview({
 
 			{/*
 			  THE RULE THAT PROPOSED THESE, in the same words the code used, and the admission that it
-			  over-proposes. A reader who has not been told the rule cannot tell a bad cluster from a
-			  bad explanation, and this one is deliberately loose: it is a nomination, not a verdict.
+			  over-proposes — one closed row, the way the backlog keeps "How this list is ordered". A
+			  reader who has not been told the rule cannot tell a bad cluster from a bad explanation,
+			  and it is one press away rather than a resident paragraph over the table.
 			*/}
-			<Note>
-				<strong>How these were found:</strong> {clusters.fingerprint.sentence}{' '}
-				{clusters.fingerprint.caveat}
-			</Note>
+			<DetailRows className="review-method">
+				<DetailRow label="How these were found">
+					<p className="copy">{clusters.fingerprint.sentence}</p>
+					<p className="copy">{clusters.fingerprint.caveat}</p>
+				</DetailRow>
+			</DetailRows>
 
 			<Table className="cluster-table" label="Names that may be one thing">
 				<thead>
@@ -363,6 +367,7 @@ export function ClusterReview({
 						<ClusterRow
 							key={cluster.key}
 							cluster={cluster}
+							focused={focusName !== null && cluster.spellings.some((entry) => entry.surface === focusName)}
 							checked={ticked.has(cluster.key)}
 							survivor={survivors.get(cluster.key) ?? cluster.survivor}
 							busy={busyKey === cluster.key}
@@ -418,8 +423,17 @@ export function ClusterReview({
  * case for merging without reading a sentence about it — which is why that mode exists on the
  * component at all.
  */
-function ClusterRow({ cluster, checked, survivor, busy, onToggle, onSurvivor, onDismiss }) {
+function ClusterRow({ cluster, focused = false, checked, survivor, busy, onToggle, onSurvivor, onDismiss }) {
 	const kept = cluster.spellings.find((entry) => entry.surface === survivor) ?? null;
+	/*
+	  The pair a link asked for is brought into view once, and wears the attention tint until the
+	  reader does something — so "Merge?" on the names table lands on this row rather than on a
+	  table of twenty to find it in.
+	*/
+	const rowRef = useRef(null);
+	useEffect(() => {
+		if (focused) rowRef.current?.scrollIntoView?.({ block: 'center' });
+	}, [focused]);
 	const gained = cluster.spellings
 		.filter((entry) => entry.surface !== survivor)
 		.reduce((total, entry) => total + entry.facts, 0);
@@ -433,7 +447,7 @@ function ClusterRow({ cluster, checked, survivor, busy, onToggle, onSurvivor, on
 	// is not a warning, and spending the warning tint on a choice would leave the app with no way
 	// to say the other thing.
 	return (
-		<Tr selected={checked}>
+		<Tr selected={checked} attention={focused && !checked} ref={rowRef}>
 			<Td>
 				<Checkbox
 					checked={checked}
@@ -636,14 +650,28 @@ function Step({ step, onOpen, onEdit }) {
 					{memory.untouched_mentions.length > 0 ? (
 						<Note>
 							This memory also spells “{step.from}” in{' '}
-							{memory.untouched_mentions.map((mention) => mention.where).join(', ')}. Those are
-							sentences a person wrote and this run does not rewrite them.
+							{[...new Set(memory.untouched_mentions.map((mention) => whereWords(mention.where)))].join(', ')}.
+							Those are sentences a person wrote and this run does not rewrite them.
 						</Note>
 					) : null}
 				</Decision>
 			))}
 		</DecisionList>
 	);
+}
+
+/**
+ * A place in the record, said in words. `entities[3].is` is where the rewrite looked, and it is a
+ * JSON path; a reader is told which KIND of place — a named thing's definition, the title, a
+ * fact's qualifier — because that is what decides whether the sentence there needs their hand.
+ */
+function whereWords(where) {
+	const text = String(where ?? '');
+	if (text === 'title') return 'the title';
+	if (/^entities\[\d+\]\.is$/.test(text)) return "a named thing's definition";
+	const qualifier = text.match(/^facts\[\d+\]\.about\.(.+)$/);
+	if (qualifier) return `a fact's “${qualifier[1]}” qualifier`;
+	return text;
 }
 
 /**

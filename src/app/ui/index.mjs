@@ -59,7 +59,9 @@ export {
 	PreviewHead,
 	TimeHeading,
 } from './browse.jsx';
-export { edgeLabelsFit, EgoGraph, layout as egoLayout } from './ego-graph.jsx';
+export { EgoGraph } from './ego-graph.jsx';
+/* The drawing's arithmetic, in a module a test can import. The component above draws what it places. */
+export { egoDrawing, layout as egoLayout } from './ego-layout.mjs';
 /*
  * THE WHOLE-VAULT OVERVIEW. A canvas, not SVG, and the only drawing in this product that paints
  * every name at once — see the head of the file for why those are two different renderers.
@@ -81,6 +83,7 @@ export {
 	ReadingPair,
 	Readings,
 	Section,
+	glossDefinition,
 	looksLikeLocator,
 } from './reading.jsx';
 
@@ -125,5 +128,5 @@ export {
 	Page,
 	ProjectSwitcher,
 	RootBar,
-	VaultName,
+	AboutVault,
 } from './shell.jsx';

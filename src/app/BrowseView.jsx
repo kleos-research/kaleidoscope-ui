@@ -14,8 +14,9 @@ import {
 	wordFor,
 } from './browse-model.mjs';
 import { Markdown } from './markdown.jsx';
-import { axisCopy, shortenScope, SORTS } from './records.mjs';
-import { ago, written } from './when.mjs';
+import { shortenScope, SORTS } from './records.mjs';
+import { bulkBarLabel, REMOVE_LABEL } from './removal-model.mjs';
+import { written } from './when.mjs';
 import {
 	BulkBar,
 	Button,
@@ -100,8 +101,7 @@ export function BrowseView({
 	onOpen,
 	onEdit,
 	onMerge,
-	onShowLimits,
-	strippedFields = null,
+	onRemove = null,
 	scrollRef = null,
 }) {
 	/*
@@ -418,9 +418,8 @@ export function BrowseView({
 							onClick={onRemoveSelected}
 							disabled={maxSelectable !== null && selection.size > maxSelectable}
 						>
-							{selection.size === 1
-								? 'Remove 1 memory'
-								: `Remove these ${selection.size} memories`}
+							{/* The one spelling of the action, from the model the confirmation reads it from. */}
+							{bulkBarLabel(selection.size)}
 						</Button>
 						{maxSelectable !== null && selection.size > maxSelectable ? (
 							// The cap is the server's own reading rather than a number written down here, so
@@ -439,12 +438,10 @@ export function BrowseView({
 				<MemoryPreview
 					key={current.memory_id}
 					row={current}
-					relations={relations}
-					strippedFields={strippedFields}
 					onOpen={onOpen}
 					onEdit={onEdit}
 					onMerge={onMerge}
-					onShowLimits={onShowLimits}
+					onRemove={onRemove}
 				/>
 			) : (
 				<div className="preview-idle">
@@ -544,34 +541,44 @@ function joinDots(parts) {
  * whole answer to "too much information overload on any page": nothing was removed, and the second
  * and third things stopped competing with the first.
  */
-function MemoryPreview({ row, relations, strippedFields, onOpen, onEdit, onMerge, onShowLimits }) {
+function MemoryPreview({ row, onOpen, onEdit, onMerge, onRemove = null }) {
 	const semantic = row.record?.semantic ?? {};
 	const facts = semantic.facts ?? [];
 	const entities = semantic.entities ?? [];
 	const evidence = semantic.evidence ?? [];
-	const entry = relations?.get(row.memory_id);
-	const inbound = (entry?.corrected_by ?? []).length + (entry?.contradicted_by ?? []).length;
 
-	// "correction · today · every branch" — the type, when it was written, and the honest reading of
-	// its scope. An omitted axis matches everything, so it is a phrase and never a blank.
-	// A VALUE IS AN ELEMENT, NOT A STRING, so a repository path can be cut short. Joined as text, a
-	// scope line reading `file infra/staging/restore.nightly.yaml` pushed the type and the date off
-	// the line — which is the reading the owner gave of the rejected build: "it's too long, it just
-	// goes on and on and on". `shortenScope` keeps the end that names the file, and `ScopeValue`
-	// draws the cut form as a control that shows the whole value on a press — not on hover, which a
-	// touch screen does not have.
-	const scopeWords = Object.keys(semantic.scope ?? {})
-		.filter((axis) => axis !== 'project')
-		.map((axis) => {
-			const value = semantic.scope[axis];
-			return value ? (
-				<span key={axis}>
-					{wordFor(axis)} <ScopeValue value={value} short={shortenScope(value)} />
-				</span>
-			) : (
-				<span key={axis}>{axisCopy(axis).every}</span>
-			);
-		});
+	/*
+	  "correction · today · branch release/2" — the type, when it was written, and where it is
+	  NARROWED to. Only an axis the memory actually sets is named: an unset axis is the default, and
+	  the default is what a headline leaves out. Every record in a real vault carries `artifact: null`
+	  and `branch: null`, so "every file · every branch" was printed on every one of 396 previews —
+	  the two axes the owner said he did not understand, resident on every memory. The memory's own
+	  page applies the same rule, and the complete reading is under "Where it applies" in the editor.
+	  Project is left out too: it is the switcher in the bar, and a reader already chose it.
+	  A VALUE IS AN ELEMENT, NOT A STRING, so a repository path can be cut short — `shortenScope`
+	  keeps the end that names the file, and `ScopeValue` draws the cut form as a control that
+	  shows the whole value on a press.
+	*/
+	/*
+	  BRANCH AND FILE ARE NOT IN THIS LINE.
+
+	  They were, and a reader hit the same wall twice: "Applies to branch — I don't know why we have
+	  it, and I don't even know how this works", and "Applies to file — I have no idea. And it's too
+	  long, it just goes on and on." Measured afterwards: 10 of 25 consecutive previews carried a meta
+	  line over 60 characters, the longest 108, every one of them above the fold and directly under the
+	  title — a git ref and a source path standing between a reader and the prose they opened.
+
+	  Both still exist, and both are still filterable. They live in the deferred provenance row at the
+	  foot of this pane, which is where a reader who wants an identifier goes looking for one. What
+	  stays here is what the approved design draws: kind, when, and scope in plain English.
+	*/
+	const scopeWords = Object.entries(semantic.scope ?? {})
+		.filter(([axis, value]) => axis !== 'project' && axis !== 'branch' && axis !== 'artifact' && value)
+		.map(([axis, value]) => (
+			<span key={axis}>
+				{wordFor(axis)} <ScopeValue value={value} short={shortenScope(value)} />
+			</span>
+		));
 
 	return (
 		<Preview>
@@ -581,17 +588,23 @@ function MemoryPreview({ row, relations, strippedFields, onOpen, onEdit, onMerge
 						<Button tone="primary" onClick={() => onEdit(row.memory_id)}>
 							Edit
 						</Button>
+						{/*
+						  Three actions, each named for what it does. "Find one this repeats" and "What
+						  removal cannot do" were labels the owner would have to ask about — the second a
+						  caveat for an action this menu did not even offer. The limits of removal are
+						  inside the removal flow, at the moment they matter.
+						*/}
 						<OverflowMenu label="More for this memory">
 							<MenuItem onSelect={() => onOpen(row.memory_id)}>Open this memory</MenuItem>
 							{onMerge ? (
-								<MenuItem onSelect={() => onMerge(row.memory_id)}>
-									Find one this repeats
-								</MenuItem>
+								<MenuItem onSelect={() => onMerge(row.memory_id)}>Merge with a duplicate…</MenuItem>
 							) : null}
-							<MenuSeparator />
-							<MenuItem onSelect={() => onShowLimits?.(row.memory_id)}>
-								What removal cannot do
-							</MenuItem>
+							{onRemove ? (
+								<>
+									<MenuSeparator />
+									<MenuItem onSelect={() => onRemove(row)}>{REMOVE_LABEL}…</MenuItem>
+								</>
+							) : null}
 						</OverflowMenu>
 					</>
 				}
@@ -644,9 +657,14 @@ function MemoryPreview({ row, relations, strippedFields, onOpen, onEdit, onMerge
 			</PreviewBlock>
 
 			{/*
-			  Everything that is not this memory's first or second thing, closed, each carrying its
-			  own count. A row with a count of zero is still rendered: if it vanished, "no evidence
-			  was recorded" would be indistinguishable from "evidence I have not scrolled to".
+			  THE THREE ROWS BrowseB DRAWS, closed, each carrying its own count. A row with a count of
+			  zero is still rendered: if it vanished, "no evidence was recorded" would be
+			  indistinguishable from "evidence I have not scrolled to".
+
+			  There is no fourth. "Corrections and contradictions" was the owner's verbatim rejected
+			  label, and it read "0" on 364 of 396 memories; the list row already says "corrects 1" or
+			  "superseded", the rail asks the same question as "Still true", and the resolved links
+			  belong on the memory's own page.
 			*/}
 			<PreviewBlock>
 				<DetailRows>
@@ -671,15 +689,14 @@ function MemoryPreview({ row, relations, strippedFields, onOpen, onEdit, onMerge
 						)}
 					</DetailRow>
 
-					<DetailRow
-						label="Corrections and contradictions"
-						count={inbound + (entry?.corrects ?? []).length + (entry?.contradicts ?? []).length}
-						tone={inbound > 0 ? 'warn' : 'neutral'}
-					>
-						<Relations entry={entry} onOpen={onOpen} />
-					</DetailRow>
-
-					<DetailRow label="History and identifiers" count={ago(row.created_on) ?? 'not dated'}>
+					{/*
+					  The two ids and the two facts about the write. The count slot is empty on purpose:
+					  "today" there repeated "written today" two lines above, and the version count the
+					  mockup draws is a lineage read this pane does not make. What is not here any more is
+					  "who wrote this — not recorded" and "not sent to this page": engineering exposition
+					  in a reading pane, and both still stand on the memory's own page for whoever asks.
+					*/}
+					<DetailRow label="History and identifiers">
 						<Readings>
 							<ReadingPair term="first written">
 								{row.created_on ?? <NotRecorded what="first written" />}
@@ -693,76 +710,11 @@ function MemoryPreview({ row, relations, strippedFields, onOpen, onEdit, onMerge
 							<ReadingPair term="version">
 								<Identifier value={row.version_id} label="version id" />
 							</ReadingPair>
-							{/*
-							  Fixed, and it is the whole reason this row exists. The nearest fields on a
-							  record look like provenance and are not, and a blank invites the next
-							  contributor to fill it with a guess.
-							*/}
-							<ReadingPair term="who wrote this">
-								not recorded. kscope does not store a writer on a memory.
-							</ReadingPair>
-							{Array.isArray(strippedFields) && strippedFields.length > 0 ? (
-								<ReadingPair term="not sent to this page">
-									{strippedFields.join(', ')} — derived from the memory rather than written, and
-									recomputed on the next write.
-								</ReadingPair>
-							) : null}
 						</Readings>
 					</DetailRow>
 				</DetailRows>
 			</PreviewBlock>
 		</Preview>
-	);
-}
-
-/**
- * What this memory corrects, and what corrects it.
- *
- * A CORRECTION NAMES ITS TARGET BY A HANDLE, and a handle is whatever the writing agent called the
- * thing. Most of them resolve to no memory at all, so resolution is reported rather than assumed —
- * a link that goes nowhere is worse than the sentence saying it does.
- */
-function Relations({ entry, onOpen }) {
-	const groups = [
-		['This corrects', entry?.corrects ?? []],
-		['This contradicts', entry?.contradicts ?? []],
-		['Corrected by', entry?.corrected_by ?? []],
-		['Contradicted by', entry?.contradicted_by ?? []],
-	].filter(([, list]) => list.length > 0);
-
-	if (groups.length === 0) {
-		return (
-			<p className="copy">
-				Nothing here declares that it corrects or contradicts another memory, and nothing declares
-				that about this one.
-			</p>
-		);
-	}
-
-	return (
-		<Readings>
-			{groups.map(([term, list]) => (
-				<ReadingPair key={term} term={term.toLowerCase()}>
-					{list.map((link, index) => {
-						const target = link.target ?? link.from ?? null;
-						return (
-							<span key={index}>
-								{index > 0 ? ' · ' : null}
-								{target ? (
-									<Button tone="quiet" size="sm" onClick={() => onOpen(target)}>
-										{link.says ?? link.handle ?? target}
-									</Button>
-								) : (
-									<span>
-										{link.handle ?? 'a handle'} — no memory in this vault answers to that name
-									</span>
-								)}
-							</span>
-						);
-					})}
-				</ReadingPair>
-			))}
-		</Readings>
 	);
 }
 

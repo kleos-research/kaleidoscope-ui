@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { fetchLineage } from './api.mjs';
 import { useFocusActions } from './focus-actions.mjs';
 import { Markdown } from './markdown.jsx';
 import { axisCopy, scopeAxes, shortenScope } from './records.mjs';
-import { ESCALATION_TITLE, REMOVE_LABEL } from './removal-model.mjs';
+import { ESCALATION_MENU_LABEL, REMOVE_LABEL } from './removal-model.mjs';
 import { exact, written } from './when.mjs';
 import {
 	Badge,
@@ -12,6 +12,7 @@ import {
 	Card,
 	DetailRow,
 	DetailRows,
+	Dialog,
 	Display,
 	DropdownMenu,
 	Evidence,
@@ -20,6 +21,7 @@ import {
 	Icon,
 	IconButton,
 	Identifier,
+	Eyebrow,
 	LinkCard,
 	MenuItem,
 	MenuSeparator,
@@ -31,6 +33,7 @@ import {
 	ReadingPair,
 	Readings,
 	ScopeLine,
+	ScopeValue,
 	Section,
 	Verbatim,
 } from './ui/index.mjs';
@@ -82,6 +85,7 @@ export function MemoryDetail({
 	relations,
 	rows,
 	strippedFields,
+	confirming = false,
 	onOpen,
 	onEdit,
 	onRemove,
@@ -106,6 +110,14 @@ export function MemoryDetail({
 	const titleOf = (memoryId) => rowOf(memoryId)?.title ?? memoryId;
 
 	/*
+	  THE TWO SHEETS BEHIND THE "…" MENU. The record as it arrived and what the vault itself records
+	  about this memory were closed rows under the prose; both are reference rather than reading —
+	  raw JSON with digests in it, and the one call this page can make — so they are one press
+	  further away, in the menu where ReadB keeps every secondary action.
+	*/
+	const [sheet, setSheet] = useState(null);
+
+	/*
 	  THE CONTROLS GO UP INTO THE ONE BAR. Every approved reading mockup draws Edit and an overflow
 	  in the 56px bar and nothing else above the title; a second row of chrome is exactly what a
 	  reader has to scroll past before reaching what they opened. The handlers are held in a ref so
@@ -113,31 +125,43 @@ export function MemoryDetail({
 	  somebody opened.
 	*/
 	const actions = useRef(null);
-	actions.current = { onEdit, onRemove, onShowLimits };
+	actions.current = { onEdit, onRemove, onShowLimits, onSheet: setSheet };
 	useFocusActions(
 		() => (
 			<MemoryActions
 				row={row}
+				quiet={confirming}
 				onEdit={actions.current.onEdit}
 				onRemove={actions.current.onRemove}
 				onShowLimits={actions.current.onShowLimits}
+				onSheet={(which) => actions.current.onSheet(which)}
 			/>
 		),
-		[row.memory_id, row.version_id],
+		[row.memory_id, row.version_id, confirming],
 	);
 
 	/*
-	  WHICH TWO CARDS THE RAIL CARRIES, and it is a rule rather than a fixed pair because the two
-	  mockups draw two different second cards. `ReadB` has one piece of evidence and three named
-	  things and puts NAMED THINGS in the rail; `ReadEvidence` has four pieces of evidence and three
-	  named things and puts EVIDENCE there. The property that separates them is which one is the
-	  bigger part of this particular memory — so that is what decides, and the loser becomes a closed
-	  row with its count showing rather than disappearing. Ties go to named things, because a name is
-	  what the graph screens are reached by and evidence is not.
+	  WHICH SECOND CARD THE RAIL CARRIES. Evidence leads whenever there is any: it is the most common
+	  thing on a memory — half of a real vault carries some — and it is what a reader checks a claim
+	  against. The rule used to be "whichever is the bigger list", which put evidence in the rail on
+	  6% of memories while 52% had some. Named things become the closed row, because a name has a
+	  whole screen of its own one press away and evidence does not.
 	*/
-	const evidenceLeads = evidence.length > entities.length;
+	const evidenceLeads = evidence.length > 0;
+
+	/*
+	  WHAT THIS CORRECTS — ReadB's warn row, in the rail. A correction memory's quote used to sit
+	  under the prose at y≈1,000 and the one real stored link at y≈1,300: on the memory whose badge
+	  says "correction", neither was visible without scrolling. The count is the reason to open it.
+	*/
+	const outbound = links.contradicts.filter((link) => link.how === 'by_id' && link.target);
+	const inbound = links.contradicted_by.filter((link) => link.how === 'by_id' && link.from);
+	const correctionCount = corrections.length + outbound.length + inbound.length;
+
+	const project = row.scope?.project ?? null;
 
 	return (
+		<>
 		<Reading
 			rail={
 				<>
@@ -170,6 +194,78 @@ export function MemoryDetail({
 					) : (
 						<NamedThingsCard entities={entities} undeclared={row.undeclared_endpoints} />
 					)}
+
+					{/*
+					  THE CLOSED ROWS, IN THE RAIL UNDER THE TWO CARDS — exactly where ReadB and ReadEvidence
+					  draw them. They stood in the reading column under the prose, and the median body is
+					  about 1,200 characters, so the count a row exists to show was never above the fold.
+					*/}
+					<DetailRows>
+						{evidenceLeads ? (
+							<DetailRow label="Named things" count={entities.length}>
+								<NamedThingsList entities={entities} undeclared={row.undeclared_endpoints} />
+							</DetailRow>
+						) : (
+							<DetailRow label="Evidence" count={evidence.length}>
+								<EvidenceList items={evidence} />
+							</DetailRow>
+						)}
+
+						{correctionCount > 0 ? (
+							<DetailRow
+								label="What this corrects"
+								count={`${correctionCount} ${correctionCount === 1 ? 'memory' : 'memories'}`}
+								tone="warn"
+							>
+								<Corrections corrections={corrections} />
+								<Disagreements
+									outbound={outbound}
+									inbound={inbound}
+									rowOf={rowOf}
+									titleOf={titleOf}
+									onOpen={onOpen}
+								/>
+							</DetailRow>
+						) : null}
+
+						{/*
+						  One row for everything about the record rather than the memory: when it applies
+						  and until when, when it was written, the two identifiers, and why it was accepted.
+						  "How long this applies" was a row of its own and read as an inventory.
+						*/}
+						<DetailRow label="History and identifiers">
+							<Timing semantic={semantic} row={row} axes={axes} />
+							<Identity row={row} semantic={semantic} titleOf={titleOf} onOpen={onOpen} />
+						</DetailRow>
+
+						{listOf(semantic.propose).length > 0 ? (
+							<DetailRow label="Relations this memory proposed" count={semantic.propose.length}>
+								<Note>
+									Relations the writer believed it was inventing, with the meaning it supplied.
+								</Note>
+								<Readings>
+									{semantic.propose.map((proposal, index) => (
+										<ReadingPair key={index} term={proposal?.rel}>
+											{proposal?.means ?? <NotRecorded what="what the relation means" />}
+											{proposal?.inverse ? ` · inverse ${proposal.inverse}` : ''}
+											{proposal?.over_time ? ` · ${proposal.over_time}` : ''}
+											{proposal?.many === true ? ' · many' : ''}
+										</ReadingPair>
+									))}
+								</Readings>
+							</DetailRow>
+						) : null}
+
+						{semantic.context ? (
+							<DetailRow label="The text this was taken from">
+								<Note>
+									Stored word for word, so a reader can check the extraction against what was
+									actually said.
+								</Note>
+								<Verbatim scroll>{semantic.context}</Verbatim>
+							</DetailRow>
+						) : null}
+					</DetailRows>
 				</>
 			}
 		>
@@ -183,21 +279,43 @@ export function MemoryDetail({
 						{written(row.created_on) ?? 'written, date not recorded'}
 					</span>
 					{/*
-					  The separator travels WITH the phrase it separates. As two flex siblings the line
-					  wrapped between them and left a bare "·" hanging at the end of the first row.
+					  ONE SCOPE PHRASE, AND IT IS THE PROJECT. ReadB's meta is three short facts on one
+					  line; the file axis — "I have no idea. And it's too long" — does not belong on the
+					  first line of a memory. Branch and file are read in full under "Where it applies"
+					  in the editor and in the History row beside. The separator travels WITH the phrase
+					  it separates, so a wrap never leaves a bare "·" at the end of a line.
 					*/}
 					<span className="reading-meta-scope">
 						<span aria-hidden="true">·</span>{' '}
-						<ScopeLine
-							scope={row.scope}
-							axes={axes}
-							phrase={axisCopy}
-							only="set"
-							shorten={shortenScope}
-						/>
+						{project ? (
+							<>
+								<span className="faint">project </span>
+								<ScopeValue value={project} short={shortenScope(project)} />
+							</>
+						) : (
+							<span className="faint">applies to every project</span>
+						)}
 					</span>
 				</div>
 			</header>
+
+			{/*
+			  A MEMORY THAT CORRECTS SOMETHING SAYS SO BEFORE ITS WORDS. The rail's warn row carries
+			  the count on every memory; on a memory whose badge says "correction" the quote and the
+			  one real stored link are the reason it exists, and under a five-fact rail they sat at
+			  y≈1,000. So the first correction and every stored outbound link are drawn here,
+			  compactly, whenever this memory corrects anything — and the row in the rail still opens
+			  the whole set, including what disagrees with this one.
+			*/}
+			{corrections.length > 0 || outbound.length > 0 ? (
+				<CorrectionLead
+					corrections={corrections}
+					outbound={outbound}
+					rowOf={rowOf}
+					titleOf={titleOf}
+					onOpen={onOpen}
+				/>
+			) : null}
 
 			{record?.content_md ? (
 				<Markdown source={record.content_md} size="lg" title={row.title} />
@@ -206,76 +324,34 @@ export function MemoryDetail({
 					<NotRecorded what="note body" />
 				</p>
 			)}
+		</Reading>
 
-			<Corrections corrections={corrections} />
+		<Dialog
+			open={sheet === 'record'}
+			onOpenChange={(open) => setSheet(open ? 'record' : null)}
+			wide
+			title="The record as it arrived"
+			description="What the browser received for this memory, as JSON."
+		>
+			<RawRecord record={record} strippedFields={strippedFields} />
+		</Dialog>
 
-			<Disagreements links={links} rowOf={rowOf} titleOf={titleOf} onOpen={onOpen} />
-
-			<DetailRows>
-				{evidenceLeads ? (
-					<DetailRow label="Named things" count={entities.length}>
-						<NamedThingsList entities={entities} undeclared={row.undeclared_endpoints} />
-					</DetailRow>
-				) : (
-					<DetailRow label="Evidence" count={evidence.length}>
-						<EvidenceList items={evidence} />
-					</DetailRow>
-				)}
-
-				<DetailRow label="How long this applies">
-					<Timing semantic={semantic} row={row} axes={axes} />
-				</DetailRow>
-
-				<DetailRow label="History and identifiers">
-					<Identity row={row} semantic={semantic} titleOf={titleOf} onOpen={onOpen} />
-				</DetailRow>
-
-				{/*
-				  What the vault itself says points AT this memory, as opposed to what the memories on
-				  this screen imply. The two can differ and the difference is honest — the inversion
-				  above sees only the loaded set. It is a closed row because opening it is the only
-				  thing on this page that costs a call.
-				*/}
-				<LineageRow
+		<Dialog
+			open={sheet === 'lineage'}
+			onOpenChange={(open) => setSheet(open ? 'lineage' : null)}
+			title="What the vault records about this memory"
+			description="The vault's own answer, read now. It can differ from what the loaded memories imply."
+		>
+			{sheet === 'lineage' ? (
+				<LineageReading
 					memoryId={row.memory_id}
 					versionId={row.version_id}
 					titleOf={titleOf}
 					onOpen={onOpen}
 				/>
-
-				{listOf(semantic.propose).length > 0 ? (
-					<DetailRow label="Relations this memory proposed" count={semantic.propose.length}>
-						<Note>
-							Relations the writer believed it was inventing, with the meaning it supplied.
-						</Note>
-						<Readings>
-							{semantic.propose.map((proposal, index) => (
-								<ReadingPair key={index} term={proposal?.rel}>
-									{proposal?.means ?? <NotRecorded what="what the relation means" />}
-									{proposal?.inverse ? ` · inverse ${proposal.inverse}` : ''}
-									{proposal?.over_time ? ` · ${proposal.over_time}` : ''}
-									{proposal?.many === true ? ' · many' : ''}
-								</ReadingPair>
-							))}
-						</Readings>
-					</DetailRow>
-				) : null}
-
-				{semantic.context ? (
-					<DetailRow label="The text this was taken from">
-						<Note>
-							Stored word for word, so a reader can check the extraction against what was
-							actually said.
-						</Note>
-						<Verbatim scroll>{semantic.context}</Verbatim>
-					</DetailRow>
-				) : null}
-
-				<DetailRow label="The record as it arrived">
-					<RawRecord record={record} strippedFields={strippedFields} />
-				</DetailRow>
-			</DetailRows>
-		</Reading>
+			) : null}
+		</Dialog>
+		</>
 	);
 }
 
@@ -292,7 +368,7 @@ export function MemoryDetail({
  * hiding a memory and ending it, so a second spelling is a second promise. There is no trash glyph
  * anywhere in this product: that is a picture of incineration and this action is not one.
  */
-export function MemoryActions({ row, onEdit, onRemove, onShowLimits }) {
+export function MemoryActions({ row, quiet = false, onEdit, onRemove, onShowLimits, onSheet = null }) {
 	const id = encodeURIComponent(row.memory_id);
 	return (
 		<>
@@ -301,9 +377,13 @@ export function MemoryActions({ row, onEdit, onRemove, onShowLimits }) {
 			  memory, which does not carry its entity declarations — so nothing here is handed onwards
 			  as the thing a save is built from. The editor re-loads the memory through the door that
 			  does, on every open.
+
+			  `quiet` is set while a removal is being confirmed over this memory: the page is asking
+			  "Remove?" and a filled Edit beside that question is the loudest control on a screen
+			  that is about something else.
 			*/}
 			{onEdit ? (
-				<Button tone="primary" onClick={() => onEdit(row.memory_id)}>
+				<Button tone={quiet ? 'default' : 'primary'} onClick={() => onEdit(row.memory_id)}>
 					Edit
 				</Button>
 			) : null}
@@ -325,18 +405,25 @@ export function MemoryActions({ row, onEdit, onRemove, onShowLimits }) {
 					Merge this into another memory…
 				</MenuItem>
 				{/*
-				  "Make this count for more" rather than "Promote". The word promote implies a rank and
-				  the store has no field for one — no priority, no importance, no pin. What the screen
-				  behind this offers is the edits that DO change where and how long a memory applies,
-				  each named for the field it changes, and it says the negative half first.
+				  NAMED FOR THE EDITS IT OPENS. "Make this count for more" was the owner's exact rejected
+				  label ("No idea what it means"). The screen behind it offers the edits that DO change
+				  where and how long a memory applies, each named for the field it changes, and says the
+				  negative half first: there is no priority, importance or pin in this store.
 				*/}
 				<MenuItem onSelect={() => (window.location.hash = `#/m/${id}/promote`)}>
-					Make this count for more…
+					Where and how long it applies…
 				</MenuItem>
+				{onSheet ? (
+					<>
+						<MenuSeparator />
+						<MenuItem onSelect={() => onSheet('lineage')}>What the vault records about it</MenuItem>
+						<MenuItem onSelect={() => onSheet('record')}>The record as it arrived</MenuItem>
+					</>
+				) : null}
 				{onShowLimits ? (
 					<>
 						<MenuSeparator />
-						<MenuItem onSelect={() => onShowLimits(row.memory_id)}>{ESCALATION_TITLE}</MenuItem>
+						<MenuItem onSelect={() => onShowLimits(row.memory_id)}>{ESCALATION_MENU_LABEL}</MenuItem>
 					</>
 				) : null}
 			</DropdownMenu>
@@ -370,7 +457,7 @@ function EvidenceCard({ items }) {
 
 /* ---------------------------------------------------------------------------- the named things */
 
-function NamedThingsList({ entities, undeclared }) {
+function NamedThingsList({ entities, undeclared, compact = false }) {
 	if (entities.length === 0) {
 		// Neutral, and deliberately so: a large share of agent-written memories declare nothing, and
 		// their facts still stand.
@@ -389,21 +476,70 @@ function NamedThingsList({ entities, undeclared }) {
 				</Note>
 			) : null}
 			{entities.map((entity, index) => (
-				<NamedThing key={index} name={entity?.n} kind={entity?.kind} gloss={entity?.is} />
+				<NamedThing key={index} name={entity?.n} kind={entity?.kind} gloss={entity?.is} compact={compact} />
 			))}
 		</>
 	);
 }
 
+/*
+ * THE RAIL'S SECOND CARD, WHEN THERE IS NO EVIDENCE: name and kind on one line each, the gloss on
+ * a press. Ten three-line glosses made the card taller than the rail beside it and pushed the
+ * closed rows — the count of what this corrects among them — to y≈1,500. A name has a screen of its
+ * own one press away; the glosses are reference, not the reason a reader opened this memory.
+ */
 function NamedThingsCard({ entities, undeclared }) {
 	return (
-		<Card title="Named things">
-			<NamedThingsList entities={entities} undeclared={undeclared} />
+		<Card title="Named things" aside={entities.length > 0 ? entities.length : null}>
+			<NamedThingsList entities={entities} undeclared={undeclared} compact />
 		</Card>
 	);
 }
 
 /* ------------------------------------------------------------------ a note, and a real link */
+
+/**
+ * The lead on a correction: the writer's own words about what they were fixing, and the memories
+ * this one is stored as disagreeing with — each a real link with a chevron, as ReadB draws them.
+ * One quote at most; the rail's row holds the rest and says how many there are.
+ */
+function CorrectionLead({ corrections, outbound, rowOf, titleOf, onOpen }) {
+	const first = corrections[0] ?? null;
+	const handle = first ? String(first?.handle ?? '').trim() : '';
+	return (
+		<div className="correction-lead">
+			<Eyebrow>What this corrects</Eyebrow>
+			{first ? (
+				<NoteQuote handle={handle || 'no handle recorded'} says={first?.says}>
+					{handle ? (
+						<>
+							The writer’s own words, not a stored link —{' '}
+							<a href={`#/search?q=${encodeURIComponent(handle)}`}>search for “{handle}”</a> to find
+							what they meant.
+						</>
+					) : (
+						'The writer’s own words, not a stored link.'
+					)}
+				</NoteQuote>
+			) : null}
+			{outbound.map((link, index) => {
+				const other = rowOf(link.target);
+				return (
+					<LinkCard
+						key={index}
+						title={titleOf(link.target)}
+						meta={
+							other
+								? [other.memory_type, written(other.created_on)].filter(Boolean).join(' · ') || null
+								: null
+						}
+						onClick={() => onOpen(link.target)}
+					/>
+				);
+			})}
+		</div>
+	);
+}
 
 /**
  * WHAT THE WRITER SAID THEY WERE FIXING. Prose, in their words, under the handle they chose.
@@ -445,9 +581,7 @@ function Corrections({ corrections }) {
  * chevron on it is indistinguishable on screen from a fact. Rare by design — a few memories in a
  * few hundred — which is why an empty section is no section at all rather than an empty one.
  */
-function Disagreements({ links, rowOf, titleOf, onOpen }) {
-	const outbound = links.contradicts.filter((link) => link.how === 'by_id' && link.target);
-	const inbound = links.contradicted_by.filter((link) => link.how === 'by_id' && link.from);
+function Disagreements({ outbound, inbound, rowOf, titleOf, onOpen }) {
 	if (outbound.length === 0 && inbound.length === 0) return null;
 
 	const card = (memoryId, key) => {
@@ -582,19 +716,16 @@ function Identity({ row, semantic, titleOf, onOpen }) {
 					)}
 				</ReadingPair>
 			</Readings>
-			<Note>
-				<strong>Who wrote this: not recorded.</strong> kscope stores no writer on a memory, so
-				nothing on this screen can tell you who did.
-			</Note>
+			<Note>Who wrote this is not recorded: kscope stores no writer on a memory.</Note>
 		</>
 	);
 }
 
 /**
  * What the store itself records pointing at this memory. The one thing on this page that costs a
- * call, and it happens only when a reader opens the row.
+ * call, and it happens only when a reader opens the sheet it is in.
  */
-function LineageRow({ memoryId, versionId, titleOf, onOpen }) {
+function LineageReading({ memoryId, versionId, titleOf, onOpen }) {
 	const cacheKey = `${memoryId}@${versionId}`;
 	const [lineage, setLineage] = useState(() => lineageCache.get(cacheKey) ?? null);
 	const [error, setError] = useState(null);
@@ -615,11 +746,17 @@ function LineageRow({ memoryId, versionId, titleOf, onOpen }) {
 			});
 	};
 
+	// Once, on open. The sheet mounts this only while it is open, so mounting is the press.
+	useEffect(() => {
+		load();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [cacheKey]);
+
 	const marked = lineage?.duplicate_of ?? lineage?.superseded_by ?? null;
 	const pointing = listOf(lineage?.contradicted_by);
 
 	return (
-		<DetailRow label="What the vault records about this memory" onOpen={load}>
+		<div className="sheet-reading">
 			{error ? (
 				<Note tone="warn">
 					The vault's own answer could not be read: {error.message}. What is on this page is
@@ -656,7 +793,7 @@ function LineageRow({ memoryId, versionId, titleOf, onOpen }) {
 					) : null}
 				</>
 			)}
-		</DetailRow>
+		</div>
 	);
 }
 

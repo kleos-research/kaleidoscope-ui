@@ -1,19 +1,21 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { buildGraph, emptyState, kindPalette, nearDuplicates } from './graph-model.mjs';
 import { HubList } from './HubList.jsx';
+import { KindMatrix } from './KindMatrix.jsx';
 import { HubLedger, HubRegime } from './HubPanel.jsx';
 import { detectRegime, hubNodeId, planView, regimeLine } from './hub-model.mjs';
 import {
 	DEFAULT_ORDER,
 	NAME_ORDERS,
-	OVERVIEW_CAPTION,
 	OVERVIEW_CEILING,
 	highlightSet,
+	nameRoute,
 	nameRows,
 	orderCounts,
 	orderedRows,
 	overviewElements,
+	overviewFocus,
 	vaultShape,
 } from './names-model.mjs';
 import { overviewLayout } from './overview-layout.mjs';
@@ -21,10 +23,10 @@ import {
 	Button,
 	Chip,
 	DegreeBar,
+	DetailRow,
+	DetailRows,
 	EmptyState,
 	FindInput,
-	Note,
-	Icon,
 	KindLegend,
 	PageHead,
 	Stat,
@@ -77,7 +79,7 @@ import {
  * exposure row into the vault it is inspecting, and it lives on the search screen behind an
  * explicit press.
  */
-export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
+export function NamesView({ records, schemaKinds = null, onOpenName, onOpenMemory = () => {} }) {
 	const graph = useMemo(() => buildGraph(records), [records]);
 	const duplicates = useMemo(() => nearDuplicates(graph), [graph]);
 	const palette = useMemo(() => kindPalette(graph), [graph]);
@@ -104,7 +106,22 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 
 	const [order, setOrder] = useState(DEFAULT_ORDER);
 	const [query, setQuery] = useState('');
-	const [picture, setPicture] = useState(false);
+	/*
+	  THE NAME THE READER CLICKED ON THE PICTURE. A click isolates the island that name lives on;
+	  it does not leave the screen, because "where does this sit" is a question about the picture
+	  and the answer is in the picture. Opening the name is a double click or the link in the
+	  reading under the picture. Typing clears it: the find box and the picture are one world, and
+	  a query is the newer statement of what the reader is looking for.
+	*/
+	const [selected, setSelected] = useState(null);
+	/*
+	  THREE RENDERINGS OF ONE SET OF NAMES, and the list is the one it opens on. "Whole shape" is
+	  the picture kept by owner decision; "Kind by kind" is the matrix of statements between kinds,
+	  which is the only surface that makes the kind vocabulary's drift past the schema visible.
+	  Neither is a destination in the top bar: both are diagnostics reached from here.
+	*/
+	const [view, setView] = useState(VIEWS[0].value);
+	const picture = view === 'shape';
 	/*
 	  WHAT THE READER HAS ASKED TO REDUCE, and it starts empty on purpose. `planView` with nothing
 	  asked for returns the projection unchanged, so the collapse is never the state this screen
@@ -148,6 +165,15 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 		[plan],
 	);
 	const highlight = useMemo(() => (picture ? highlightSet(rows, query) : null), [picture, rows, query]);
+	/*
+	  WHAT THE PICTURE NARROWS TO: islands, not dots. A selection or a query resolves to the
+	  components those names live on, and the canvas lights, labels and fits its view to them. See
+	  `overviewFocus` for why a ring on one dot in a field of fourteen hundred was the wrong answer.
+	*/
+	const focus = useMemo(
+		() => (picture && plan ? overviewFocus(plan.nodes, { selected, matches: highlight, placement }) : null),
+		[picture, plan, selected, highlight, placement],
+	);
 
 	const empty = emptyState(graph);
 	if (empty) {
@@ -158,15 +184,27 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 		);
 	}
 
+	/*
+	  IN WHOLE SHAPE THE STRIP FOLDS INTO THE SUBTITLE. The four cards restate the picture's own
+	  payload (stat.jsx says so), and above the picture they pushed the frame's top to y≈337 and its
+	  bottom below the fold. One line carries the same three numbers.
+	*/
 	const head = (
 		<>
 			<PageHead
 				title="Things your memories talk about"
-				subtitle={`${shape.nameCount.toLocaleString()} names across ${shape.statementCount.toLocaleString()} statements`}
+				subtitle={
+					picture
+						? `${shape.namedOnce.toLocaleString()} named once · ${shape.componentCount.toLocaleString()} clusters, largest ${shape.largestComponent.toLocaleString()} · ${shape.duplicateGroups.toLocaleString()} possible ${shape.duplicateGroups === 1 ? 'duplicate' : 'duplicates'}`
+						: `${shape.nameCount.toLocaleString()} names across ${shape.statementCount.toLocaleString()} statements`
+				}
 				actions={
 					<FindInput
 						value={query}
-						onChange={setQuery}
+						onChange={(next) => {
+							setQuery(next);
+							setSelected(null);
+						}}
 						placeholder="Find a name"
 						label="Find a name"
 					/>
@@ -181,21 +219,50 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 			  is the sentence the other three add up to, and it is the reason the duplicates tab is
 			  worth a reader's afternoon.
 			*/}
-			<StatStrip>
-				<Stat value={shape.namedOnce.toLocaleString()}>named once and never again</Stat>
-				<Stat value={shape.componentCount.toLocaleString()}>
-					separate clusters, largest is {shape.largestComponent.toLocaleString()}
-				</Stat>
-				<Stat value={shape.duplicateGroups.toLocaleString()} tone="warn">
-					look like the same thing, spelled twice
-				</Stat>
-				<StatNote>
-					Names join only when they match character for character, so this is{' '}
-					<strong>more connected than it looks.</strong> Every pair you merge turns two loose ends
-					into one junction.
-				</StatNote>
-			</StatStrip>
+			{picture ? null : (
+				<StatStrip>
+					<Stat value={shape.namedOnce.toLocaleString()}>named once and never again</Stat>
+					<Stat value={shape.componentCount.toLocaleString()}>
+						separate clusters, largest is {shape.largestComponent.toLocaleString()}
+					</Stat>
+					<Stat value={shape.duplicateGroups.toLocaleString()} tone="warn">
+						look like the same thing, spelled twice
+					</Stat>
+					<StatNote>
+						Names join only when they match character for character, so this is{' '}
+						<strong>more connected than it looks.</strong> Every pair you merge turns two loose ends
+						into one junction.
+					</StatNote>
+				</StatStrip>
+			)}
 		</>
+	);
+
+	/*
+	  THE DIAL BETWEEN THE THREE RENDERINGS, quiet: three words at the tab height with the current
+	  one in ink, the way the bar's four words do it. The active tab is the one filled control on
+	  this screen; an inverse-filled segment beside it was two, against tokens.css's own rule.
+	*/
+	const dial = (
+		<div className="view-dial" role="group" aria-label="How to show these names">
+			{VIEWS.map((entry, index) => (
+				<Fragment key={entry.value}>
+					{index > 0 ? (
+						<span className="view-dial-sep" aria-hidden="true">
+							·
+						</span>
+					) : null}
+					<button
+						type="button"
+						className="view-dial-item"
+						aria-current={view === entry.value ? 'true' : undefined}
+						onClick={() => setView(entry.value)}
+					>
+						{entry.label}
+					</button>
+				</Fragment>
+			))}
+		</div>
 	);
 
 	/*
@@ -207,33 +274,46 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 		<div className="page">
 			{head}
 
-			<Tabs value={order} onValueChange={setOrder}>
-					<div className="names-bar">
+			{/*
+			  THE ORDERING TABS ARE THE LIST'S. In the two pictures they changed nothing and stayed live
+			  — four dead controls — so they are drawn only where they order something. The dial that
+			  moves between the three renderings stays, at the right, on every one.
+			*/}
+			<div className="names-bar">
+				{view === 'list' ? (
+					<Tabs value={order} onValueChange={setOrder}>
 						<TabsList label="How to order these names">
 							{NAME_ORDERS.map((entry) => (
 								<Tab
 									key={entry.id}
 									value={entry.id}
-									count={entry.only ? counts[entry.id] : null}
+									/*
+									  The duplicates tab counts GROUPS — one row per question — so it agrees
+									  with the card beside it and needs no note to reconcile the two.
+									*/
+									count={
+										entry.id === 'duplicates'
+											? shape.duplicateGroups
+											: entry.only
+												? counts[entry.id]
+												: null
+									}
 									tone={entry.id === 'duplicates' ? 'warn' : 'neutral'}
 								>
 									{entry.label}
 								</Tab>
 							))}
 						</TabsList>
+					</Tabs>
+				) : (
+					<span />
+				)}
+				{dial}
+			</div>
 
-						{/*
-						  The way into the picture, and it says what the picture is FOR rather than what
-						  it is made of. "Whole shape" is a job; "graph view" is a rendering technique,
-						  and a reader who presses it expecting to find something will not.
-						*/}
-						<Button onClick={() => setPicture((on) => !on)} aria-pressed={picture}>
-							{picture ? 'Back to the list' : 'Whole shape'}
-						</Button>
-					</div>
-				</Tabs>
-
-				{picture ? (
+				{view === 'kinds' ? (
+					<KindMatrix graph={graph} schemaKinds={schemaKinds} />
+				) : picture ? (
 					<Overview
 						graph={graph}
 						overview={overview}
@@ -244,7 +324,9 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 						setReduction={setReduction}
 						listing={listing}
 						setListing={setListing}
-						highlight={highlight}
+						focus={focus}
+						selected={selected}
+						onSelect={setSelected}
 						query={query}
 						shape={shape}
 						palette={palette}
@@ -252,24 +334,17 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
 						onOpenMemory={onOpenMemory}
 					/>
 				) : (
-					<>
-						{/*
-						  TWO NUMBERS, TWO UNITS, SAID OUT LOUD.
-
-						  The card above counts GROUPS — twelve things that may be one thing each — and this
-						  tab counts NAMES, because each spelling is its own row. Both are true and they are
-						  different, so the sentence that reconciles them is on the screen rather than left
-						  for the reader to work out from a card and a tab that disagree.
-						*/}
-						{order === 'duplicates' && visible.length > 0 ? (
-							<Note tone="warn">
-								{visible.length.toLocaleString()} names, in {shape.duplicateGroups.toLocaleString()}{' '}
-								groups. Each group is one question — these names did not join because they are not
-								spelled identically, and only you can say whether they are the same thing.
-							</Note>
-						) : null}
-						<NameTable rows={visible} order={order} query={query} onOpenName={onOpenName} />
-					</>
+					<NameTable
+						/*
+						  ONE ROW PER GROUP under "Possible duplicates". Each spelling was its own row with
+						  its own "Merge?", so twenty questions were forty rows and the tab said 40 where the
+						  card said 20. The busiest spelling leads the row and the others ride on it as chips.
+						*/
+						rows={order === 'duplicates' ? oneRowPerGroup(visible) : visible}
+						order={order}
+						query={query}
+						onOpenName={onOpenName}
+					/>
 				)}
 		</div>
 	);
@@ -284,6 +359,12 @@ export function NamesView({ records, onOpenName, onOpenMemory = () => {} }) {
  * about the resolution they have.
  */
 function NameTable({ rows, order, query, onOpenName }) {
+	/*
+	  FORTY ROWS, THEN THE NEXT FORTY ON A PRESS. The table used to draw three hundred — 14,300px of
+	  scroll with the sentence that said what was not drawn at the very bottom — under a comment
+	  quoting the owner's "scrolled through for ten minutes". The exact remainder is on the button.
+	*/
+	const [limit, setLimit] = useState(ROW_PAGE);
 	if (rows.length === 0) {
 		return (
 			<EmptyState heading="No name here matches that">
@@ -294,11 +375,11 @@ function NameTable({ rows, order, query, onOpenName }) {
 		);
 	}
 
-	const drawn = rows.slice(0, ROW_LIMIT);
+	const drawn = rows.slice(0, limit);
 
 	return (
 		<>
-		<Table label="Names in this vault">
+		<Table label="Names in this vault" sticky>
 			<thead>
 				<tr>
 					<Th>Name</Th>
@@ -337,7 +418,15 @@ function NameTable({ rows, order, query, onOpenName }) {
 						<Td>
 							<span className="row-action">
 								{row.alsoSpelled.length > 0 ? (
-									<a className="row-action-warn" href="#/decide" onClick={(event) => event.stopPropagation()}>
+									/*
+									  The route CARRIES THE NAME, so the queue opens on this pair rather than
+									  landing the reader on the whole review to find it among twenty.
+									*/
+									<a
+										className="row-action-warn"
+										href={`#/decide?name=${encodeURIComponent(row.surface)}`}
+										onClick={(event) => event.stopPropagation()}
+									>
 										Merge?
 									</a>
 								) : (
@@ -355,8 +444,12 @@ function NameTable({ rows, order, query, onOpenName }) {
 		*/}
 		{rows.length > drawn.length ? (
 			<p className="names-more">
-				{(rows.length - drawn.length).toLocaleString()} more names in this ordering are not drawn.
-				Type in the find box above to narrow to the one you want.
+				<button type="button" className="link-more" onClick={() => setLimit(limit + ROW_PAGE)}>
+					Show the next {Math.min(ROW_PAGE, rows.length - drawn.length).toLocaleString()}
+				</button>
+				{' · '}
+				{(rows.length - drawn.length).toLocaleString()} more in this ordering. The find box above is
+				the fast way to one of them.
 			</p>
 		) : null}
 		</>
@@ -364,14 +457,43 @@ function NameTable({ rows, order, query, onOpenName }) {
 }
 
 /**
- * HOW MANY ROWS ARE RENDERED AT ONCE.
+ * HOW MANY ROWS ARE RENDERED AT ONCE, and how many more each press adds.
  *
  * The interesting part of the degree ladder is a few dozen rows and the table is meant to be
  * scanned, not scrolled through for ten minutes — which is a complaint this design already has on
- * the record. Above this the reader is told the exact number that is not drawn and given the
- * control that narrows it, which is a different thing from a list that silently stops.
+ * the record. Past this the reader is told the exact number that is not drawn, given the control
+ * that draws the next page, and reminded of the box that narrows — which is a different thing from
+ * a list that silently stops.
  */
-const ROW_LIMIT = 300;
+const ROW_PAGE = 40;
+
+/**
+ * The duplicates ordering, one row per GROUP. Rows arrive busiest first, so the first spelling of a
+ * group seen is the one that leads it; every spelling it is "also" is then a chip on that row and
+ * not a row of its own.
+ */
+function oneRowPerGroup(rows) {
+	const seen = new Set();
+	const out = [];
+	for (const row of rows) {
+		if (seen.has(row.surface)) continue;
+		seen.add(row.surface);
+		for (const other of row.alsoSpelled) seen.add(other);
+		out.push(row);
+	}
+	return out;
+}
+
+/**
+ * The three renderings, as the dial offers them. Words for what each is for, in the order a reader
+ * needs them: the list is where names are found, the shape is the occasional diagnostic the owner
+ * kept, and kind by kind is the one that shows whether the kind vocabulary has sprawled.
+ */
+const VIEWS = [
+	{ value: 'list', label: 'List' },
+	{ value: 'shape', label: 'Whole shape' },
+	{ value: 'kinds', label: 'Kind by kind' },
+];
 
 /**
  * THE STATE OF HAVING ASKED FOR NOTHING.
@@ -416,7 +538,9 @@ function Overview({
 	setReduction,
 	listing,
 	setListing,
-	highlight,
+	focus,
+	selected,
+	onSelect,
 	query,
 	shape,
 	palette,
@@ -466,8 +590,6 @@ function Overview({
 		);
 	}
 
-	const lit = highlight === null ? null : highlight.size;
-
 	return (
 		<div className="overview">
 			{offer}
@@ -478,51 +600,59 @@ function Overview({
 					duplicateLinks={overview.duplicateLinks}
 					alwaysLabelled={overview.alwaysLabelled}
 					layout={placement}
-					highlight={highlight}
-					onSelect={(id) => {
-						if (id) onOpenName(id);
-					}}
+					focus={focus}
+					selected={selected}
+					onSelect={onSelect}
 					onOpen={onOpenName}
 				/>
-				<div className="overview-legend">
-					<KindLegend palette={palette} />
-					<span className="overview-legend-sep" aria-hidden="true">
-						|
-					</span>
-					<span>circle size = how often it is named</span>
-					{overview.duplicateLinks.length > 0 ? (
-						<>
-							<span className="overview-legend-sep" aria-hidden="true">
-								|
-							</span>
-							<span className="overview-legend-warn">
-								<span className="overview-dash" aria-hidden="true" /> two spellings, one thing?
-							</span>
-						</>
-					) : null}
-				</div>
+				{/*
+				  WHAT THE PICTURE IS NARROWED TO, said in words INSIDE the frame's top edge, and only
+				  while it is narrowed: it names the island and carries the one way off this screen —
+				  to the name itself. Under the frame it sat below the fold, so a dimmed canvas read
+				  as a broken one and the only way to the name was somewhere the reader could not see.
+				*/}
+				<FocusReading focus={focus} plan={plan} selected={selected} query={query} shape={shape} />
+			</div>
+			{/*
+			  THE LEGEND, UNDER THE FRAME. Over the picture it covered 18% of the drawn arcs at the
+			  opening fit, on a canvas that reaches every edge of its frame.
+			*/}
+			<div className="overview-legend overview-legend-below">
+				<KindLegend palette={palette} />
+				<span className="overview-legend-sep" aria-hidden="true">
+					|
+				</span>
+				<span>circle size = how often it is named</span>
+				{overview.duplicateLinks.length > 0 ? (
+					<>
+						<span className="overview-legend-sep" aria-hidden="true">
+							|
+						</span>
+						<span className="overview-legend-pair">
+							<span className="overview-dash" aria-hidden="true" /> possible duplicate — point at a
+							ringed name to see its pair
+						</span>
+					</>
+				) : null}
 			</div>
 
-			<p className="overview-caption">
-				{OVERVIEW_CAPTION}
-				{lit === null ? null : (
-					<>
-						{' '}
-						<strong>
-							{lit === 0
-								? `Nothing here is spelled like “${query}”.`
-								: `${lit.toLocaleString()} of ${shape.nameCount.toLocaleString()} names match “${query}”.`}
-						</strong>
-					</>
-				)}
-			</p>
-
 			{/*
-			  THE GUARD'S OWN READING, IN ONE LINE. Its words are built in `hub-model.mjs`, beside the
-			  numbers they quote, so this screen cannot describe one verdict while the plan above it
-			  acted on another.
+			  THE GUARD'S OWN READING. Its words are built in `hub-model.mjs`, beside the numbers they
+			  quote, so this screen cannot describe one verdict while the plan above it acted on
+			  another. In the working regime — every vault whose busiest name is not an outlier — it
+			  is behind a press: "the bar for hiding one is 28" is a label the owner would ask about,
+			  shown when the mechanism did nothing. It is still one press from the picture, so "this
+			  app found nothing that needs hiding" stays distinguishable from "this app cannot hide".
 			*/}
-			<p className="overview-caption">{regimeLine(regime)}</p>
+			{regime?.regime === 'working' ? (
+				<DetailRows>
+					<DetailRow label="What was checked before drawing">
+						<p className="copy">{regimeLine(regime)}</p>
+					</DetailRow>
+				</DetailRows>
+			) : (
+				<p className="overview-caption">{regimeLine(regime)}</p>
+			)}
 
 			{/*
 			  THE RECEIPT, and it is absent exactly when nothing has been reduced. Its counts are not
@@ -546,11 +676,58 @@ function Overview({
 				/>
 			) : null}
 
-			<p className="overview-hint">
-				<Icon.Info size={13} className="icon" />
-				Scroll to zoom, drag to move, click a name to open it. Names are labelled once you are close
-				enough for the labels to fit.
-			</p>
 		</div>
+	);
+}
+
+/**
+ * The reading under a narrowed picture: which island, how big, and the way to the name.
+ *
+ * Three cases and three sentences. A selection names the island the click landed on with its
+ * size in names and statements, and offers to open the name. A query says how many names matched
+ * and on how many islands — and, when there were more islands than the picture lights at once,
+ * how many it chose. A query that matched nothing says so, because a wholly dimmed canvas with no
+ * sentence under it reads as a broken picture rather than as an honest answer.
+ */
+function FocusReading({ focus, plan, selected, query, shape }) {
+	if (!focus) return null;
+
+	if (focus.reason === 'selected' && selected) {
+		const componentId = plan.nodes.find((node) => node.id === selected)?.componentId;
+		const members = new Set(plan.nodes.filter((node) => node.componentId === componentId).map((node) => node.id));
+		const statements = plan.edges.filter((edge) => members.has(edge.source)).length;
+		/*
+		  "labelled where the names fit" and not "every name on it is labelled": the paint drops a
+		  label that would land on another, so a 206-name island shows a few dozen at the fit and the
+		  rest as the reader zooms. The old clause was false on the biggest island in the vault.
+		*/
+		return (
+			<p className="overview-reading">
+				<strong>“{selected}”</strong> is one of {members.size.toLocaleString()} names on this island, joined by{' '}
+				{statements.toLocaleString()} {statements === 1 ? 'statement' : 'statements'}; labelled where the
+				names fit — zoom for the rest. <a href={nameRoute(selected)}>Open “{selected}”</a>
+			</p>
+		);
+	}
+
+	const matched = focus.marked.size;
+	if (matched === 0) {
+		return (
+			<p className="overview-reading">
+				<strong>Nothing here is spelled like “{query}”.</strong> The picture is dimmed because nothing on
+				it matched; clear the box to light it again.
+			</p>
+		);
+	}
+	const islands = focus.islands === 1 ? 'one island' : `${focus.islands.toLocaleString()} islands`;
+	return (
+		<p className="overview-reading">
+			<strong>
+				{matched.toLocaleString()} of {shape.nameCount.toLocaleString()} names match “{query}”
+			</strong>
+			{focus.shown === focus.islands
+				? ` — on ${islands}, lit and labelled where the names fit.`
+				: ` across ${islands}; the ${focus.shown.toLocaleString()} where the most connected matches sit are lit.`}
+		</p>
 	);
 }

@@ -1,6 +1,6 @@
 import * as RadixCheckbox from '@radix-ui/react-checkbox';
 import * as RadixCollapsible from '@radix-ui/react-collapsible';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { Chip } from './badge.jsx';
 import { cx } from './cx.mjs';
@@ -173,8 +173,16 @@ export function Facet({
 							<p className="filter-empty">No value here contains those words.</p>
 						) : null}
 
-						{visible.map((entry) => (
-							<label key={entry.value} className="filter-value">
+						{visible.map((entry, index) => (
+							<Fragment key={entry.value}>
+							{/*
+							  A facet whose values fall under more than one axis — branch, file — draws the axis
+							  once as a small heading over its values, instead of as a word repeated on every row.
+							*/}
+							{entry.group && entry.group !== visible[index - 1]?.group ? (
+								<div className="filter-group">{entry.group}</div>
+							) : null}
+							<label className="filter-value">
 								<RadixCheckbox.Root
 									className="checkbox"
 									checked={chosen.has(entry.value)}
@@ -184,9 +192,10 @@ export function Facet({
 										<Check size={10} />
 									</RadixCheckbox.Indicator>
 								</RadixCheckbox.Root>
-								<span className="filter-value-label">{entry.label ?? entry.value}</span>
+								<span className="filter-value-label" title={String(entry.value)}>{entry.label ?? entry.value}</span>
 								<span className="filter-value-count">{entry.count}</span>
 							</label>
+							</Fragment>
 						))}
 
 						{active && onClear ? (

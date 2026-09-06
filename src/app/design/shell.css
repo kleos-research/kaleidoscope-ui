@@ -70,39 +70,10 @@
 }
 
 /*
- * THE VAULT IS A SHORT NAME. "I don't know why we need to enter the entire folder path. It's too
- * long."
- *
- * The name is the last segment of the resolved root, and the whole path — with the engine, the
- * contract digest, the model reading and where this app keeps its copies — is one click away in a
- * popover. Nothing was hidden; a fingerprint stopped being a headline.
+ * ABOUT THIS VAULT — the readings, in a dialog behind the "…" menu. The vault chip that used to sit
+ * between the wordmark and the project is gone: no approved mockup draws one, and on the owner's
+ * own install it repeated the wordmark in lower case.
  */
-.vault-name {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-3);
-	height: var(--control-h-sm);
-	padding: 0 var(--space-4);
-	border: var(--border) solid transparent;
-	border-radius: var(--radius-chip);
-	background: none;
-	color: var(--muted);
-	font-size: var(--text-small);
-	cursor: pointer;
-	max-width: 180px;
-	white-space: nowrap;
-}
-
-.vault-name:hover {
-	background: var(--raised);
-	color: var(--text);
-}
-
-.vault-name-text {
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
 .vault-sheet {
 	display: flex;
 	flex-direction: column;
@@ -193,52 +164,59 @@
 	color: var(--muted);
 }
 
-/* "of 2,847 in this vault" — what the chosen project is a part of. Reads only beside the switcher. */
-.topbar-context {
-	font-size: var(--text-small);
-	color: var(--faint);
-	white-space: nowrap;
-}
-
 /* ------------------------------------------------------------------ navigation */
 
 /*
- * FOUR DESTINATIONS, EACH LABELLED SO IT NEEDS NO EXPLAINING.
+ * FOUR WORDS AFTER THE PROJECT CHIP, drawn in BrowseB.dc.html.
  *
  * "I see Kaleidoscope, Memories, Needs a decision, Graph, New memory. I don't know what either of
- * them does." Two of those five are gone: "Graph" became "Names", which says what is in there, and
- * "New memory" is an action rather than a place — it lives in the More menu with the other actions.
+ * them does." The first build answered with a row of boxed pills, which is the same row in a
+ * different coat. This is the quietest form that is still self-evident: plain text at the body UI
+ * size, no box, no icon, no weight change. The screen you are on is the one word in ink with a 2px
+ * accent rule under it, and the rule runs the full height of the bar so it meets the hairline —
+ * a "you are here" the eye reads before it reads the word.
+ *
+ * Why the link is as tall as the bar: the rule is a border on the link, and a border that stopped
+ * short of the hairline would float as an underline under a word rather than mark a place in the
+ * bar. The height is the bar's minus its own hairline so nothing overflows onto it. The 2px of
+ * top padding balances the 2px rule, so the four words share a baseline whichever one is lit.
+ *
+ * No weight change on the current one, on purpose: a heavier word is a wider word, and the three
+ * to its right would shift with every switch.
  */
 .topbar-nav {
 	display: flex;
 	align-items: center;
-	gap: var(--space-1);
+	gap: var(--space-14);
+	margin-left: var(--space-6);
 	min-width: 0;
 }
 
 .nav-link {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-4);
-	height: var(--control-h-sm);
-	padding: 0 var(--space-8);
-	border-radius: var(--radius-control);
+	height: calc(var(--topbar-h) - var(--border));
+	padding-top: 2px;
+	border-bottom: 2px solid transparent;
 	color: var(--muted);
-	font-size: var(--text-ui);
+	font-size: var(--text-ui-lg);
 	text-decoration: none;
 	white-space: nowrap;
 }
 
 .nav-link:hover {
-	background: var(--raised);
 	color: var(--text);
 	text-decoration: none;
 }
 
 .nav-link[aria-current='page'] {
-	background: var(--raised);
 	color: var(--text);
-	font-weight: var(--weight-medium);
+	border-bottom-color: var(--accent);
+}
+
+/* The ring would otherwise be clipped by the bar; keep it inside the word's own row. */
+.nav-link:focus-visible {
+	outline-offset: -2px;
 }
 
 /* ------------------------------------------------------------------ find or ask */
@@ -406,8 +384,22 @@
 	gap: var(--space-13);
 }
 
+/*
+ * 940px OF CONTENT, as Search.dc.html draws it from 250 to 1190 at 1440 wide. The page carries 40px
+ * of horizontal padding, so the box has to be the content plus both gutters — at 940 the ask box
+ * measured 860 and nine of sixteen served titles wrapped where the mockup sets a one-line rhythm.
+ */
 .page-narrow {
-	width: min(940px, 100%);
+	width: min(calc(940px + 2 * var(--space-20)), 100%);
+}
+
+/*
+ * A page made of sentences takes the memory's own reading measure — 660, as ReadB sets the words —
+ * rather than the 1080 column: at 130 characters a line is a paragraph a reader loses their place
+ * in, and "What removal cannot do" is read once, slowly, by somebody who has just leaked a secret.
+ */
+.page-read {
+	width: min(calc(var(--column-read) + 2 * var(--space-20)), 100%);
 }
 
 /*
@@ -441,6 +433,56 @@
 
 .notice p {
 	margin: 0;
+}
+
+/*
+ * THE ONE-LINE FORM, which the engine-compatibility notice wears. One sentence at the small UI size,
+ * a link that opens the readings under it, and — when the writes are still allowed — a control that
+ * puts it away for the session. It used to be a 274px block on every screen of the owner's own
+ * install; that is the "huge path across the entire screen" complaint with a hash instead of a path.
+ */
+.notice-line {
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-4) var(--space-8);
+	padding: var(--space-5) var(--space-14);
+	/* One sentence at the size of a control — the bar's own language, never a headline. */
+	font-size: var(--text-ui);
+	line-height: var(--leading-ui);
+}
+
+.notice-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.notice-link {
+	border: 0;
+	padding: 0;
+	background: none;
+	font: inherit;
+	color: inherit;
+	font-weight: var(--weight-medium);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.notice-dismiss {
+	width: var(--control-h-sm);
+	height: var(--control-h-sm);
+	border-color: transparent;
+	background: none;
+	color: inherit;
+}
+
+.notice-details {
+	flex-basis: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: var(--space-4) 0 var(--space-3);
 }
 
 /*

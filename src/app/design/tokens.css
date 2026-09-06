@@ -17,7 +17,13 @@
  */
 
 :root {
-	color-scheme: light dark;
+	/*
+	 * LIGHT ONLY. Every approved board is drawn on the light palette, and the brief names no dark
+	 * one. A dark block kept "the values the app already had" and it was what the owner's own Mac —
+	 * in Dark appearance — rendered on first launch: a bar and an accent nobody had drawn or
+	 * reviewed. Until a dark board exists, the page paints its own ground whatever the OS prefers.
+	 */
+	color-scheme: light;
 
 	/* ------------------------------------------------------------------ colour */
 
@@ -191,49 +197,4 @@
 
 	--duration-fast: 90ms;
 	--duration: 140ms;
-}
-
-@media (prefers-color-scheme: dark) {
-	:root {
-		--bg: #121211;
-		--surface: #191918;
-		--raised: #212020;
-		--text: #e8e5df;
-		--muted: #9a958d;
-		--faint: #6e6a63;
-		--line: #2a2926;
-		--line-strong: #3b3934;
-		--accent: #8ab4de;
-		--accent-soft: #1a2530;
-		--warn: #d9a066;
-		--warn-soft: #241d14;
-
-		--accent-line: #2b3d4e;
-		--accent-ink: #b9d3ea;
-		--warn-line: #3b2f20;
-		--warn-raised: #4a3a25;
-		--warn-row: #1d1a15;
-
-		/*
-		 * The filled control inverts too. Keeping #1a1917 here would paint a near-black button on a
-		 * near-black page: still technically the accent-free "one filled control", and invisible.
-		 */
-		--inverse-bg: #e8e5df;
-		--inverse-text: #121211;
-
-		--graph-edge: #47443e;
-		--k0: #7aa8d6;
-		--k1: #9dbb7e;
-		--k2: #c2a06a;
-		--k3: #b193c2;
-		--k4: #d9a066;
-		--k5: #6fc4c0;
-		--k6: #d69a9a;
-		--k7: #9aa8d6;
-		--k-other: #8b867e;
-
-		--shadow-popover: 0 4px 14px rgba(0, 0, 0, 0.45);
-		--shadow-dialog: 0 12px 40px rgba(0, 0, 0, 0.6);
-		--scrim: rgba(0, 0, 0, 0.55);
-	}
 }

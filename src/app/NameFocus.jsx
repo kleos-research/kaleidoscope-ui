@@ -1,28 +1,67 @@
 import { useMemo, useState } from 'react';
 
-import { buildGraph, fidelityReading, kindPalette, modelWarning, nearDuplicates } from './graph-model.mjs';
+import { buildGraph, fidelityReading, modelWarning, nearDuplicates } from './graph-model.mjs';
 import {
+	DEFAULT_DIRECTION,
+	EGO_DIRECTIONS,
 	EGO_MAX_DEPTH,
 	FOCUS_CAPTION,
-	egoElements,
+	egoWithPin,
 	nameReading,
 } from './names-model.mjs';
 import { useFocusActions } from './focus-actions.mjs';
 import { ago } from './when.mjs';
 import {
-	Badge,
+	Chip,
 	DetailRow,
 	DetailRows,
 	EgoGraph,
-	edgeLabelsFit,
+	egoDrawing,
 	EmptyState,
 	Eyebrow,
 	Display,
+	glossDefinition,
 	KindLegend,
+	MenuItem,
+	MenuLabel,
+	MenuSeparator,
 	Note,
+	OverflowMenu,
 	PaneFoot,
 	SegmentedControl,
 } from './ui/index.mjs';
+
+/**
+ * The direction dial's positions, in plain words. The model's ids are structure and the words are
+ * this screen's: "from it" and "to it" were labels the owner would have to ask about.
+ */
+const DIRECTION_WORDS = { all: 'Both ways', out: 'What it says', in: 'What is said about it' };
+
+/** The strip at the frame's foot that the legend is drawn over, in CSS px. */
+const LEGEND_INSET = 44;
+
+/**
+ * THE SLOTS ARE ASSIGNED PER DRAWING. The vault-wide palette gives the eight most-used kinds in
+ * the whole vault a colour, so on a drawing of nine names twelve of fourteen nodes were grey and
+ * the legend listed "practice" while no practice was drawn. Here the kinds present on THIS canvas
+ * take the slots, most frequent first, and the legend lists exactly those — GraphFocus's five on
+ * bare paper. The hub is left out: it is drawn in the text ink and is named in the heading beside.
+ */
+function drawingPalette(nodes, focus) {
+	const counts = new Map();
+	for (const node of nodes) {
+		if (node.depth === 0 || node.id === focus || !node.kind) continue;
+		counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1);
+	}
+	const ordered = [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+	const assignment = new Map(ordered.slice(0, 8).map(([kind], index) => [kind, index]));
+	return {
+		size: 8,
+		slotOf: (kind) => (kind && assignment.has(kind) ? assignment.get(kind) : -1),
+		named: ordered.slice(0, 8).map(([kind, count], index) => ({ kind, count, slot: index })),
+		otherCount: Math.max(0, ordered.length - 8),
+	};
+}
 
 /**
  * ONE NAME: the drawing of what is around it, and the text of what is said about it.
@@ -51,42 +90,123 @@ import {
  * BECAUSE DEGREE IS BOUNDED, EVERY LIST IN THE PANE IS COMPLETE. What is deferred behind a closed
  * row is deferred for attention, not because it was too long to render — and the row carries its
  * count, so a reader deciding whether to open it is deciding on a number rather than on a hunch.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ * THREE DIALS IN THE BAR, AND THE PIN
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * How far to draw, which way to follow the statements, and whether to keep this name on the
+ * canvas while another is opened. The first two are the drawing's and live in this screen's own
+ * state. The pin outlives this screen — it is the whole point of it — so it lives in the URL, and
+ * this component only reads it and asks for it to change.
  */
-export function NameFocus({ surface, records, health = null, model = null, onOpen, onOpenName }) {
+export function NameFocus({
+	surface,
+	records,
+	health = null,
+	model = null,
+	pinned = null,
+	onPin = () => {},
+	onOpen,
+	onOpenName,
+}) {
 	const graph = useMemo(() => buildGraph(records), [records]);
 	const duplicates = useMemo(() => nearDuplicates(graph), [graph]);
-	const palette = useMemo(() => kindPalette(graph), [graph]);
 	const reading = useMemo(() => nameReading(graph, surface, duplicates), [graph, surface, duplicates]);
 
 	const [depth, setDepth] = useState(1);
+	const [direction, setDirection] = useState(DEFAULT_DIRECTION);
+	const [allStatements, setAllStatements] = useState(false);
+	const [allMemories, setAllMemories] = useState(false);
+	const walked = useMemo(
+		() => (reading ? egoWithPin(graph, surface, pinned, { depth, direction }) : null),
+		[reading, graph, surface, pinned, depth, direction],
+	);
+	// The colours are this drawing's own — see `drawingPalette` — and the nodes carry them.
+	const palette = useMemo(() => (walked ? drawingPalette(walked.nodes, surface) : null), [walked, surface]);
 	const ego = useMemo(
-		() => (reading ? egoElements(graph, surface, { depth, palette }) : null),
-		[reading, graph, surface, depth, palette],
+		() =>
+			walked
+				? { ...walked, nodes: walked.nodes.map((node) => ({ ...node, slot: palette.slotOf(node.kind) })) }
+				: null,
+		[walked, palette],
 	);
 
-	const labelsFit = useMemo(() => edgeLabelsFit(ego?.edges ?? []), [ego]);
+	/*
+	  WHERE EVERYTHING SITS, computed once here rather than inside the drawing, because two things
+	  read the answer: the canvas draws it, and the legend in the canvas's corner lists the relations
+	  the arithmetic could not place on their lines. One computation, so the two cannot disagree
+	  about which those are.
+	*/
+	const drawing = useMemo(() => (ego ? egoDrawing(ego, ego.centres) : null), [ego]);
+	const shared = useMemo(() => new Set((ego?.shared ?? []).map((entry) => entry.id)), [ego]);
+	// "+n" is printed at two steps, where opening a neighbour is the question it answers.
+	const anyBeyond = useMemo(
+		() => depth >= 2 && (ego?.nodes ?? []).some((node) => node.beyond > 0),
+		[ego, depth],
+	);
+	// The relation names the drawing numbered, keyed by edge, so the panel can print the number
+	// beside the statement it belongs to.
+	const numbered = useMemo(
+		() => new Map((drawing?.markers ?? []).map((marker) => [marker.id, marker.number])),
+		[drawing],
+	);
 
 	/*
-	  THE DEPTH DIAL GOES IN THE ONE BAR, not above the drawing. A second row of chrome under the
-	  bar is exactly the thing a reader has to scroll past before reaching what they opened, and
-	  every approved mockup for a focused screen draws one bar.
+	  THE BAR IS GraphFocus's: one two-position control, Direct / Two steps. The direction and the
+	  pin are real and stay, behind one quiet "…" with plain words — "From it", "To it" and "Pin"
+	  resident in the bar were three boxed controls no mockup draws and labels the owner would ask
+	  about. A pinned name still reads back as a chip, because it is a choice the reader made and
+	  the way to undo it belongs where it is shown. The third step is not offered: nothing draws it.
 	*/
 	useFocusActions(
 		() =>
 			reading ? (
-				<SegmentedControl
-					label="How far from this name to draw"
-					value={String(depth)}
-					onValueChange={(next) => setDepth(Number(next))}
-					/*
-					  The steps come from the cap rather than from three literals here. A control that
-					  offered a depth the model refuses to grow to is a control that does nothing, and it
-					  would look identical to one that worked on a vault where that depth was empty.
-					*/
-					options={DEPTH_STEPS.slice(0, EGO_MAX_DEPTH)}
-				/>
+				<>
+					{pinned ? (
+						<Chip tone="accent" onRemove={() => onPin(null)} removeLabel={`Unpin “${pinned}”`}>
+							<span className="pin-chip-text">pinned “{pinned}”</span>
+						</Chip>
+					) : null}
+					<SegmentedControl
+						label="How far from this name to draw"
+						value={String(depth)}
+						onValueChange={(next) => setDepth(Number(next))}
+						/*
+						  Two positions, capped by the model's own limit so the control cannot offer a
+						  depth the walk refuses to grow to.
+						*/
+						options={DEPTH_STEPS.slice(0, Math.min(2, EGO_MAX_DEPTH))}
+					/>
+					<OverflowMenu label="More ways to draw this">
+						<MenuLabel>Follow the statements</MenuLabel>
+						{/*
+						  The positions are the model's own list, so the menu cannot offer a direction the
+						  walk does not know; the words are this screen's. A statement has a subject and an
+						  object: "what it says" draws the statements this name makes, "what is said about
+						  it" the ones made about it.
+						*/}
+						{EGO_DIRECTIONS.map((entry) => (
+							<MenuItem
+								key={entry.id}
+								onSelect={() => setDirection(entry.id)}
+								hint={entry.id === direction ? 'now' : null}
+							>
+								{DIRECTION_WORDS[entry.id] ?? entry.label}
+							</MenuItem>
+						))}
+						<MenuSeparator />
+						{pinned === surface ? (
+							<MenuItem onSelect={() => onPin(null)}>Unpin this name</MenuItem>
+						) : (
+							<MenuItem onSelect={() => onPin(surface)}>
+								{pinned ? 'Pin this name instead' : 'Keep this name on the canvas while opening another'}
+							</MenuItem>
+						)}
+					</OverflowMenu>
+				</>
 			) : null,
-		[reading, depth],
+		[reading, depth, direction, surface, pinned],
 	);
 
 	if (!reading) {
@@ -103,6 +223,8 @@ export function NameFocus({ surface, records, health = null, model = null, onOpe
 		);
 	}
 
+	const following = DIRECTION_WORDS[direction] ?? direction;
+
 	/*
 	  TWO PANES INSIDE THE SCROLL REGION `App` ALREADY OPENED, and therefore a height of its own
 	  rather than `flex: 1` — a flex grow term inside a block scroll container is inert, and the
@@ -114,53 +236,87 @@ export function NameFocus({ surface, records, health = null, model = null, onOpe
 				<EgoGraph
 					elements={ego}
 					focus={surface}
+					drawing={drawing}
+					pinned={ego.pinned?.found ? ego.pinned.surface : null}
+					shared={shared}
 					selected={surface}
+					inset={LEGEND_INSET}
+					beyondMarks={depth >= 2}
 					onSelect={(id) => {
 						if (id && id !== surface) onOpenName(id);
 					}}
-					/*
-					  MEASURED, not counted. `edgeLabelsFit` compares the longest relation name against
-					  the arc each spoke actually has; a count cannot see that ten forty-character
-					  snake_case names on one hub overprint each other and the hub. See `ego-graph.jsx`.
-					*/
-					showEdgeLabels={labelsFit}
-					label={`What is around “${surface}”`}
+					label={
+						`What is around “${surface}”` +
+						(ego.pinned?.found ? ` and “${ego.pinned.surface}”` : '') +
+						`, following statements ${following.toLowerCase()}`
+					}
 				/>
 
 				<div className="name-canvas-legend">
-					<KindLegend palette={palette} />
+					<KindLegend palette={palette} limit={8} otherWord="other" />
 					<span className="overview-legend-sep" aria-hidden="true">
 						|
 					</span>
 					<span>circle size = how often it is named</span>
-					{labelsFit ? null : (
+					{anyBeyond ? (
 						<>
 							<span className="overview-legend-sep" aria-hidden="true">
 								|
 							</span>
 							{/*
-							  SAID, not silently omitted. A drawing with no relation names looks exactly like
-							  a drawing whose relations are unknown, and they are all listed beside it.
+							  The count at a node's shoulder, decoded once. It is what lets a reader decide
+							  whether opening a neighbour is worth it before they do.
 							*/}
-							<span>relations are named in the panel</span>
+							<span>+n = more beyond it, not drawn</span>
 						</>
-					)}
+					) : null}
+					{ego.pinned?.found ? (
+						<>
+							<span className="overview-legend-sep" aria-hidden="true">
+								|
+							</span>
+							<span className="name-legend-item">
+								<span className="name-legend-mark name-legend-mark-pinned" aria-hidden="true" />
+								pinned
+							</span>
+							{shared.size > 0 ? (
+								<span className="name-legend-item">
+									<span className="name-legend-mark name-legend-mark-shared" aria-hidden="true" />
+									joined to both
+								</span>
+							) : null}
+						</>
+					) : null}
 				</div>
 
-				{/*
-				  WHAT THE DRAWING DID NOT DRAW, AS AN EXACT COUNT.
+				<div className="name-canvas-notes">
+					{/*
+					  WHAT THE DRAWING DID NOT DRAW, AS AN EXACT COUNT.
 
-				  The neighbourhood grows a whole ring at a time and a ring that would cross the node cap
-				  is refused entire, so this sentence is a fact rather than an estimate. A drawing that
-				  stopped part-way through a ring would look identical to a complete one.
-				*/}
-				{ego.capped ? (
-					<Note tone="warn" className="name-canvas-note">
-						Drawn to {ego.reachedDepth === 1 ? 'one step' : `${ego.reachedDepth} steps`}. The next
-						step would add {ego.hidden.toLocaleString()} more names, which is past what this drawing
-						will put in front of you at once — so it is not drawn at all rather than drawn in part.
-					</Note>
-				) : null}
+					  The neighbourhood grows a whole ring at a time and a ring that would cross the node cap
+					  is refused entire, so this sentence is a fact rather than an estimate. A drawing that
+					  stopped part-way through a ring would look identical to a complete one.
+					*/}
+					{ego.capped ? (
+						<Note tone="warn" className="name-canvas-note">
+							Drawn to {ego.reachedDepth === 1 ? 'one step' : `${ego.reachedDepth} steps`}. The next
+							step would add {ego.hidden.toLocaleString()} more names, which is past what this drawing
+							will put in front of you at once — so it is not drawn at all rather than drawn in part.
+						</Note>
+					) : null}
+
+					{/*
+					  THE COMPARISON, IN WORDS. Two neighbourhoods side by side answer "what do these two
+					  have in common" only if the reader finds the common names by eye; here they are
+					  listed. There is no path between the two, on evidence — see `egoWithPin` — and this
+					  sentence is what a reader gets instead of one.
+					*/}
+					{pinned && pinned !== surface ? (
+						<Note className="name-canvas-note">
+							<PinReading ego={ego} onOpenName={onOpenName} />
+						</Note>
+					) : null}
+				</div>
 			</div>
 
 			<aside className="pane pane-surface name-panel">
@@ -169,12 +325,17 @@ export function NameFocus({ surface, records, health = null, model = null, onOpe
 						<Display level={1} size="sm">
 							{reading.surface}
 						</Display>
+						{/*
+						  "tool · the shared dependency cache used by CI". A vault stores a gloss as
+						  `surface | kind | definition`, which drawn whole here printed the name and the
+						  kind twice with pipes; `glossDefinition` keeps the clause that says something new.
+						*/}
 						<div className="name-panel-what">
 							{reading.kind ? <span>{reading.kind}</span> : <span className="faint">kind not declared</span>}
-							{reading.gloss ? (
+							{glossDefinition(reading.gloss, reading.surface, reading.kind) ? (
 								<>
 									<span className="faint"> · </span>
-									{reading.gloss}
+									{glossDefinition(reading.gloss, reading.surface, reading.kind)}
 								</>
 							) : null}
 						</div>
@@ -225,23 +386,51 @@ export function NameFocus({ surface, records, health = null, model = null, onOpe
 					<section className="name-panel-block">
 						<Eyebrow>What is said about it</Eyebrow>
 						<ul className="statements">
-							{reading.statements.slice(0, VISIBLE_STATEMENTS).map((statement) => (
-								<Statement key={statement.id} statement={statement} onOpenName={onOpenName} />
+							{reading.statements.slice(0, allStatements ? undefined : VISIBLE_STATEMENTS).map((statement) => (
+								<Statement
+									key={statement.id}
+									statement={statement}
+									number={numbered.get(statement.id) ?? null}
+									onOpenName={onOpenName}
+								/>
 							))}
 						</ul>
+						{/*
+						  GraphFocus's own disclosure: one accent line — "5 more" — that opens the rest in
+						  place, not a chevron row with hairlines.
+						*/}
 						{reading.statements.length > VISIBLE_STATEMENTS ? (
-							<DetailRows>
-								<DetailRow
-									label="The rest of what is said about it"
-									count={reading.statements.length - VISIBLE_STATEMENTS}
-								>
-									<ul className="statements">
-										{reading.statements.slice(VISIBLE_STATEMENTS).map((statement) => (
-											<Statement key={statement.id} statement={statement} onOpenName={onOpenName} />
-										))}
-									</ul>
-								</DetailRow>
-							</DetailRows>
+							<button
+								type="button"
+								className="link-more"
+								aria-expanded={allStatements}
+								onClick={() => setAllStatements(!allStatements)}
+							>
+								{allStatements ? 'Fewer' : `${reading.statements.length - VISIBLE_STATEMENTS} more`}
+							</button>
+						) : null}
+						{/*
+						  THE RELATIONS THE DRAWING COULD NOT PLACE, BY NUMBER — decoded here, beside the
+						  statements they belong to, rather than in a box over the drawing that covered
+						  nodes at two steps. The count comes first: a drawing that dropped three relation
+						  names without saying so would look exactly like one whose relations were all drawn.
+						*/}
+						{drawing && drawing.counts.numbered > 0 ? (
+							<div className="ego-fallbacks" role="note">
+								<div className="ego-fallbacks-head">
+									{drawing.counts.numbered === 1
+										? '1 relation had no room for its name on the drawing and wears a number there.'
+										: `${drawing.counts.numbered} relations had no room for their names on the drawing and wear numbers there.`}
+								</div>
+								<ol className="ego-fallbacks-list">
+									{drawing.markers.map((marker) => (
+										<li key={marker.id} className="ego-fallbacks-row">
+											<span className="ego-fallbacks-number">{marker.number}</span>
+											<span>{marker.text}</span>
+										</li>
+									))}
+								</ol>
+							</div>
 						) : null}
 					</section>
 
@@ -251,23 +440,19 @@ export function NameFocus({ surface, records, health = null, model = null, onOpe
 							<span className="item-count">{reading.memoryCount}</span>
 						</div>
 						<ul className="name-memories">
-							{reading.memories.slice(0, VISIBLE_MEMORIES).map((memory) => (
+							{reading.memories.slice(0, allMemories ? undefined : VISIBLE_MEMORIES).map((memory) => (
 								<MemoryLine key={memory.memory_id} memory={memory} onOpen={onOpen} />
 							))}
 						</ul>
 						{reading.memories.length > VISIBLE_MEMORIES ? (
-							<DetailRows>
-								<DetailRow
-									label="The rest of the memories that name it"
-									count={reading.memories.length - VISIBLE_MEMORIES}
-								>
-									<ul className="name-memories">
-										{reading.memories.slice(VISIBLE_MEMORIES).map((memory) => (
-											<MemoryLine key={memory.memory_id} memory={memory} onOpen={onOpen} />
-										))}
-									</ul>
-								</DetailRow>
-							</DetailRows>
+							<button
+								type="button"
+								className="link-more"
+								aria-expanded={allMemories}
+								onClick={() => setAllMemories(!allMemories)}
+							>
+								{allMemories ? 'Fewer' : `See all ${reading.memories.length}`}
+							</button>
 						) : null}
 					</section>
 
@@ -305,13 +490,61 @@ const VISIBLE_STATEMENTS = 4;
 const VISIBLE_MEMORIES = 3;
 
 /**
+ * The comparison, as a sentence with links in it.
+ *
+ * Three cases, three sentences: the pinned name is not in this vault any more, the two share
+ * nothing at this depth, or they share these. The shared names are links, because the reader's
+ * next question is "what is that", and it is one press away.
+ */
+function PinReading({ ego, onOpenName }) {
+	const pin = ego.pinned;
+	if (!pin) return null;
+	if (!pin.found) {
+		return (
+			<>
+				“{pin.surface}” is pinned, and no name in the memories this browser holds is spelled that way
+				any more — so only this name is drawn.
+			</>
+		);
+	}
+	const capped = pin.capped ? (
+		<>
+			{' '}
+			Its next step would add {pin.hidden.toLocaleString()} more names and is not drawn.
+		</>
+	) : null;
+	if (ego.shared.length === 0) {
+		return (
+			<>
+				“{pin.surface}” is pinned. At this depth nothing is joined to both, so the two are drawn apart.
+				{capped}
+			</>
+		);
+	}
+	return (
+		<>
+			“{pin.surface}” is pinned. Joined to both:{' '}
+			{ego.shared.map((entry, index) => (
+				<span key={entry.id}>
+					{index > 0 ? ', ' : null}
+					<button type="button" className="statement-other" onClick={() => onOpenName(entry.id)}>
+						{entry.id}
+					</button>
+				</span>
+			))}
+			.{capped}
+		</>
+	);
+}
+
+/**
  * One thing said about this name.
  *
  * The relation is grey and the other endpoint is the link, which puts the reader's eye on the noun
  * rather than on the verb — and the direction is carried in the word order rather than by an arrow
  * glyph, because "is keyed on lockfile hash" and "lockfile hash keys" are a sentence and a puzzle.
  */
-function Statement({ statement, onOpenName }) {
+function Statement({ statement, number = null, onOpenName }) {
 	const other = (
 		<button type="button" className="statement-other" onClick={() => onOpenName(statement.other)}>
 			{statement.other}
@@ -332,8 +565,13 @@ function Statement({ statement, onOpenName }) {
 	  earlier version prefixed the incoming case with "is what", which put the relation before the
 	  thing doing it and read as a fragment with a real relation name in the middle of it.
 	*/
+	/*
+	  No mode badge on the row: the mockup draws these as plain text, and the mode belongs to the
+	  memory, which is one press away. A column of grey chips beside every line was chrome.
+	*/
 	return (
 		<li className="statement">
+			{number !== null ? <span className="statement-number">{number}</span> : null}
 			{statement.outgoing ? (
 				<>
 					{relation} {other}
@@ -343,7 +581,6 @@ function Statement({ statement, onOpenName }) {
 					{other} {relation} <span className="statement-relation">this</span>
 				</>
 			)}
-			{statement.mode ? <Badge>{statement.mode}</Badge> : null}
 		</li>
 	);
 }

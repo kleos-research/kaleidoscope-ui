@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchEditRecord, runMerge } from './api.mjs';
 import { composeBody, splitLeadingHeading } from './editor-model.mjs';
+import { useFocusActions } from './focus-actions.mjs';
 import { markSyntax } from './markdown-syntax.mjs';
 import {
+	joinAtMarker,
 	MERGE_STEPS,
 	NO_RANKING_FIELD,
 	planMemoryMerge,
@@ -11,13 +13,13 @@ import {
 	REVERSIBILITY,
 	reversibilityFor,
 	ROLLBACK_IS_NOT_OFFERED,
+	splitAtJoin,
 } from './merge-model.mjs';
 import {
 	Badge,
 	Button,
 	Card,
 	Checkbox,
-	ChoiceRow,
 	Decision,
 	DecisionList,
 	DetailRow,
@@ -28,10 +30,13 @@ import {
 	Eyebrow,
 	FactSentence,
 	Field,
+	Icon,
 	Input,
 	LoadingState,
+	MenuItem,
 	NamedThing,
 	Note,
+	OverflowMenu,
 	PageHead,
 	PageSection,
 	ProseField,
@@ -66,12 +71,15 @@ import {
  *   - the CHOOSER is a page head, one card about the memory in hand, a find box and a list, with
  *     its one control in the head. It had two display headings, a run bar whose only button was
  *     Cancel, and three sentences of caveat above the first thing to read;
- *   - the COMPOSITION is ReadB: the merged memory's words in the reading column and what the agent
- *     acts on in the rail beside them — because a merged memory is a memory, and the person checking
- *     it should be looking at the object they read every day. Every fact in the rail is a tick, the
- *     declarations are the rail's second card, and the order of the two writes and what can put
- *     them back are closed rows under it. The one write is in a run bar under the words, with the
- *     reversibility sentence beside the button rather than in a panel that scrolls away.
+ *   - the COMPOSITION is ReadB with EditB's bar: the merged memory's words in the reading column
+ *     and what the agent acts on in the rail beside them — because a merged memory is a memory, and
+ *     the person checking it should be looking at the object they read every day. Every fact in
+ *     the rail is a tick under the eyebrow of the memory it came from; the order of the two writes
+ *     and what can put them back are closed rows under the facts; the declarations are the rail's
+ *     last card, name and kind on a line. The one write is in the top bar — Cancel and a filled
+ *     "Merge them", where the editor keeps Cancel and Save — and the rail ends in the one line about
+ *     reversibility, as the editor's pane does. The duplicate's words are drawn as a marked block
+ *     under the survivor's, so the join the reader is expected to rewrite is visible as a join.
  *
  * Every honesty statement the previous drawing made is still made; none is behind a tooltip.
  *
@@ -109,8 +117,12 @@ import {
 // Merge two memories
 // =============================================================================================
 
-/** The word for where a fact came from, beside the fact. Three sources is too many for a colour. */
-const FROM = { survivor: 'survivor', duplicate: 'duplicate', both: 'both' };
+/** The eyebrow over a group of facts, by which memory wrote them. */
+const GROUP_LABELS = Object.freeze([
+	{ source: 'survivor', label: () => 'From this memory' },
+	{ source: 'both', label: () => 'Written in both' },
+	{ source: 'duplicate', label: (duplicateTitle) => `From “${duplicateTitle}”` },
+]);
 
 /** The composed body, cut into the heading the page draws as its H1 and the words the pane edits. */
 const wordsOf = (plan, fallbackTitle) =>
@@ -128,14 +140,19 @@ const wordsOf = (plan, fallbackTitle) =>
  * carry entity declarations, and a merge assembled from it would commit having deleted every named
  * thing both memories declared.
  */
-export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepick = null }) {
+export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepick = null, onSwap = null }) {
 	const [loaded, setLoaded] = useState(null);
 	const [loadError, setLoadError] = useState(null);
-	const [body, setBody] = useState('');
+	// The words, in two halves: the survivor's, and the duplicate's after the join marker. Each is
+	// its own field so the join is drawn as a join; the marker goes back between them at the write.
+	const [words, setWords] = useState('');
+	const [joined, setJoined] = useState('');
+	const [seam, setSeam] = useState(null);
 	const [dropped, setDropped] = useState(() => new Set());
 	const [report, setReport] = useState(null);
 	const [error, setError] = useState(null);
 	const [busy, setBusy] = useState(false);
+	const joinRef = useRef(null);
 
 	useEffect(() => {
 		let live = true;
@@ -148,7 +165,10 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 				if (!live) return;
 				setLoaded({ survivor, duplicate });
 				const composed_ = planMemoryMerge(survivor, duplicate);
-				setBody(wordsOf(composed_, survivorId).body);
+				const halves = splitAtJoin(wordsOf(composed_, survivorId).body);
+				setWords(halves.before);
+				setJoined(halves.after);
+				setSeam(halves);
 			} catch (cause) {
 				if (live) setLoadError(cause);
 			}
@@ -179,7 +199,88 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 		return { ...plan.semantic_delta, facts };
 	}, [plan, dropped]);
 
-	const segments = useMemo(() => markSyntax(body), [body]);
+	const segments = useMemo(() => markSyntax(words), [words]);
+	const joinedSegments = useMemo(() => markSyntax(joined), [joined]);
+
+	/*
+	  THE JOIN IS WHERE THE EDITING HAPPENS, so the page opens with it in view: the seam sits about
+	  two-fifths down the screen, with the survivor's last lines above it and the duplicate's first
+	  under it, and the rail beside both. Never scrolled up — a short survivor keeps its title on
+	  screen — and `scrollIntoView` is not used, because a block taller than the viewport is pinned
+	  to its top edge by it, which put the seam itself off-screen.
+	*/
+	useEffect(() => {
+		const join = joinRef.current;
+		const screen = join?.closest('.screen');
+		if (!plan || !join || !screen) return;
+		const target = join.getBoundingClientRect().top - screen.getBoundingClientRect().top - screen.clientHeight * 0.4;
+		if (target > 0) screen.scrollTop = target;
+	}, [plan]);
+
+	const survivorTitle = plan?.semantic_delta?.title ?? survivorId;
+	const duplicateTitle = loaded?.duplicate?.semantic_delta?.title ?? duplicateId;
+
+	/*
+	  THE ONE WRITE, reached through a ref so the bar's button always runs the current composition
+	  without the bar being rebuilt on every keystroke in the words.
+	*/
+	const runRef = useRef(() => {});
+	runRef.current = async () => {
+		if (!plan || !loaded) return;
+		setBusy(true);
+		setError(null);
+		try {
+			const body_ = {
+				survivor: {
+					memory_id: survivorId,
+					seen_version_id: loaded.survivor.expected_version_id,
+					content_md: composeBody({
+						body: joinAtMarker({ ...(seam ?? {}), before: words, after: joined }),
+						title: survivorTitle,
+						heading,
+					}),
+					semantic_delta: composed,
+				},
+				duplicate: {
+					memory_id: duplicateId,
+					seen_version_id: loaded.duplicate.expected_version_id,
+				},
+			};
+			setReport(await runMerge(body_));
+		} catch (cause) {
+			setError(cause);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	/*
+	  EDITB'S BAR: the secondary choices behind "…", then Cancel, then the one filled control. The
+	  write used to be in a run bar 2,200px below the fold, under four sentences; the reader pressed
+	  it with the facts off-screen and authorised a count, which the run bar's own doc comment forbids.
+	*/
+	useFocusActions(
+		() => (
+			<>
+				{onSwap || onRepick ? (
+					<OverflowMenu label="More for this merge">
+						{onSwap ? (
+							<MenuItem onSelect={onSwap}>Keep “{duplicateTitle}” instead, remove this one</MenuItem>
+						) : null}
+						{onRepick ? <MenuItem onSelect={onRepick}>Pick a different memory</MenuItem> : null}
+					</OverflowMenu>
+				) : null}
+				<span className="topbar-divider" aria-hidden="true" />
+				<Button onClick={onDone} disabled={busy}>
+					Cancel
+				</Button>
+				<Button tone="primary" disabled={busy || !plan || Boolean(report)} onClick={() => runRef.current()}>
+					{busy ? 'Writing…' : 'Merge them'}
+				</Button>
+			</>
+		),
+		[busy, plan, report, duplicateTitle, onSwap, onRepick, onDone],
+	);
 
 	if (loadError) return <ErrorState heading="These two memories could not be loaded" error={loadError} />;
 	if (!plan) return <LoadingState what="Loading both memories through the door that carries their declarations" />;
@@ -189,75 +290,61 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 	const reversibility = reversibilityFor('merge');
 	const facts = plan.semantic_delta.facts ?? [];
 	const entities = plan.semantic_delta.entities ?? [];
-	const survivorTitle = plan.semantic_delta.title ?? survivorId;
-	const duplicateTitle = loaded.duplicate?.semantic_delta?.title ?? duplicateId;
-	const factWord = (n) => (n === 1 ? 'fact' : 'facts');
+	const groups = GROUP_LABELS.map((group) => ({
+		source: group.source,
+		label: group.label(duplicateTitle),
+		facts: facts
+			.map((fact, index) => ({ fact, index }))
+			.filter(({ index }) => (plan.provenance[index]?.source ?? 'survivor') === group.source),
+	})).filter((group) => group.facts.length > 0);
 
 	return (
 		<Reading
 			rail={
 				<>
 					{/*
-					  FIRST IN THE RAIL: every fact the merged memory would carry, each one a tick. A
-					  dropped fact stays on the page, struck through, so the list still says what the
-					  two memories held and the reader can put one back.
+					  FIRST IN THE RAIL: every fact the merged memory would carry, each one a tick, under
+					  the eyebrow of the memory it came from. A dropped fact stays on the page, struck
+					  through, so the list still says what the two memories held and the reader can put
+					  one back. The aside is the live count.
 					*/}
 					<Card title="What your agent acts on" aside={`${composed.facts.length} of ${facts.length}`}>
-						<ul className="merge-facts" aria-label="Every fact the merged memory would carry">
-							{facts.map((fact, index) => {
-								const kept = !dropped.has(index);
-								return (
-									<li
-										key={`${fact.subject}-${fact.predicate}-${fact.object}-${index}`}
-										className={kept ? 'merge-fact' : 'merge-fact merge-fact-dropped'}
-									>
-										<Checkbox
-											checked={kept}
-											label={`Keep “${fact.subject} ${fact.predicate} ${fact.object}”`}
-											onCheckedChange={() => {
-												const next = new Set(dropped);
-												if (next.has(index)) next.delete(index);
-												else next.add(index);
-												setDropped(next);
-											}}
-										/>
-										<FactSentence
-											subject={fact.subject}
-											predicate={fact.predicate}
-											object={fact.object}
-										/>
-										<span className="merge-fact-from">
-											{FROM[plan.provenance[index]?.source] ?? FROM.survivor}
-										</span>
-									</li>
-								);
-							})}
-						</ul>
-						<p className="meta">
-							{plan.counts.from_survivor} from the survivor, {plan.counts.from_duplicate} from the
-							duplicate, {plan.counts.shared} written in both.
-						</p>
+						{groups.map((group) => (
+							<div className="merge-group" key={group.source}>
+								<Eyebrow>{group.label}</Eyebrow>
+								<ul className="merge-facts" aria-label={group.label}>
+									{group.facts.map(({ fact, index }) => {
+										const kept = !dropped.has(index);
+										return (
+											<li
+												key={`${fact.subject}-${fact.predicate}-${fact.object}-${index}`}
+												className={kept ? 'merge-fact' : 'merge-fact merge-fact-dropped'}
+											>
+												<Checkbox
+													checked={kept}
+													label={`Keep “${fact.subject} ${fact.predicate} ${fact.object}”`}
+													onCheckedChange={() => {
+														const next = new Set(dropped);
+														if (next.has(index)) next.delete(index);
+														else next.add(index);
+														setDropped(next);
+													}}
+												/>
+												<FactSentence
+													subject={fact.subject}
+													predicate={fact.predicate}
+													object={fact.object}
+												/>
+											</li>
+										);
+									})}
+								</ul>
+							</div>
+						))}
 					</Card>
 
-					<Card title="Named things, from both memories" aside={entities.length}>
-						{entities.map((entity) => (
-							<NamedThing key={entity.n} name={entity.n} kind={entity.kind} gloss={entity.is} />
-						))}
-						{plan.declaration_conflicts.map((conflict) => (
-							<Note key={conflict.name} tone="warn">
-								Both declare “{conflict.name}” and they disagree. Keeping the survivor’s: “
-								{conflict.kept.kind ?? 'no kind'}”.
-							</Note>
-						))}
-						<Note>
-							Both memories’ declarations travel with the facts, in one payload. A merge that
-							folded in the facts and forgot the declarations would commit with those facts
-							dropped from the stored record and nothing in the response saying so.
-						</Note>
-					</Card>
-
+					{/* THE READER'S TWO ROWS, before the reference: the order of the writes, and what can put them back. */}
 					<DetailRows>
-						{/* THE ORDER, on the screen, with the reason each write is where it is. */}
 						<DetailRow label="The order the two writes happen in" count={MERGE_STEPS.length}>
 							<DecisionList label="The two writes a merge is made of">
 								{MERGE_STEPS.map((step) => (
@@ -269,11 +356,33 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 						</DetailRow>
 						<DetailRow label="What can put it back">
 							<p className="copy">{reversibility.recovers}.</p>
+							<p className="copy">
+								Both memories’ declarations travel with the facts, in one payload, so a merge
+								cannot commit with its facts dropped from the stored record.
+							</p>
 							<p className="meta">
 								<a href="#/reversibility">What can be undone, for every action</a>
 							</p>
 						</DetailRow>
 					</DetailRows>
+
+					<Card title="Named things, from both memories" aside={entities.length}>
+						{entities.map((entity) => (
+							<NamedThing key={entity.n} name={entity.n} kind={entity.kind} gloss={entity.is} compact />
+						))}
+						{plan.declaration_conflicts.map((conflict) => (
+							<Note key={conflict.name} tone="warn">
+								Both declare “{conflict.name}” and they disagree. Keeping the survivor’s: “
+								{conflict.kept.kind ?? 'no kind'}”.
+							</Note>
+						))}
+					</Card>
+
+					{/* Said once, here, in the editor's own words for its own foot. */}
+					<p className="reading-rail-foot">
+						<Icon.Info size={13} className="icon" />
+						<span>A copy is kept before both writes. There is no undo.</span>
+					</p>
 				</>
 			}
 		>
@@ -283,18 +392,7 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 				</Display>
 				<div className="reading-meta">
 					{plan.semantic_delta.memory_type ? <Badge>{plan.semantic_delta.memory_type}</Badge> : null}
-					<span>
-						survives · takes in “{duplicateTitle}”, which is then removed
-						{onRepick ? (
-							<>
-								{' '}
-								<span className="faint">·</span>{' '}
-								<Button tone="quiet" onClick={onRepick}>
-									pick a different memory
-								</Button>
-							</>
-						) : null}
-					</span>
+					<span>merging in “{duplicateTitle}”</span>
 				</div>
 			</header>
 
@@ -306,59 +404,34 @@ export function MergeMemories({ survivorId, duplicateId, onDone, onOpen, onRepic
 			) : null}
 
 			{/*
-			  THE WORDS, editable, in the same shape the editor draws them. The composition below is
-			  a starting point, not a proposal: the duplicate's words follow the survivor's under a
-			  marker, and the reader is expected to rewrite the join.
+			  THE WORDS, editable, in the same shape the editor draws them. The survivor's words first;
+			  the duplicate's under them as a marked block, because the join between the two is the
+			  one editorial act this screen exists for and a raw comment in the prose did not say so.
 			*/}
 			<Section title="The words">
 				<ProseField
-					value={body}
+					value={words}
 					segments={segments}
 					spellCheck="true"
-					aria-label="The note the survivor will carry"
-					onChange={(event) => setBody(event.target.value)}
+					aria-label="The survivor’s words"
+					onChange={(event) => setWords(event.target.value)}
 				/>
 			</Section>
 
-			{error ? <ErrorState heading="This merge could not be started" error={error} /> : null}
+			{seam?.marker ? (
+				<div className="merge-join" ref={joinRef}>
+					<Eyebrow>From “{duplicateTitle}” — rewrite the join</Eyebrow>
+					<ProseField
+						value={joined}
+						segments={joinedSegments}
+						spellCheck="true"
+						aria-label={`The words merged in from “${duplicateTitle}”`}
+						onChange={(event) => setJoined(event.target.value)}
+					/>
+				</div>
+			) : null}
 
-			<RunBar
-				what={`${composed.facts.length} ${factWord(composed.facts.length)} and ${entities.length} ${entities.length === 1 ? 'named thing' : 'named things'} are written to the survivor, then the duplicate is removed.`}
-				note={`${reversibility.confirmation} What can put it back: ${reversibility.recovers.toLowerCase()}.`}
-			>
-				<Button onClick={onDone} disabled={busy}>
-					Cancel
-				</Button>
-				<Button
-					tone="primary"
-					disabled={busy}
-					onClick={async () => {
-						setBusy(true);
-						setError(null);
-						try {
-							const body_ = {
-								survivor: {
-									memory_id: survivorId,
-									seen_version_id: loaded.survivor.expected_version_id,
-									content_md: composeBody({ body, title: survivorTitle, heading }),
-									semantic_delta: composed,
-								},
-								duplicate: {
-									memory_id: duplicateId,
-									seen_version_id: loaded.duplicate.expected_version_id,
-								},
-							};
-							setReport(await runMerge(body_));
-						} catch (cause) {
-							setError(cause);
-						} finally {
-							setBusy(false);
-						}
-					}}
-				>
-					{busy ? 'Writing…' : 'Merge them'}
-				</Button>
-			</RunBar>
+			{error ? <ErrorState heading="This merge could not be started" error={error} /> : null}
 		</Reading>
 	);
 }
@@ -414,10 +487,11 @@ function MergeReceipt({ report, onDone, onOpen }) {
  * listing this browser already holds, and the filter is the same substring match the list uses —
  * there is no ranked search in this product and this is not where the first one arrives.
  *
- * WHICH ONE SURVIVES IS ASKED BEFORE ANYTHING IS COMPOSED. It decides which body leads, which
- * declaration wins a disagreement, and which memory is the one that gets removed — and getting it
- * backwards is not visible from the composition afterwards. It is asked on the card about the
- * memory in hand, because it is a fact about that memory's fate.
+ * WHICH ONE SURVIVES IS ASKED ON THE COMPOSITION, not here. It decides which body leads, which
+ * declaration wins a disagreement, and which memory is the one that gets removed — and it can only
+ * be answered once the other memory exists on screen. So the chooser asks for the other memory
+ * and nothing else; the composition's "…" swaps the two, and the swap remounts it with the roles
+ * reversed so nothing composed under the old answer survives.
  */
 export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 	const [partnerId, setPartnerId] = useState(null);
@@ -427,17 +501,16 @@ export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 	const here = rows.find((row) => row.memory_id === memoryId) ?? null;
 	const partner = rows.find((row) => row.memory_id === partnerId) ?? null;
 
+	// Nothing is listed until two characters are typed: forty unfiltered memories under an empty
+	// box were an inventory, and the reader came here knowing which memory they meant.
+	const needle = query.trim().toLowerCase();
 	const candidates = useMemo(() => {
-		const needle = query.trim().toLowerCase();
+		if (needle.length < 2) return [];
 		return rows
 			.filter((row) => row.memory_id !== memoryId)
-			.filter((row) =>
-				needle.length === 0
-					? true
-					: `${row.title ?? ''} ${row.memory_id}`.toLowerCase().includes(needle),
-			)
+			.filter((row) => `${row.title ?? ''} ${row.memory_id}`.toLowerCase().includes(needle))
 			.slice(0, 40);
-	}, [rows, memoryId, query]);
+	}, [rows, memoryId, needle]);
 
 	if (!here) {
 		return (
@@ -463,6 +536,7 @@ export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 				onDone={onDone}
 				onOpen={onOpen}
 				onRepick={() => setPartnerId(null)}
+				onSwap={() => setSurvivorIsThis(!survivorIsThis)}
 			/>
 		);
 	}
@@ -471,7 +545,7 @@ export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 		<div className="page page-narrow">
 			<PageHead
 				title="Merge this memory into another"
-				subtitle="Two memories become one: this app writes the memory that survives, then removes the other. Nothing is written from this screen — picking a memory opens the composition."
+				subtitle="Two memories become one. Nothing is written from this screen."
 				actions={<Button onClick={onDone}>Cancel</Button>}
 			/>
 
@@ -482,31 +556,14 @@ export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 				<Display level={2} size="xs">
 					{here.title ?? here.memory_id}
 				</Display>
-				<Eyebrow>Which one survives?</Eyebrow>
-				<ChoiceRow
-					name={`survivor-side-${memoryId}`}
-					legend="Which of the two memories is the one that survives"
-					value={survivorIsThis ? 'this' : 'other'}
-					onChange={(value) => setSurvivorIsThis(value === 'this')}
-					options={[
-						{
-							value: 'this',
-							label: 'This memory survives',
-							note: 'the other one is removed once the survivor is written',
-						},
-						{
-							value: 'other',
-							label: 'The one I pick survives',
-							note: 'this memory is the one removed',
-						},
-					]}
-				/>
 			</Card>
 
-			<Field
-				label="Find the other memory"
-				note="This finds the words you type in what is already loaded. It does not rank and it asks the engine nothing — and nothing here nominates a pair: this app has no way to tell that two memories say the same thing, so you name the other one."
-			>
+			{/*
+			  The find box needs no note. It finds the words typed in what is already loaded — the
+			  same substring match the list uses — and asks the engine nothing; nothing here nominates
+			  a pair, because this app has no way to tell that two memories say the same thing.
+			*/}
+			<Field label="Find the other memory">
 				{(id) => (
 					<Input
 						id={id}
@@ -519,7 +576,7 @@ export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 				)}
 			</Field>
 
-			{candidates.length === 0 ? (
+			{needle.length < 2 ? null : candidates.length === 0 ? (
 				<EmptyState heading={`No memory in what was loaded matches “${query}”.`}>
 					<p>Every memory this app has read is searched. Try fewer words.</p>
 				</EmptyState>
@@ -534,14 +591,7 @@ export function MergeScreen({ memoryId, rows, onDone, onOpen }) {
 								</Button>
 							}
 							stake={`${row.fact_count.toLocaleString()} ${row.fact_count === 1 ? 'fact' : 'facts'}`}
-							actions={
-								<>
-									{row.memory_type ? <Badge>{row.memory_type}</Badge> : null}
-									<Button tone="quiet" size="sm" onClick={() => onOpen?.(row.memory_id)}>
-										Read it first
-									</Button>
-								</>
-							}
+							actions={row.memory_type ? <Badge>{row.memory_type}</Badge> : null}
 						/>
 					))}
 				</DecisionList>

@@ -21,7 +21,7 @@ import { BacklogView } from './BacklogView.jsx';
   produced the rows. Both old files are deleted rather than left beside it.
 */
 import { BrowseView } from './BrowseView.jsx';
-import { nameRoute, surfaceFromRoute } from './names-model.mjs';
+import { nameRoute, pinnedFromRoute, surfaceFromRoute } from './names-model.mjs';
 import { NameFocus } from './NameFocus.jsx';
 import { NamesView } from './NamesView.jsx';
 import { MemoryDetail } from './MemoryDetail.jsx';
@@ -61,7 +61,9 @@ import {
 	RootBar,
 	ToastProvider,
 	TooltipProvider,
-	VaultName,
+	AboutVault,
+	Icon,
+	IconButton,
 } from './ui/index.mjs';
 
 /** How often the cheap liveness read runs. It fetches no memory and writes nothing. */
@@ -151,9 +153,14 @@ function routeFromHash() {
 	  match at all and drop the reader on the table.
 	*/
 	const named = surfaceFromRoute(window.location.hash);
-	if (named !== null) return { name: 'name', surface: named };
+	// The pin rides in the same route — `?with=<name>` — because a comparison of two names is a
+	// place, and a place survives a reload and can be handed on as a link. See `pinnedFromRoute`.
+	if (named !== null) return { name: 'name', surface: named, pinned: pinnedFromRoute(window.location.hash) };
 	if (window.location.hash === '#/names') return { name: 'names' };
-	if (window.location.hash === '#/decide') return { name: 'backlog' };
+	// The curation queue, and the group a link may open it on: `#/decide?name=<surface>` arrives from
+	// a "Merge?" on the names table, so the reader lands on their pair rather than on the whole queue.
+	const deciding = window.location.hash.match(/^#\/decide(?:\?name=(.*))?$/);
+	if (deciding) return { name: 'backlog', focusName: deciding[1] ? decodeURIComponent(deciding[1]) : null };
 	// The search screen. It runs no query on arrival — it carries the words typed in the shell,
 	// runs "find these words" over the payload the browser already holds, and waits to be asked
 	// before it touches the ranked door. See the note on `FindOrAsk`.
@@ -410,6 +417,24 @@ export function App() {
 	const relations = useMemo(() => relationIndex(allRows), [allRows]);
 
 	/*
+	  WHAT "WHAT REMOVAL CANNOT DO" IS ABOUT. One memory when the route names one; the ticked
+	  selection when it was reached from a bulk confirmation, so the no-copy path is open to a run of
+	  several rather than a dead end with only Cancel on it; nothing when it was opened from the menu.
+	*/
+	const limitsMemories = useMemo(() => {
+		if (route.name !== 'limits') return [];
+		if (route.memoryId) return rows.filter((row) => row.memory_id === route.memoryId);
+		return (confirm?.selection ?? []).map(
+			(item) =>
+				rows.find((row) => row.memory_id === item.memory_id) ?? {
+					memory_id: item.memory_id,
+					title: item.title,
+					version_id: item.seen_version_id,
+				},
+		);
+	}, [route, rows, confirm]);
+
+	/*
 	  THE FACETS, THE NARROWING AND THE SORT ARE NOT COMPUTED HERE ANY MORE.
 
 	  They were, in two `useMemo`s beside this one, and the rail and the list each read one of them.
@@ -528,6 +553,9 @@ export function App() {
 	);
 
 	const showLimits = useCallback((memoryId = null) => {
+		// A receipt's own link to this screen used to re-render the receipt minus the link: the route
+		// effect below keeps `report` on the limits route on purpose, so it has to be let go of here.
+		setReport(null);
 		window.location.hash = memoryId ? `#/m/${encodeURIComponent(memoryId)}/limits` : '#/limits';
 	}, []);
 
@@ -571,6 +599,8 @@ export function App() {
 						<AppBar
 							route={route}
 							session={session}
+							filters={filters}
+							setFilters={setFilters}
 							moved={Boolean(pending)}
 							refreshing={loading}
 							onRefresh={() => load({ refresh: true })}
@@ -754,17 +784,15 @@ export function App() {
 						) : (
 							<RemovalLimits
 								session={session}
-								memory={rows.find((row) => row.memory_id === route.memoryId) ?? null}
+								memories={limitsMemories}
 								busy={removing}
-								onRemove={(memory) =>
+								onRemove={(memories) =>
 									runRemoval(
-										[
-											{
-												memory_id: memory.memory_id,
-												title: memory.title,
-												seen_version_id: memory.version_id,
-											},
-										],
+										memories.map((memory) => ({
+											memory_id: memory.memory_id,
+											title: memory.title,
+											seen_version_id: memory.version_id,
+										})),
 										// The one place in this product that sets it. The store still records
 										// that a copy was deliberately not kept, and why.
 										{ escalated: true },
@@ -868,6 +896,11 @@ export function App() {
 							onRemoveSelected={() => askToRemove([...selection.values()])}
 							onOpen={openMemory}
 							onEdit={editMemory}
+							onRemove={(row) =>
+								askToRemove([
+									{ memory_id: row.memory_id, title: row.title, seen_version_id: row.version_id },
+								])
+							}
 							onMerge={(id) => {
 								window.location.hash = `#/m/${encodeURIComponent(id)}/merge`;
 							}}
@@ -917,6 +950,7 @@ export function App() {
 										<RemovalConfirm
 											selection={confirm.selection}
 											busy={removing}
+											compact
 											onCancel={() => setConfirm(null)}
 											onConfirm={() => runRemoval(confirm.selection)}
 											onEscalate={() =>
@@ -987,6 +1021,7 @@ export function App() {
 									onEdit={editMemory}
 									onOpen={openMemory}
 									onBack={backToList}
+									focusName={route.focusName ?? null}
 									/*
 									  The re-read the merge needs, both DURING a run and after it. During:
 									  every rename after the first has to carry versions the writes before
@@ -1010,6 +1045,13 @@ export function App() {
 								*/
 								<NamesView
 									records={payload?.memories ?? []}
+									/*
+									  The kinds the engine's contract names, parsed out of what the binary
+									  printed at launch — the one list the kind-by-kind view is allowed to
+									  partition against, because it is a reading and not a transcription.
+									  Absent when the contract was not read, and the view says so.
+									*/
+									schemaKinds={session?.vocabulary?.known?.['semantic_delta.entities.kind'] ?? null}
 									onOpenName={(surface) => {
 										window.location.hash = nameRoute(surface);
 									}}
@@ -1027,9 +1069,20 @@ export function App() {
 									records={payload?.memories ?? []}
 									health={health}
 									model={session?.model ?? null}
+									pinned={route.pinned ?? null}
+									/*
+									  The pin is written INTO THE ROUTE and read back from it, never held
+									  here. The screen is keyed on the name it shows, so anything kept inside
+									  it is gone on the next navigation — which is the one moment a pin has
+									  to still be there. Writing the hash re-reads the route; the key is
+									  unchanged, so the screen keeps its dials.
+									*/
+									onPin={(name) => {
+										window.location.hash = nameRoute(route.surface, { pinned: name });
+									}}
 									onOpen={openMemory}
 									onOpenName={(surface) => {
-										window.location.hash = nameRoute(surface);
+										window.location.hash = nameRoute(surface, { pinned: route.pinned ?? null });
 									}}
 								/>
 							) : route.name === 'memory' ? (
@@ -1038,6 +1091,7 @@ export function App() {
 									rows={rows}
 									relations={relations}
 									strippedFields={payload?.stripped_fields}
+									confirming={Boolean(confirm)}
 									onOpen={openMemory}
 									onBack={backToList}
 									onEdit={editMemory}
@@ -1074,6 +1128,7 @@ function Detail({
 	rows,
 	relations,
 	strippedFields,
+	confirming = false,
 	onOpen,
 	onBack,
 	onEdit,
@@ -1103,6 +1158,7 @@ function Detail({
 			rows={rows}
 			relations={relations}
 			strippedFields={strippedFields}
+			confirming={confirming}
 			onOpen={onOpen}
 			onBack={onBack}
 			onEdit={onEdit}
@@ -1134,6 +1190,8 @@ function AppBar({
 	shown,
 	total,
 	onProject,
+	filters,
+	setFilters,
 	focusActions = null,
 }) {
 	/*
@@ -1158,45 +1216,19 @@ function AppBar({
 	}
 
 	const vaultRoot = session?.vault?.root ?? null;
+	/*
+	  "ABOUT THIS VAULT" IS IN THE MENU, NOT IN THE BAR. The bar used to carry a vault-name chip between
+	  the wordmark and the project chip — no approved mockup draws one, and on the owner's own install
+	  the vault is called `kaleidoscope`, so the bar opened "Kaleidoscope  kaleidoscope": the wordmark
+	  repeated in lower case, a label he would ask about. The readings it held are unchanged and one
+	  press further away, as the last item of the "…" menu.
+	*/
+	const [about, setAbout] = useState(false);
 
 	return (
+		<>
 		<RootBar
-			vault={
-				<VaultName
-					name={shortVaultName(vaultRoot)}
-					readings={[
-						{ term: 'this vault', value: vaultRoot ?? 'resolving…', mono: true },
-						{ term: 'engine', value: session?.engine?.version ?? 'not recorded' },
-						{ term: 'engine binary', value: session?.engine?.path ?? 'not recorded', mono: true },
-						{ term: 'embedding model', value: session?.model?.status ?? 'not recorded' },
-						{
-							term: 'write contract',
-							value: `${(session?.contract?.digest ?? '').slice(0, 12) || 'not recorded'} · tier ${
-								session?.compatibility?.tier ?? '—'
-							}`,
-							mono: true,
-						},
-						{
-							term: 'copies kept before a write',
-							value: session?.snapshots?.directory ?? 'not recorded',
-							mono: true,
-						},
-						{ term: '', value: 'Nothing here leaves this machine.' },
-					]}
-				/>
-			}
-			project={
-				<ProjectSwitcher
-					projects={projects}
-					value={project}
-					onChange={onProject}
-					shown={shown}
-					everywhereCount={everywhereCount}
-				/>
-			}
-			context={
-				project === null || total === shown ? null : `of ${total} in this vault`
-			}
+			project={<ProjectSwitcher projects={projects} value={project} onChange={onProject} everywhereCount={everywhereCount} />}
 			nav={<Nav current={route.name} />}
 			/*
 			  NOT ON THE SEARCH SCREEN. Search.dc.html draws that screen's top bar as the wordmark and
@@ -1207,6 +1239,19 @@ function AppBar({
 			find={
 				route.name === 'search' ? null : (
 				<FindOrAsk
+					/*
+					  ON THE LIST, KEYSTROKES NARROW THE LIST — arithmetic over the payload the browser
+					  already holds, through the same `filters.text` the rail's foot counts. BrowseB draws
+					  the box over the list as "Find in these memories", and that is what it does; on any
+					  other screen it holds the words until Enter carries them to Ask. Nothing typed here
+					  reaches the engine on either route.
+					*/
+					value={route.name === 'list' ? filters.text : undefined}
+					onChange={
+						route.name === 'list'
+							? (text) => setFilters((current) => ({ ...current, text }))
+							: undefined
+					}
 					onSubmit={(text) => {
 						const typed = text.trim();
 						// A NAVIGATION, NOT A QUERY. Nothing here runs a search; the search screen
@@ -1228,11 +1273,41 @@ function AppBar({
 						What can be undone
 					</MenuItem>
 					<MenuItem onSelect={() => (window.location.hash = '#/limits')}>
-						What removal cannot do
+						A memory holds a secret…
 					</MenuItem>
+					<MenuSeparator />
+					<MenuItem onSelect={() => setAbout(true)}>About this vault</MenuItem>
 				</OverflowMenu>
 			}
 		/>
+		<AboutVault
+			open={about}
+			onOpenChange={setAbout}
+			name={shortVaultName(vaultRoot)}
+			readings={[
+				{ term: 'this vault', value: vaultRoot ?? 'resolving…', mono: true },
+				{ term: 'engine', value: session?.engine?.version ?? 'not recorded' },
+				{ term: 'engine binary', value: session?.engine?.path ?? 'not recorded', mono: true },
+				{ term: 'embedding model', value: session?.model?.status ?? 'not recorded' },
+				{
+					term: 'write contract',
+					value: `${session?.contract?.digest ?? 'not recorded'} · tier ${session?.compatibility?.tier ?? '—'}`,
+					mono: true,
+				},
+				{
+					term: 'tested against',
+					value: (session?.compatibility?.tested_digests ?? []).join(' · ') || 'not recorded',
+					mono: true,
+				},
+				{
+					term: 'copies kept before a write',
+					value: session?.snapshots?.directory ?? 'not recorded',
+					mono: true,
+				},
+				{ term: '', value: 'Nothing here leaves this machine.' },
+			]}
+		/>
+		</>
 	);
 }
 
@@ -1247,7 +1322,9 @@ const FOCUS_ROUTES = {
 	memory: { backTo: '#/', backLabel: 'Memories' },
 	edit: { backTo: '#/', backLabel: 'Memories' },
 	create: { backTo: '#/', backLabel: 'Memories' },
-	merge: { backTo: '#/', backLabel: 'Memories' },
+	// The composition's bar says what is happening at its left, the way EditB's says nothing but
+	// carries Cancel and the filled action at its right; the screen hands those two up.
+	merge: { backTo: '#/', backLabel: 'Memories', trail: () => ['Merging two memories'] },
 	promote: { backTo: '#/', backLabel: 'Memories' },
 	limits: { backTo: '#/', backLabel: 'Memories' },
 	reversibility: { backTo: '#/', backLabel: 'Memories' },
@@ -1282,71 +1359,121 @@ export function shortVaultName(root) {
 	return last;
 }
 
+/** Where a dismissed Tier B line is remembered for the session, keyed to the contract it was about. */
+const COMPAT_DISMISSED_KEY = 'kaleidoscope-ui.compat-dismissed';
+
+function readCompatDismissed() {
+	try {
+		return window.sessionStorage.getItem(COMPAT_DISMISSED_KEY);
+	} catch {
+		return null;
+	}
+}
+
+function writeCompatDismissed(digest) {
+	try {
+		window.sessionStorage.setItem(COMPAT_DISMISSED_KEY, digest);
+	} catch {
+		// A browser that refuses session storage gets the line again next launch, which is the
+		// safe direction for a notice to fail in.
+	}
+}
+
 /**
- * What this engine is, relative to the one this build was tested against.
+ * What this engine is, relative to the one this build was tested against — as ONE LINE.
  *
  * SILENT IN TIER C AND ONLY IN TIER C. A banner that is always there is a banner nobody reads, and
  * the whole value of this one is that its appearance is information.
  *
- * It names BOTH digests. "Your engine is not supported" is a sentence a user can do nothing with;
- * the two fingerprints and the tier are what a person can put in a bug report, and they are what
- * distinguishes "this app is a version behind" from "this vault is broken", which is the wrong
- * conclusion and the one a vague banner invites.
+ * It used to be a 274px block above every screen: a headline, a five-line paragraph, four 64-hex
+ * digests and an operations inventory, undismissable — on the owner's own engine. That is the
+ * "huge slash-private-something extending through the entire screen" he rejected, wearing a hash
+ * instead of a path: metadata above content, a fingerprint as a headline. So it is now one sentence
+ * in the notice tint that says the two things a reader needs — reading is unaffected, and menus
+ * become text boxes — with the digests, the tested table and the operations reading behind a
+ * press. Nothing was removed: the readings a bug report needs are all one press away, and the same
+ * ones sit in "About this vault". Tier B can be put away for the session; Tier A, which refuses
+ * writes, cannot.
  */
 function EngineCompatibility({ compatibility }) {
+	const [open, setOpen] = useState(false);
+	const [dismissed, setDismissed] = useState(readCompatDismissed);
 	if (!compatibility || compatibility.tier === 'C') return null;
 	const blocked = !compatibility.writes_permitted;
+	if (!blocked && dismissed === compatibility.digest) return null;
+	const version = compatibility.engine_version ?? 'this engine';
+
 	return (
-		<section className={blocked ? 'notice notice-warn' : 'notice'}>
-			<h2>
+		<section className={blocked ? 'notice notice-line notice-warn' : 'notice notice-line'} role="status">
+			<p className="notice-text">
 				{blocked
-					? 'This app will not write to this engine'
-					: 'This engine is newer or older than the one this build was tested against'}
-			</h2>
-			{compatibility.reasons.map((reason) => (
-				<p key={reason.code}>{reason.message}</p>
-			))}
-			<dl className="compat-readings">
-				<div>
-					<dt>engine</dt>
-					<dd>{compatibility.engine_version ?? 'not recorded'}</dd>
-				</div>
-				<div>
-					<dt>its write contract</dt>
-					<dd>
-						<code className="identifier">{compatibility.digest ?? 'not recorded'}</code>
-					</dd>
-				</div>
-				<div>
-					<dt>tested against</dt>
-					<dd>
-						{compatibility.tested_digests.length === 0
-							? 'nothing'
-							: compatibility.tested_digests.map((digest) => (
-									<code className="identifier" key={digest}>
-										{digest}
-									</code>
-								))}
-					</dd>
-				</div>
-				<div>
-					<dt>operations this app needs</dt>
-					<dd>
-						{compatibility.operations
-							.map((op) => `${op.name} — ${op.retired ? 'retired' : op.present ? 'present' : 'missing'}`)
-							.join(' · ')}
-					</dd>
-				</div>
-			</dl>
-			{/*
-			  Said explicitly, because the first question a person asks at a banner like this one is
-			  whether the thing they came for still works.
-			*/}
-			<p className="compat-effect">
-				{blocked
-					? 'Reading your memory is unaffected. Every screen renders, nothing is guessed, and every write is refused until you install an engine this build has been tested against.'
-					: 'Reading your memory is unaffected. Writes are still allowed: the engine refuses what it cannot accept and names the field to fix, which is a better answer than a menu this app is guessing at.'}
+					? `This app will not write to ${version}: something it needs is missing or retired. Reading is unaffected.`
+					: `${version} is not one this build was tested with. Reading is unaffected; menus become text boxes.`}{' '}
+				<button
+					type="button"
+					className="notice-link"
+					aria-expanded={open}
+					onClick={() => setOpen(!open)}
+				>
+					{open ? 'Hide the details' : 'Details'}
+				</button>
 			</p>
+			{blocked ? null : (
+				<IconButton
+					label="Put this away for the session"
+					className="notice-dismiss"
+					onClick={() => {
+						writeCompatDismissed(compatibility.digest);
+						setDismissed(compatibility.digest);
+					}}
+				>
+					<Icon.Close size={13} />
+				</IconButton>
+			)}
+			{open ? (
+				<div className="notice-details">
+					{compatibility.reasons.map((reason) => (
+						<p key={reason.code}>{reason.message}</p>
+					))}
+					{/*
+					  The readings, in the disclosure that depends on them. "Your engine is not supported"
+					  is a sentence a user can do nothing with; the two fingerprints and the tier are what a
+					  person can put in a bug report.
+					*/}
+					<dl className="compat-readings">
+						<div>
+							<dt>engine</dt>
+							<dd>{compatibility.engine_version ?? 'not recorded'}</dd>
+						</div>
+						<div>
+							<dt>its write contract</dt>
+							<dd>
+								<code className="identifier">{compatibility.digest ?? 'not recorded'}</code>
+							</dd>
+						</div>
+						<div>
+							<dt>tested against</dt>
+							<dd>
+								{compatibility.tested_digests.length === 0
+									? 'nothing'
+									: compatibility.tested_digests.map((digest) => (
+											<code className="identifier" key={digest}>
+												{digest}
+											</code>
+										))}
+							</dd>
+						</div>
+						<div>
+							<dt>operations this app needs</dt>
+							<dd>
+								{compatibility.operations
+									.map((op) => `${op.name} — ${op.retired ? 'retired' : op.present ? 'present' : 'missing'}`)
+									.join(' · ')}
+							</dd>
+						</div>
+					</dl>
+				</div>
+			) : null}
 		</section>
 	);
 }

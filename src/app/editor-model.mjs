@@ -336,7 +336,7 @@ export function toSemanticDelta(buffer, fields, project) {
 // ---------------------------------------------------------------------------------------------
 
 const statementOf = (row) =>
-	`${trimmed(row.subject).toLowerCase()} ${trimmed(row.predicate).toLowerCase()} ${trimmed(row.object).toLowerCase()}`;
+	`${trimmed(row.subject).toLowerCase()}\u0000${trimmed(row.predicate).toLowerCase()}\u0000${trimmed(row.object).toLowerCase()}`;
 
 /**
  * Rows that state the same triple as another row.

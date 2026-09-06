@@ -37,6 +37,19 @@ export const BASE_RADIUS = 3.2;
 const COMPONENT_GAP = 26;
 
 /**
+ * A ONE-FACT ISLAND IS DRAWN SMALL AND CLOSE, so two hundred of them read as a field and not as
+ * confetti. Two names joined by one statement carry no shape worth reading — the picture's job for
+ * them is to show HOW MANY there are, and a tighter mark does that better than a larger one. They
+ * are packed at two thirds of the edge length and half the gap; the canvas draws them smaller and
+ * quieter as well. Anything with a third name in it is drawn at full size, because from three names
+ * up there is a shape.
+ */
+const ISLAND_SIZE = 2;
+const ISLAND_EDGE = 30;
+const ISLAND_GAP = 13;
+const isIsland = (size) => size <= ISLAND_SIZE;
+
+/**
  * How hard a component is relaxed, by how many names are in it.
  *
  * A pair or a triangle has one legible arrangement and a relaxation cannot improve on the seed, so
@@ -62,6 +75,7 @@ function placeComponent(members, neighbours) {
 		positions.set(members[0], { x: 0, y: 0 });
 		return positions;
 	}
+	const edgeLength = isIsland(members.length) ? ISLAND_EDGE : EDGE_LENGTH;
 
 	const hub = members.reduce((best, id) =>
 		(neighbours.get(id)?.length ?? 0) > (neighbours.get(best)?.length ?? 0) ? id : best,
@@ -92,7 +106,7 @@ function placeComponent(members, neighbours) {
 			positions.set(ids[0], { x: 0, y: 0 });
 			continue;
 		}
-		const radius = EDGE_LENGTH * d;
+		const radius = edgeLength * d;
 		ids.forEach((id, index) => {
 			// The half-step on alternating rings is what stops ring 2 hiding directly behind ring 1.
 			const offset = d % 2 === 0 ? Math.PI / ids.length : 0;
@@ -391,10 +405,8 @@ export function overviewLayout(nodes, edges, { aspect = 2.6 } = {}) {
 	// Rows, filled left to right, wrapping at a width chosen so the finished block is about the
 	// canvas's shape. Because the input is sorted by size, the rows are too: the continent opens the
 	// picture and the dust closes it, which is the reading the diagnostic is for.
-	const totalArea = local.reduce(
-		(sum, component) => sum + (2 * component.radius + COMPONENT_GAP) ** 2,
-		0,
-	);
+	const gapFor = (component) => (isIsland(component.members.length) ? ISLAND_GAP : COMPONENT_GAP);
+	const totalArea = local.reduce((sum, component) => sum + (2 * component.radius + gapFor(component)) ** 2, 0);
 	const targetWidth = Math.max(
 		local[0] ? local[0].radius * 2 + COMPONENT_GAP : 1,
 		Math.sqrt(totalArea * aspect),
@@ -407,7 +419,7 @@ export function overviewLayout(nodes, edges, { aspect = 2.6 } = {}) {
 	let rowHeight = 0;
 
 	for (const component of local) {
-		const size = component.radius * 2 + COMPONENT_GAP;
+		const size = component.radius * 2 + gapFor(component);
 		if (rowX > 0 && rowX + size > targetWidth) {
 			rowX = 0;
 			rowY += rowHeight;

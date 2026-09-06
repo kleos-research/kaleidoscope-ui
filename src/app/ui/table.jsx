@@ -12,10 +12,15 @@ import { cx } from './cx.mjs';
  * `sticky` headers are on by default: the whole point of this surface is that it is long.
  */
 
-export function Table({ label, children, className }) {
+export function Table({ label, sticky = false, children, className }) {
+	/*
+	  `sticky` is for a table long enough to scroll the SCREEN — the names table. The frame then
+	  clips nothing, so the header sticks to the screen rather than to a wrapper that never scrolls;
+	  a table that scrolls sideways inside a page keeps the default frame.
+	*/
 	return (
-		<div className={cx('table-frame', className)}>
-			<div className="scroll-x">
+		<div className={cx('table-frame', sticky && 'table-frame-open', className)}>
+			<div className={cx('scroll-x', sticky && 'table-scroll')}>
 				<table className="table" aria-label={label}>
 					{children}
 				</table>
@@ -111,8 +116,18 @@ export function DegreeBar({ count, provisional = 0, max = 10 }) {
 					<span key={`p${index}`} className="degree-tick degree-tick-provisional" />
 				))}
 			</span>
+			{/*
+			  THE NUMBER IS THE COUNT, NEVER THE CAPPED TICKS. Printing `solid` made the four busiest
+			  rows of a table sorted by this column all read "10" while their real degrees differed;
+			  the ticks stop at the cap and the "+" says they did.
+			*/}
+			{count > max ? (
+				<span className="degree-more" aria-hidden="true">
+					+
+				</span>
+			) : null}
 			<span className={cx('item-count', extra > 0 && 'warn-text')}>
-				{extra > 0 ? `${solid} + ${extra}` : solid}
+				{extra > 0 ? `${count} + ${extra}` : count}
 			</span>
 			<span className="sr-only">{label}</span>
 		</span>

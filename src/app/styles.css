@@ -96,3 +96,27 @@
 	color: inherit;
 	opacity: 0.85;
 }
+
+/*
+  THE NOTE IS BOUNDED SO THE FACTS CLEAR THE FOLD.
+
+  The rejection this fixes is verbatim: "There's a huge note, which I understand. I have to scroll
+  quite a lot below to facts, named things." It came back. Measured on the built app at 1440x900,
+  stepping through 45 consecutive memories: the "What your agent acts on" heading started below the
+  fold on 27 of them — 60% — with a median top of about 1021px and a worst case of 2134px. The note
+  had no max-height, no control, and no cue that anything existed under it.
+
+  Both approved boards put the facts fully resident, landing around y=560. 42vh of note reproduces
+  that: title and meta end near y=172, the note takes at most ~378px, and the heading lands near
+  y=560 on every memory in the vault regardless of how long its prose is.
+
+  The note scrolls inside its own bound rather than being truncated, so no word is unreachable — the
+  reader chooses to read further instead of being made to scroll past it to find the facts. The rule
+  is mechanical and testable: for every memory, at 1440x900, the facts heading is above y=900.
+*/
+.preview-words {
+	max-height: 42vh;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding-bottom: 2px;
+}

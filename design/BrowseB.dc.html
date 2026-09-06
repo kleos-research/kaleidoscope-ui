@@ -18,13 +18,36 @@
 
 <div style="width: 1440px; height: 900px; background: #faf9f7; color: #1a1917; display: flex; flex-direction: column; overflow: hidden;">
 
-  <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
-    <div style="display: flex; align-items: center; gap: 16px;">
+  <div style="height: 56px; box-sizing: border-box; flex-shrink: 0; border-bottom: 1px solid #e6e2db; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 16px; align-self: stretch;">
       <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Kaleidoscope</div>
       <div style="width: 1px; height: 20px; background: #e6e2db;"></div>
       <div style="display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 11px; border: 1px solid #d4cfc6; border-radius: 6px; background: #ffffff; font-size: 13.5px; font-weight: 500;">
         Payments platform
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6a6660" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+
+      <!--
+        THE NAVIGATION — the one thing these mockups had not drawn.
+
+        Every approved board shows the bar as wordmark · project · find · refresh · more, and nothing
+        that moves between the four screens. The build put a row of boxed links back because Ask,
+        Names and the curation queue were otherwise unreachable — and a row of boxes was the first
+        thing rejected: "I see Kaleidoscope, Memories, Needs a decision, Graph, New memory. I don't
+        know what either of them does."
+
+        So the quietest form that is still self-evident: four words, set after the project because
+        everything sits under a project. 13.5px in the UI face, no boxes, no icons. The screen you are
+        on is the one word in ink with a 2px rule under it in the accent; the rest sit in the muted
+        grey. Each label says what the screen is FOR without help — Memories is the list, Ask is
+        asking the way the agent does, Names is what the memories talk about, Needs a decision is the
+        queue that waits on a person. Keys 1–4 go to the same four places.
+      -->
+      <div style="display: flex; align-items: center; gap: 20px; margin-left: 8px; align-self: stretch; font-size: 13.5px;">
+        <div style="display: flex; align-items: center; height: 55px; box-sizing: border-box; padding-top: 2px; border-bottom: 2px solid #2f5d8a; color: #1a1917;">Memories</div>
+        <div style="display: flex; align-items: center; height: 55px; box-sizing: border-box; padding-top: 2px; border-bottom: 2px solid transparent; color: #6a6660;">Ask</div>
+        <div style="display: flex; align-items: center; height: 55px; box-sizing: border-box; padding-top: 2px; border-bottom: 2px solid transparent; color: #6a6660;">Names</div>
+        <div style="display: flex; align-items: center; height: 55px; box-sizing: border-box; padding-top: 2px; border-bottom: 2px solid transparent; color: #6a6660;">Needs a decision</div>
       </div>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">

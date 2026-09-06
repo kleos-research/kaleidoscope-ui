@@ -30,7 +30,7 @@
  * truth states — which are structure this app defines rather than an open registry the engine owns.
  */
 
-import { validityOf } from './records.mjs';
+import { shortenScope, validityOf } from './records.mjs';
 
 /** Milliseconds in a day. The time buckets are all derived from days, as `when.mjs` is. */
 const DAY = 86_400_000;
@@ -332,12 +332,22 @@ export function browseFacets(rows, { vocabulary = null, relations = null, lastLo
 		// The "every …" bucket is listed first within its axis because it is usually the largest and
 		// because its meaning is inverted: the writer left the axis out, so the memory applies to
 		// every one of them rather than to none.
+		// `group` is the axis word, drawn once as a small heading over its values rather than as a
+		// prefix on each. With the prefix, four repository paths cut from the END by CSS read
+		// identically — "file packages/ledger… 6 / …5 / …3 / …3" — so the label is the front cut
+		// `shortenScope` makes, whole segments at a time, which keeps the filename.
 		if (every > 0) {
-			place.push({ value: placeValue(axis, EVERY), label: `every ${wordFor(axis)}`, count: every, axis });
+			place.push({ value: placeValue(axis, EVERY), label: `every ${wordFor(axis)}`, count: every, axis, group: wordFor(axis) });
 		}
 		for (const [value, count] of [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))) {
 			if (value === EVERY) continue;
-			place.push({ value: placeValue(axis, value), label: `${wordFor(axis)} ${value}`, count, axis });
+			place.push({
+				value: placeValue(axis, value),
+				label: shortenScope(value) ?? value,
+				count,
+				axis,
+				group: wordFor(axis),
+			});
 		}
 	}
 

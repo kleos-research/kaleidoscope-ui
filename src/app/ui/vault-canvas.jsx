@@ -45,6 +45,9 @@ import { hitIndex } from '../overview-layout.mjs';
 /** Label everything in view once the reader is this many times zoomed in past the opening fit. */
 const LABEL_ZOOM = 3;
 
+/** The most a focus is allowed to magnify the picture, in screen px per layout unit. */
+const FOCUS_ZOOM_CAP = 3.5;
+
 /** Screen radius of a drawn name, in px, before the zoom multiplier. */
 const screenRadius = (degree) => 1.9 + Math.sqrt(Math.max(0, degree ?? 0)) * 1.5;
 
@@ -84,11 +87,13 @@ function readInk(element) {
  * @param {Array}    props.edges
  * @param {Array}    props.duplicateLinks  the pairs a merge would join — the actionable structure
  * @param {Set}      props.alwaysLabelled  ids that keep a label at every zoom level
- * @param {object}   props.layout          from `overviewLayout` — positions and bounds
- * @param {Set|null} props.highlight       ids to keep lit while everything else dims. `null` = none
+ * @param {object}   props.layout          from `overviewLayout` — positions, bounds, components
+ * @param {object|null} props.focus        from `overviewFocus`: the components to keep lit, fit the
+ *                                         view to, and label whole, and the names to ring. `null`
+ *                                         is the whole vault, undimmed.
  * @param {string|null} props.selected
- * @param {Function} props.onSelect        (id | null) => void
- * @param {Function} props.onOpen          (id) => void, on a double click or Enter
+ * @param {Function} props.onSelect        (id | null) => void, on a click
+ * @param {Function} props.onOpen          (id) => void, on a double click
  */
 export function VaultCanvas({
 	nodes,
@@ -96,7 +101,7 @@ export function VaultCanvas({
 	duplicateLinks = [],
 	alwaysLabelled = new Set(),
 	layout,
-	highlight = null,
+	focus = null,
 	selected = null,
 	onSelect = () => {},
 	onOpen = () => {},
@@ -112,6 +117,12 @@ export function VaultCanvas({
 	const positions = layout.positions;
 	const index = useMemo(() => hitIndex(positions), [positions]);
 	const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+	/*
+	  A ONE-FACT ISLAND: two names and the statement between them, which is most of the components
+	  in a vault of this shape. Drawn smaller and quieter, so two hundred of them read as a field the
+	  eye can size at a glance rather than as confetti competing with the one region that has a shape.
+	*/
+	const island = (node) => (node.componentSize ?? 0) <= 2;
 
 	/*
 	  The draw. Imperative and outside React's render, because a pan is sixty of these a second and
@@ -137,51 +148,80 @@ export function VaultCanvas({
 		context.setTransform(ratio, 0, 0, ratio, 0, 0);
 		context.clearRect(0, 0, width, height);
 
-		// Anything the reader has narrowed to. `null` means no narrowing at all, which is NOT the
-		// same as an empty set — an empty set means the query matched nothing and the whole canvas
-		// dims, which is the honest answer and is visibly different from "everything is lit".
-		const lit = (id) => highlight === null || highlight.has(id);
-		const dimming = highlight !== null;
+		/*
+		  WHAT THE READER HAS NARROWED TO IS AN ISLAND, NOT A NAME. `focus` names components, and a
+		  node is lit when its component is one of them. `null` means no narrowing at all, which is
+		  NOT the same as a focus with no components — that means the query matched nothing and the
+		  whole canvas dims, which is the honest answer and is visibly different from "everything is
+		  lit". The names that actually matched are ringed on top of that, so a reader sees both the
+		  island and the thing on it they asked for.
+		*/
+		const lit = (id) => focus === null || focus.components.has(byId.get(id)?.componentId);
+		const isMatch = (id) => focus !== null && focus.marked.has(id);
+		const dimming = focus !== null;
 
-		/* Edges first, and thin. They are context for the nodes, not the subject. */
+		/*
+		  Edges first, and thin. They are context for the nodes, not the subject. Two passes: the
+		  islands' one statement each is drawn quieter, for the same reason their names are.
+		*/
 		context.lineWidth = Math.max(0.35, 0.55 * zoom);
 		context.strokeStyle = ink.edge;
-		context.globalAlpha = dimming ? 0.25 : 0.75;
-		context.beginPath();
-		for (const edge of edges) {
-			const a = positions.get(edge.source);
-			const b = positions.get(edge.target);
-			if (!a || !b) continue;
-			context.moveTo(sx(a.x), sy(a.y));
-			context.lineTo(sx(b.x), sy(b.y));
+		for (const quiet of [false, true]) {
+			context.globalAlpha = (dimming ? 0.25 : 0.75) * (quiet ? 0.55 : 1);
+			context.beginPath();
+			for (const edge of edges) {
+				const a = positions.get(edge.source);
+				const b = positions.get(edge.target);
+				if (!a || !b) continue;
+				if (island(byId.get(edge.source) ?? {}) !== quiet) continue;
+				context.moveTo(sx(a.x), sy(a.y));
+				context.lineTo(sx(b.x), sy(b.y));
+			}
+			context.stroke();
 		}
-		context.stroke();
 
 		/*
 		  THE ACTIONABLE STRUCTURE, DRAWN DIFFERENTLY FROM EVERYTHING ELSE.
 
 		  A near-duplicate pair is the one relationship in this picture that position cannot show,
 		  because the two spellings are usually in different components and the packing puts those
-		  wherever their size says. So it gets its own mark: a dashed line in the warn ink, over the
-		  edges rather than under them, which is legible across the whole canvas at the opening fit.
-		  This is the difference between a pretty picture and a diagnostic — it is the only thing on
-		  the canvas the reader can act on.
+		  wherever their size says. So it gets its own mark: a dashed line, over the edges rather than
+		  under them, which is legible across the whole canvas at the opening fit. It is drawn IN THE
+		  HUE ITS GROUP WAS GIVEN, and so are the rings on its two ends, so the ends of one line can
+		  be matched to each other across the canvas without following the line. This is the
+		  difference between a pretty picture and a diagnostic — it is the only thing on the canvas
+		  the reader can act on.
 		*/
+		const hueInk = (hue) => (hue >= 0 && hue <= 7 ? ink.slots[hue] : ink.warn);
+		/*
+		  THE LINES ARE DRAWN ON ASKING. Twenty dashed diagonals in eight hues were the loudest thing
+		  on the whole-vault fit, and with every hue used by two or three pairs "a pair shares a
+		  colour" identified nothing. A pair's line appears when the picture is narrowed, or when
+		  either of its ends is under the pointer or selected; the rings on the ends stay, so the
+		  pairs are still findable at the fit.
+		*/
+		const touched = (link) =>
+			dimming ||
+			link.source === hovered ||
+			link.target === hovered ||
+			link.source === selected ||
+			link.target === selected;
 		if (duplicateLinks.length > 0) {
 			context.save();
 			context.setLineDash([5, 4]);
-			context.lineWidth = Math.max(0.8, 1.1 * zoom);
-			context.strokeStyle = ink.warn;
+			context.lineWidth = Math.max(0.9, 1.2 * zoom);
 			context.globalAlpha = dimming ? 0.4 : 0.95;
-			context.beginPath();
 			for (const link of duplicateLinks) {
+				if (!touched(link)) continue;
 				const a = positions.get(link.source);
 				const b = positions.get(link.target);
 				if (!a || !b) continue;
+				context.strokeStyle = hueInk(link.hue ?? -1);
+				context.beginPath();
 				context.moveTo(sx(a.x), sy(a.y));
 				context.lineTo(sx(b.x), sy(b.y));
+				context.stroke();
 			}
-			context.stroke();
 			context.restore();
 		}
 
@@ -211,14 +251,19 @@ export function VaultCanvas({
 			 * left two dots the reader could not find. The dim has to keep the shape of the vault
 			 * legible, because the shape is what this picture is for; the match is marked below.
 			 */
-			context.globalAlpha = litText === '1' ? 1 : 0.3;
-			context.beginPath();
-			for (const { node, px, py } of members) {
-				const r = screenRadius(node.degree) * zoom;
-				context.moveTo(px + r, py);
-				context.arc(px, py, r, 0, Math.PI * 2);
+			for (const quiet of [false, true]) {
+				// An island's two names at half the ink and three quarters of the size: present, and
+				// not competing with the region that has a shape.
+				context.globalAlpha = (litText === '1' ? 1 : 0.3) * (quiet ? 0.5 : 1);
+				context.beginPath();
+				for (const { node, px, py } of members) {
+					if (island(node) !== quiet) continue;
+					const r = screenRadius(node.degree) * zoom * (quiet ? 0.75 : 1);
+					context.moveTo(px + r, py);
+					context.arc(px, py, r, 0, Math.PI * 2);
+				}
+				context.fill();
 			}
-			context.fill();
 		}
 
 		/*
@@ -227,35 +272,35 @@ export function VaultCanvas({
 		 * is the search the reader just asked the app to do for them.
 		 */
 		if (dimming) {
-			context.globalAlpha = 1;
 			context.strokeStyle = ink.accent;
 			context.lineWidth = Math.max(1.2, 1.6 * zoom);
-			context.beginPath();
 			for (const node of nodes) {
-				if (!lit(node.id)) continue;
+				if (!isMatch(node.id)) continue;
 				const point = positions.get(node.id);
 				if (!point) continue;
+				// A match on an island that is not lit is still ringed, quietly, so a query that hit
+				// more islands than are shown leaves its other hits findable.
+				context.globalAlpha = lit(node.id) ? 1 : 0.45;
 				const r = screenRadius(node.degree) * zoom + 3.5;
-				context.moveTo(sx(point.x) + r, sy(point.y));
+				context.beginPath();
 				context.arc(sx(point.x), sy(point.y), r, 0, Math.PI * 2);
+				context.stroke();
 			}
-			context.stroke();
 		}
 
-		/* A ring on the pair the reader could merge, so the dashed line has two visible ends. */
+		/* A ring on each end of a pair, in the pair's hue, so the dashed line has two visible ends. */
 		context.globalAlpha = dimming ? 0.35 : 1;
-		context.strokeStyle = ink.warn;
-		context.lineWidth = Math.max(0.8, 1 * zoom);
-		context.beginPath();
+		context.lineWidth = Math.max(1, 1.3 * zoom);
 		for (const node of nodes) {
 			if (!node.duplicate) continue;
 			const point = positions.get(node.id);
 			if (!point) continue;
 			const r = screenRadius(node.degree) * zoom + 2.5;
-			context.moveTo(sx(point.x) + r, sy(point.y));
+			context.strokeStyle = hueInk(node.duplicateHue ?? -1);
+			context.beginPath();
 			context.arc(sx(point.x), sy(point.y), r, 0, Math.PI * 2);
+			context.stroke();
 		}
-		context.stroke();
 
 		/* The selected name, marked so it is findable after the panel beside it has been read. */
 		const marked = [selected, hovered].filter(Boolean);
@@ -273,9 +318,9 @@ export function VaultCanvas({
 		}
 
 		/*
-		  LABELS. Three reasons a name gets one, and they are cumulative:
-		  the largest few always, everything in view once the reader has zoomed past the threshold,
-		  and whatever is under the pointer.
+		  LABELS. Four reasons a name gets one, and they are cumulative: the largest few always,
+		  everything in view once the reader has zoomed past the threshold, everything on an island
+		  the reader has narrowed to, and whatever is under the pointer.
 		*/
 		context.globalAlpha = 1;
 		context.textAlign = 'center';
@@ -283,7 +328,12 @@ export function VaultCanvas({
 		const everything = scale > view.current.fit * LABEL_ZOOM;
 		const labelled = [];
 		for (const node of nodes) {
-			const wanted = everything || alwaysLabelled.has(node.id) || node.id === hovered || node.id === selected;
+			const wanted =
+				everything ||
+				alwaysLabelled.has(node.id) ||
+				node.id === hovered ||
+				node.id === selected ||
+				(dimming && lit(node.id));
 			if (!wanted) continue;
 			if (dimming && !lit(node.id) && node.id !== hovered) continue;
 			const point = positions.get(node.id);
@@ -316,15 +366,23 @@ export function VaultCanvas({
 
 		for (const { node, px, py } of labelled) {
 			const emphasis = node.id === hovered || node.id === selected;
-			context.font = `${emphasis ? 600 : 400} ${emphasis ? 12 : 10.5}px ${ink.font}`;
+			/*
+			  A NAME ON A NARROWED ISLAND IS A NAME, drawn as GraphFocus draws one: 12.5px in the
+			  ink. The 10.5px faint form is the mockup's style for a relation label, and it is kept
+			  for the whole-vault fit, where the labels are marks among a thousand dots.
+			*/
+			const onIsland = dimming && lit(node.id);
+			const size = emphasis ? 12 : onIsland ? 12.5 : 10.5;
+			context.font = `${emphasis ? 600 : 400} ${size}px ${ink.font}`;
 			const text = node.label;
 			const measured = context.measureText(text).width;
-			const offset = screenRadius(node.degree) * zoom + (emphasis ? 11 : 8);
+			const offset = screenRadius(node.degree) * zoom + (emphasis ? 11 : onIsland ? 10 : 8);
+			const half = onIsland ? 9 : 8;
 			const box = {
 				left: px - measured / 2 - 3,
 				right: px + measured / 2 + 3,
-				top: py + offset - 8,
-				bottom: py + offset + 8,
+				top: py + offset - half,
+				bottom: py + offset + half,
 			};
 			if (!emphasis && !clear(box)) continue;
 			taken.push(box);
@@ -348,15 +406,24 @@ export function VaultCanvas({
 				context.strokeText(text, px, py + offset);
 				context.globalAlpha = 1;
 			}
-			context.fillStyle = emphasis ? ink.text : ink.faint;
+			context.fillStyle = emphasis || onIsland ? ink.text : ink.faint;
 			context.fillText(text, px, py + offset);
 		}
-	}, [nodes, edges, duplicateLinks, positions, alwaysLabelled, highlight, selected, hovered, byId]);
+	}, [nodes, edges, duplicateLinks, positions, alwaysLabelled, focus, selected, hovered, byId]);
 
+	/*
+	  THE DRAW IS HELD IN A REF SO THE SCHEDULER NEVER CHANGES. `paint` is rebuilt on every hover and
+	  selection, and a `schedule` rebuilt from it was in the fit effect's dependencies — so crossing
+	  a dot after six wheel ticks re-ran the fit and threw the reader's zoom and pan away (the canvas
+	  hashed identical to the opening fit). The fit now depends on the frame and the layout only; a
+	  new `paint` merely asks for a repaint.
+	*/
+	const paintRef = useRef(paint);
+	paintRef.current = paint;
 	const schedule = useCallback(() => {
 		if (frame.current !== null) return;
-		frame.current = requestAnimationFrame(paint);
-	}, [paint]);
+		frame.current = requestAnimationFrame(() => paintRef.current());
+	}, []);
 
 	/*
 	  THE DRAW, REACHABLE FROM OUTSIDE, SO THE COST OF A FRAME CAN BE MEASURED RATHER THAN ESTIMATED.
@@ -430,9 +497,49 @@ export function VaultCanvas({
 		schedule();
 	}, [size, layout, schedule]);
 
+	/*
+	  THE VIEW FITS THE ISLAND. "Here is the island this name lives on, labelled" needs the island
+	  to fill the frame, not to be three ringed dots in a field of confetti — so when the focus
+	  changes the view moves to the box around its components and stops there. It is a jump and not
+	  a glide: nothing on this canvas is animated, and a picture that arrives is one the reader can
+	  read at once. The scale is capped so a two-name island is not blown up to a pair of dinner
+	  plates; at the cap its two names and their statement are still the only things in view.
+	*/
+	useEffect(() => {
+		const element = canvas.current;
+		if (!element || size.width === 0 || size.height === 0) return;
+		if (!focus || focus.components.size === 0) return;
+		let minX = Number.POSITIVE_INFINITY;
+		let minY = Number.POSITIVE_INFINITY;
+		let maxX = Number.NEGATIVE_INFINITY;
+		let maxY = Number.NEGATIVE_INFINITY;
+		for (const box of layout.components ?? []) {
+			if (!focus.components.has(box.id)) continue;
+			minX = Math.min(minX, box.x - box.radius);
+			maxX = Math.max(maxX, box.x + box.radius);
+			minY = Math.min(minY, box.y - box.radius);
+			maxY = Math.max(maxY, box.y + box.radius);
+		}
+		if (!Number.isFinite(minX)) return;
+		// Room for the labels that hang off the outermost names.
+		const pad = 60;
+		const width = maxX - minX + pad * 2;
+		const height = maxY - minY + pad * 2;
+		const fit = view.current.fit;
+		const scale = Math.min(FOCUS_ZOOM_CAP, fit * 40, Math.max(fit, Math.min(size.width / width, size.height / height)));
+		view.current = {
+			...view.current,
+			scale,
+			x: (minX + maxX) / 2 - size.width / scale / 2,
+			y: (minY + maxY) / 2 - size.height / scale / 2,
+		};
+		schedule();
+	}, [focus, layout, size, schedule]);
+
+	// A new `paint` — a hover, a selection, a narrowing — repaints; it never refits.
 	useEffect(() => {
 		schedule();
-	}, [schedule]);
+	}, [paint, schedule]);
 
 	useEffect(
 		() => () => {

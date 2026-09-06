@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+
 import { askRanked } from './api.mjs';
 import { ago } from './when.mjs';
 import {
@@ -27,8 +28,6 @@ import {
 	Meter,
 	Page,
 	RankedResult,
-	ReadingPair,
-	Readings,
 	ResultBlock,
 	ResultList,
 	Rule,
@@ -247,6 +246,7 @@ function FoundWords({ query, found, total, onOpen }) {
  * THE RANKED HALF: what the agent would have been given, and everything true about it.
  */
 function Answer({ busy, error, result, rows, relations, project, onOpen }) {
+	const [ranking, setRanking] = useState(false);
 	if (error) {
 		return <ErrorState heading="That question did not reach the engine" error={error} />;
 	}
@@ -333,36 +333,30 @@ function Answer({ busy, error, result, rows, relations, project, onOpen }) {
 
 						<Card title={served.length === 1 ? 'Why this one' : `Why these ${served.length}`}>
 							<p className="rail-copy">{whyThese(result)}</p>
-							<DetailRows>
-								<DetailRow label="Show the ranking">
-									<Readings>
-										<ReadingPair term="asked">{result.asked_for}</ReadingPair>
-										<ReadingPair term="within">
-											{project ? `project ${project}` : 'every project'}
-										</ReadingPair>
-										{/*
-										  The controls the engine ECHOED, spelled the way it spells them.
-										  Not the ones this app sent: an omitted control comes back filled
-										  in with the published default, and the default is the number a
-										  reader needs.
-										*/}
-										{controls.map((control) => (
-											<ReadingPair key={control.name} term={control.name}>
-												{control.value}
-											</ReadingPair>
-										))}
-										<ReadingPair term="round trip">
-											{Math.round(result.elapsed_ms).toLocaleString()} ms, including starting
-											the engine — not a measurement of retrieval on its own
-										</ReadingPair>
-									</Readings>
-									<p className="rail-copy">
-										The door publishes the controls it ran under, not a score per memory. There
-										is no per-memory number to show you, so this screen shows none rather than
-										drawing one.
-									</p>
-								</DetailRow>
-							</DetailRows>
+							{/*
+							  THE MOCKUP'S ONE ACCENT LINE, not a chevron row with hairlines. Opened, it says
+							  what the engine ran under as sentences where this build knows the name and as
+							  the engine spells it where it does not — the echo, never the request, because an
+							  omitted control comes back filled in with the published default.
+							*/}
+							<button
+								type="button"
+								className="link-more"
+								aria-expanded={ranking}
+								onClick={() => setRanking(!ranking)}
+							>
+								{ranking ? 'Hide the ranking' : 'Show the ranking'}
+							</button>
+							{ranking ? (
+								<ul className="reasons">
+									<li>asked “{result.asked_for}”</li>
+									<li>within {project ? `project ${project}` : 'every project'}</li>
+									{controls.map((control) => (
+										<li key={control.name}>{control.words}</li>
+									))}
+									<li>{Math.round(result.elapsed_ms).toLocaleString()} ms, including engine start-up</li>
+								</ul>
+							) : null}
 						</Card>
 
 						{/*
@@ -384,6 +378,37 @@ function Answer({ busy, error, result, rows, relations, project, onOpen }) {
 					label="It would receive"
 					caption={servedCaption(result, { pool: rows.length })}
 				>
+					{/*
+					  WHAT WAS LEFT OUT, directly under the block head that announces it — closed, with
+					  its count showing — rather than as the closing row 1,500px under the caption. The
+					  shared reason is said once, in the label, when there is one; each title opens the
+					  memory when the listing holds it, which is what `in_listing` was computed for.
+					*/}
+					{omitted.length > 0 ? (
+						<DetailRows>
+							<DetailRow
+								label={
+									omitted.every((row) => row.reason === 'context_byte_budget')
+										? 'Left out for size'
+										: 'Ranked, then left out'
+								}
+								count={omitted.length}
+							>
+								<ResultList>
+									{omitted.map((row) => (
+										<RankedResult
+											key={row.memory_id}
+											title={row.title ?? <Identifier value={row.memory_id} label="memory id" />}
+											meta={
+												omitted.every((entry) => entry.reason === row.reason) ? '' : row.words
+											}
+											onOpen={row.in_listing ? () => onOpen(row.memory_id) : null}
+										/>
+									))}
+								</ResultList>
+							</DetailRow>
+						</DetailRows>
+					) : null}
 					{served.length === 0 ? (
 						<EmptyState heading="Your agent would have been given nothing for this">
 							<p>
@@ -435,32 +460,6 @@ function Answer({ busy, error, result, rows, relations, project, onOpen }) {
 					)}
 				</ResultBlock>
 
-				{/*
-				  WHAT WAS LEFT OUT. Closed, with its count showing, because it is the screen's third
-				  thing rather than its first — but never hidden, and never reduced to a number with
-				  no names behind it.
-				*/}
-				{omitted.length > 0 ? (
-					<DetailRows>
-						<DetailRow
-							label="Ranked, then left out"
-							count={`${omitted.length} ${omitted.length === 1 ? 'memory' : 'memories'}`}
-						>
-							<ul className="reasons">
-								{omitted.map((row) => (
-									<li key={row.memory_id}>
-										{row.title ? (
-											<span className="reason-what">{row.title}</span>
-										) : (
-											<Identifier value={row.memory_id} label="memory id" />
-										)}{' '}
-										<span className="reason-why">{row.words}</span>
-									</li>
-								))}
-							</ul>
-						</DetailRow>
-					</DetailRows>
-				) : null}
 			</AskLayout>
 		</>
 	);

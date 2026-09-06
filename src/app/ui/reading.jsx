@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { cx } from './cx.mjs';
 import { ChevronRight } from './icons.jsx';
 import { Eyebrow } from './text.jsx';
@@ -101,7 +103,14 @@ export function Evidence({ items, footnote = null }) {
 				const locator = looksLikeLocator(reference);
 				return (
 					<div className="evidence-item" key={index}>
-						<span className="badge badge-tag">{String(item?.kind ?? 'evidence').toUpperCase()}</span>
+						{/*
+						  A SPELLING TRANSFORM, NOT A VOCABULARY: underscores become spaces, so `user_statement`
+						  reads USER STATEMENT and `pull_request` reads PULL REQUEST. The value is still the
+						  record's own, letter for letter; nothing here maps a kind to a word of its own.
+						*/}
+						<span className="badge badge-tag">
+							{String(item?.kind ?? 'evidence').replace(/_/g, ' ').toUpperCase()}
+						</span>
 						<span className="evidence-body">
 							<span className={cx('evidence-ref', locator && 'evidence-ref-mono')}>
 								{reference ?? <span className="faint">no locator recorded</span>}
@@ -190,20 +199,72 @@ export function LinkCard({ title, meta = null, onClick }) {
 
 /* ------------------------------------------------------------------------------- named things */
 
-/** A declared name, its kind and the gloss the writer supplied. The rail's second card in `ReadB`. */
-export function NamedThing({ name, kind = null, gloss = null }) {
+/**
+ * A declared name, its kind and the gloss the writer supplied. The rail's second card in `ReadB`.
+ *
+ * `compact` draws the name and the kind on one line and keeps the gloss behind a press. It is for a
+ * list long enough that fourteen three-line glosses would be taller than the rail beside them —
+ * the merge composition's — where the reader is checking WHICH names travel, not what each means.
+ *
+ * WHAT IS SHOWN OF A GLOSS. A vault stores a gloss as `surface | kind | definition`, and drawn
+ * whole under a line that already says the surface and the kind it read "kaleidoscope · artifact ·
+ * kaleidoscope | artifact | the local memory runtime" — the two values printed twice with pipes
+ * between. `glossDefinition` strips exactly that prefix when it repeats what is already on the
+ * line, and otherwise shows the gloss as it is.
+ */
+export function NamedThing({ name, kind = null, gloss = null, compact = false }) {
+	const [open, setOpen] = useState(false);
+	const definition = glossDefinition(gloss, name, kind);
+	if (compact) {
+		return (
+			<div className="named named-compact">
+				<div className="named-line">
+					<span className="named-name">{name}</span>
+					{kind ? <span className="named-gloss">{kind}</span> : null}
+					{definition ? (
+						<button
+							type="button"
+							className="link-more"
+							aria-expanded={open}
+							onClick={() => setOpen(!open)}
+						>
+							{open ? 'less' : 'what it is'}
+						</button>
+					) : null}
+				</div>
+				{open && definition ? <div className="named-gloss">{definition}</div> : null}
+			</div>
+		);
+	}
 	return (
 		<div className="named">
 			<div className="named-name">{name}</div>
-			{kind || gloss ? (
+			{kind || definition ? (
 				<div className="named-gloss">
 					{kind ? <span>{kind}</span> : null}
-					{kind && gloss ? <span className="faint"> · </span> : null}
-					{gloss ? <span>{gloss}</span> : null}
+					{kind && definition ? <span className="faint"> · </span> : null}
+					{definition ? <span>{definition}</span> : null}
 				</div>
 			) : null}
 		</div>
 	);
+}
+
+/**
+ * The definition clause of a stored gloss, when the gloss opens by repeating the surface and the
+ * kind that are already drawn beside it. A gloss in any other shape is returned whole: this reads
+ * a layout the writer used, it does not know a vocabulary.
+ */
+export function glossDefinition(gloss, name = null, kind = null) {
+	if (typeof gloss !== 'string') return gloss ?? null;
+	const parts = gloss.split('|').map((part) => part.trim());
+	if (parts.length >= 3) {
+		const [first, second, ...rest] = parts;
+		const sameName = name ? first.toLowerCase() === String(name).trim().toLowerCase() : false;
+		const sameKind = kind ? second.toLowerCase() === String(kind).trim().toLowerCase() : false;
+		if (sameName && (sameKind || !kind)) return rest.join(' | ').trim() || null;
+	}
+	return gloss;
 }
 
 /* ------------------------------------------------------------------------- term-and-value list */

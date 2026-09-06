@@ -309,7 +309,30 @@ export function rankingControls(result) {
 	const search = result?.search ?? {};
 	return Object.entries(search)
 		.filter(([, value]) => value !== null && value !== undefined)
-		.map(([name, value]) => ({ name, value: String(value) }));
+		.map(([name, value]) => ({ name, value: String(value), words: controlWords(name, value) }));
+}
+
+/**
+ * A control the engine echoed, as a sentence where this build knows what the name means and as
+ * the engine spells it where it does not — the same rule `OMISSION_WORDS` applies to reasons.
+ *
+ * These are FIELD NAMES on the door's echo, which is structure rather than an open registry; the
+ * VALUE is never rewritten, only put in a sentence. `candidate_pool 200 / ledger true / top_k 20`
+ * as bare labels were identifiers the owner would have to ask about.
+ */
+const CONTROL_WORDS = {
+	candidate_pool: (value) => `looked at ${Number(value).toLocaleString()} candidates`,
+	top_k: (value) => `kept up to ${Number(value).toLocaleString()}`,
+	ledger: (value) =>
+		String(value) === 'true' ? 'recorded the read in the vault' : `did not record the read (ledger ${value})`,
+};
+
+export function controlWords(name, value) {
+	const known = CONTROL_WORDS[name];
+	if (known && (name !== 'candidate_pool' && name !== 'top_k' || Number.isFinite(Number(value)))) {
+		return known(value);
+	}
+	return `${name} ${value}`;
 }
 
 function numberOr(value, fallback) {

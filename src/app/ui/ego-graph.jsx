@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { MARKER_R, egoDrawing, namePlacement, nodeRadius } from './ego-layout.mjs';
+
 /**
  * THE ONLY NODE-LINK DRAWING IN THIS PRODUCT, and it replaces a graph engine.
  *
@@ -19,176 +21,39 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
  * from each component's own hub are reproducible, are the same drawing on every reload, and are
  * exactly what GraphFocus.dc.html shows: a centre with its neighbours around it.
  *
+ * WHERE THE GEOMETRY IS. Not here. `ego-layout.mjs` decides where every node sits and where every
+ * relation name sits along its line, as arithmetic with no DOM, so a test can assert that no two
+ * names overlap rather than trust this file to have drawn them apart. This component draws what it
+ * is handed and owns exactly three things the arithmetic cannot: the frame it is drawn in, the
+ * wheel and the drag, and what is under the pointer.
+ *
  * WHAT IT DOES NOT DO, on purpose: no clustering (the components already ARE the clusters, and each
  * is very nearly a tree), no edge bundling (there are no parallel edges to bundle), and no
  * path-between-two-names (two names share a component about 2% of the time, and when they do the
  * component is a tree so the path is a breadcrumb rather than a drawing).
  */
 
-/**
- * HOW MUCH OF A RELATION NAME FITS ON AN EDGE.
- *
- * The approved drawing is labelled with relations like "is keyed on" and "stopped using", which fit.
- * A real vault's relation vocabulary is open and written by agents, and it carries names several
- * times that length — nine of those, all crossing at the centre of a nine-spoke drawing, is a grey
- * smear with the hub underneath it. The full value is on the `<title>`, and the panel beside the
- * drawing carries every one of them in full and in order, so nothing here is the only copy.
- */
-const EDGE_LABEL_CHARS = 22;
-
-/** Ring radii, in the drawing's own units. Depth 0 is the hub. */
-const RING = [0, 150, 260, 350];
-
-const clipLabel = (value) => {
-	const text = String(value ?? '');
-	return text.length <= EDGE_LABEL_CHARS ? text : `${text.slice(0, EDGE_LABEL_CHARS - 1)}…`;
-};
-
-/** About the width of one character of the edge-label face, in this drawing's own units. */
-const EDGE_LABEL_CHAR_WIDTH = 5.4;
-
-/**
- * WHETHER THE RELATION NAMES CAN BE DRAWN AT ALL — measured, not guessed at from a count.
- *
- * The caller used to decide this with `edges.length <= 40`, which is a proxy for the property and
- * is wrong in both directions. What actually decides it is how much ROOM each label has, and on an
- * ego drawing that is the arc between two spokes: the labels sit on a ring at 62% of the first ring
- * out, so `n` spokes divide `2πr` between them. GraphFocus is labelled with relations like "is keyed
- * on" — 11 characters — and they fit. A real vault's relation names run to forty characters of
- * snake_case, and ten of those on one hub produce a grey smear across the middle of the picture
- * with the hub underneath it, at any edge count under the old threshold.
- *
- * When they do not fit, nothing is drawn and nothing is lost: every relation is listed in full, in
- * order, in the panel beside the drawing.
- */
-export function edgeLabelsFit(edges) {
-	const spokes = edges?.length ?? 0;
-	if (spokes === 0) return true;
-	const arc = (2 * Math.PI * RING[1] * 0.62) / spokes;
-	let longest = 0;
-	for (const edge of edges) longest = Math.max(longest, clipLabel(edge?.label ?? '').length);
-	return longest * EDGE_LABEL_CHAR_WIDTH <= arc;
-}
-
-
-const HUB_R = 26;
-const NODE_R = 9;
-
-/**
- * Place every node, once, by breadth-first depth from its own component's most-connected node.
- *
- * Components are packed left to right, largest first, on a row that wraps — which is the honest
- * arrangement for a set of islands that have no relationship to each other. Nothing here is
- * random and nothing is animated, so the same elements always draw the same picture.
- */
-export function layout(nodes, edges, focusId = null) {
-	const byId = new Map(nodes.map((node) => [node.id, node]));
-	const neighbours = new Map(nodes.map((node) => [node.id, []]));
-	for (const edge of edges) {
-		if (!byId.has(edge.source) || !byId.has(edge.target)) continue;
-		neighbours.get(edge.source).push(edge.target);
-		neighbours.get(edge.target).push(edge.source);
-	}
-
-	// Components, in a stable order: by size, then by the id of the first member.
-	const seen = new Set();
-	const components = [];
+/** The box that holds every placed node and every name beside one. */
+function boundsOf(nodes, placed) {
+	let minX = Number.POSITIVE_INFINITY;
+	let minY = Number.POSITIVE_INFINITY;
+	let maxX = Number.NEGATIVE_INFINITY;
+	let maxY = Number.NEGATIVE_INFINITY;
 	for (const node of nodes) {
-		if (seen.has(node.id)) continue;
-		const members = [];
-		const queue = [node.id];
-		seen.add(node.id);
-		while (queue.length > 0) {
-			const id = queue.shift();
-			members.push(id);
-			for (const next of neighbours.get(id) ?? []) {
-				if (seen.has(next)) continue;
-				seen.add(next);
-				queue.push(next);
-			}
-		}
-		components.push(members);
+		const point = placed.get(node.id);
+		if (!point) continue;
+		const radius = nodeRadius(node, point.depth);
+		// A name beside a node reaches past it — a forty-character name by two hundred pixels — and
+		// a box drawn to the nodes alone would cut the names off at the frame's edge.
+		const name = namePlacement(node, point);
+		const left = name.anchor === 'start' ? name.x : name.anchor === 'end' ? name.x - name.width : name.x - name.width / 2;
+		minX = Math.min(minX, point.x - radius, left);
+		maxX = Math.max(maxX, point.x + radius, left + name.width);
+		minY = Math.min(minY, point.y - radius, name.y - name.thickness);
+		maxY = Math.max(maxY, point.y + radius, name.y + name.thickness * 0.4);
 	}
-	components.sort((a, b) => b.length - a.length || String(a[0]).localeCompare(String(b[0])));
-
-	const placed = new Map();
-	const span = RING[RING.length - 1] * 2 + 80;
-	const perRow = Math.max(1, Math.ceil(Math.sqrt(components.length)));
-
-	components.forEach((members, index) => {
-		const cx = (index % perRow) * span;
-		const cy = Math.floor(index / perRow) * span;
-
-		// The centre is the focused node when it is in this component, otherwise the most connected
-		// one — which is what makes a component's drawing about the thing it is actually about.
-		const hub =
-			(focusId && members.includes(focusId) ? focusId : null) ??
-			members.reduce((best, id) =>
-				(neighbours.get(id)?.length ?? 0) > (neighbours.get(best)?.length ?? 0) ? id : best,
-			);
-
-		const depth = new Map([[hub, 0]]);
-		const queue = [hub];
-		while (queue.length > 0) {
-			const id = queue.shift();
-			for (const next of neighbours.get(id) ?? []) {
-				if (depth.has(next)) continue;
-				depth.set(next, Math.min(depth.get(id) + 1, RING.length - 1));
-				queue.push(next);
-			}
-		}
-
-		const rings = new Map();
-		for (const id of members) {
-			const d = depth.get(id) ?? RING.length - 1;
-			if (!rings.has(d)) rings.set(d, []);
-			rings.get(d).push(id);
-		}
-
-		for (const [d, ids] of rings) {
-			ids.sort();
-			if (d === 0) {
-				placed.set(ids[0], { x: cx, y: cy, depth: 0 });
-				continue;
-			}
-			const radius = RING[d];
-			// Start each ring at the top and step evenly. The half-step offset on odd rings stops
-			// ring 2 hiding directly behind ring 1.
-			const offset = d % 2 === 0 ? Math.PI / ids.length : 0;
-			ids.forEach((id, position) => {
-				const angle = -Math.PI / 2 + offset + (position / ids.length) * Math.PI * 2;
-				placed.set(id, {
-					x: cx + Math.cos(angle) * radius,
-					y: cy + Math.sin(angle) * radius,
-					depth: d,
-				});
-			});
-		}
-	});
-
-	return placed;
-}
-
-/** The box that holds every placed node, with room for the labels that hang off them. */
-function boundsOf(placed) {
-	let minX = 0;
-	let minY = 0;
-	let maxX = 0;
-	let maxY = 0;
-	let first = true;
-	for (const point of placed.values()) {
-		if (first) {
-			minX = maxX = point.x;
-			minY = maxY = point.y;
-			first = false;
-			continue;
-		}
-		minX = Math.min(minX, point.x);
-		maxX = Math.max(maxX, point.x);
-		minY = Math.min(minY, point.y);
-		maxY = Math.max(maxY, point.y);
-	}
-	const pad = 90;
+	if (!Number.isFinite(minX)) return { x: 0, y: 0, width: 1, height: 1 };
+	const pad = 30;
 	return {
 		x: minX - pad,
 		y: minY - pad,
@@ -221,28 +86,47 @@ export function atMostLifeSize(bounds, frame) {
 }
 
 /**
- * @param elements       `{ nodes, edges }` — plain objects, not a library's element shape.
- * @param focus          the node this drawing is about, placed at the centre of its component.
- * @param onSelect       (id | null) => void. Clicking the background clears the selection.
- * @param onHover        (id | null, {x, y}) => void, in client coordinates.
- * @param showEdgeLabels the caller decides; a canvas with more edges than labels can carry says so
- *                       in words rather than drawing an unreadable one.
+ * @param elements  `{ nodes, edges }` — plain objects, not a library's element shape. A node may
+ *                  carry `beyond`, the exact count of names one step past it that are not drawn.
+ * @param focus     the node this drawing is about, placed at the centre of its component.
+ * @param pinned    a second name kept on the canvas: the centre of its own component when the two
+ *                  share none, and drawn hollow at the focus's size wherever it lands.
+ * @param shared    a Set of the names joined to both the focus and the pin, ringed in the accent.
+ * @param drawing   from `egoDrawing`, when the caller has already computed it — the panel beside
+ *                  this drawing lists the numbered relations, so it needs the same answer.
+ * @param onSelect  (id | null) => void. Clicking the background clears the selection.
+ * @param onHover   (id | null, {x, y}) => void, in client coordinates.
+ * @param inset     CSS px at the frame's foot that belong to the legend drawn over it. The drawing
+ *                  is fitted to the frame MINUS this strip, so no node sits under the legend.
+ * @param beyondMarks whether to print the "+n" count beside a name. Off at one step: it is a
+ *                  number a reader has to decode from the legend, and it earns its place only when
+ *                  deciding whether to open a neighbour — which is a two-step question.
  */
 export function EgoGraph({
 	elements,
 	focus = null,
+	pinned = null,
+	shared = null,
+	drawing: given = null,
 	selected = null,
+	inset = 0,
+	beyondMarks = true,
 	onSelect = () => {},
 	onHover = () => {},
-	showEdgeLabels = true,
 	label = 'The names in this view and what connects them',
 }) {
 	const nodes = elements?.nodes ?? [];
 	const edges = elements?.edges ?? [];
-	const placed = useMemo(() => layout(nodes, edges, focus), [nodes, edges, focus]);
-	const bounds = useMemo(() => boundsOf(placed), [placed]);
+	const drawing = useMemo(
+		() => given ?? egoDrawing(elements, pinned ? [focus, pinned] : focus),
+		[given, elements, focus, pinned],
+	);
+	const placed = drawing.placed;
+	const bounds = useMemo(() => boundsOf(nodes, placed), [nodes, placed]);
+	const edgeById = useMemo(() => new Map(edges.map((edge) => [edge.id, edge])), [edges]);
 
 	const [view, setView] = useState(null);
+	const [hoveredEdge, setHoveredEdge] = useState(null);
 	const drag = useRef(null);
 	const svg = useRef(null);
 
@@ -280,7 +164,18 @@ export function EgoGraph({
 		return () => observer.disconnect();
 	}, []);
 
-	const fitted = useMemo(() => atMostLifeSize(bounds, frame), [bounds, frame]);
+	/*
+	  THE FIT KNOWS ABOUT THE LEGEND. `boundsOf` and `atMostLifeSize` see nodes and a frame and
+	  nothing else, so at two steps the bottom nodes and their names sat under the legend box. The
+	  drawing is fitted to the frame less the legend's strip, and the viewBox is then grown by that
+	  strip's share so the drawing sits above it and the strip stays empty — scale unchanged.
+	*/
+	const fitted = useMemo(() => {
+		if (!frame || inset <= 0) return atMostLifeSize(bounds, frame);
+		const usable = { width: frame.width, height: Math.max(1, frame.height - inset) };
+		const box = atMostLifeSize(bounds, usable);
+		return { ...box, height: box.height * (frame.height / usable.height) };
+	}, [bounds, frame, inset]);
 	const box = view ?? fitted;
 
 	/* Wheel zooms about the pointer; drag pans. Both write the viewBox, so nothing re-lays-out. */
@@ -321,10 +216,20 @@ export function EgoGraph({
 		drag.current = null;
 	};
 
+	/** Where the pointer is, in the drawing's own units, so a hover label can sit beside it. */
+	const localPoint = (event) => {
+		const matrix = svg.current?.getScreenCTM?.();
+		if (!matrix) return null;
+		const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+		return { x: point.x, y: point.y };
+	};
+
 	const colour = (node) =>
 		node.slot === undefined || node.slot < 0 || node.slot > 7
 			? 'var(--k-other)'
 			: `var(--k${node.slot})`;
+
+	const hoverText = hoveredEdge ? edgeById.get(hoveredEdge.id)?.label : null;
 
 	return (
 		<svg
@@ -356,38 +261,83 @@ export function EgoGraph({
 								y2={b.y}
 								className={edge.band === 'rare' ? 'ego-edge ego-edge-rare' : 'ego-edge'}
 							/>
-							{showEdgeLabels && edge.label ? (
-								/*
-								  Placed at 62% of the way out rather than at the midpoint. Every edge in an
-								  ego drawing runs from one centre, so nine midpoints sit in a tight ring
-								  around it and overlap each other; two-thirds out they fan apart.
-								*/
-								<text
-									className="ego-edge-label"
-									x={a.x + (b.x - a.x) * 0.62}
-									y={a.y + (b.y - a.y) * 0.62 - 4}
-									textAnchor="middle"
-								>
-									<title>{edge.label}</title>
-									{clipLabel(edge.label)}
-								</text>
+							{/*
+							  A 1.4px line cannot be pointed at. This is the same line, fourteen wide and
+							  painted in nothing, so the pointer finds it — and the relation it carries is
+							  named beside the pointer while it is there. Every relation is also in the
+							  panel and, for all but the numbered ones, on the line itself: the hover
+							  repeats, it is never the only copy.
+							*/}
+							{edge.label ? (
+								<line
+									x1={a.x}
+									y1={a.y}
+									x2={b.x}
+									y2={b.y}
+									className="ego-edge-hit"
+									onPointerEnter={(event) => {
+										if (drag.current) return;
+										const at = localPoint(event);
+										if (at) setHoveredEdge({ id: edge.id, ...at });
+									}}
+									onPointerMove={(event) => {
+										if (drag.current) return;
+										const at = localPoint(event);
+										if (at) setHoveredEdge({ id: edge.id, ...at });
+									}}
+									onPointerLeave={() => setHoveredEdge(null)}
+								/>
 							) : null}
 						</g>
 					);
 				})}
 			</g>
 
+			{/*
+			  THE RELATION NAMES, along their lines. Where each one sits — and which could not be
+			  placed — is decided in `ego-layout.mjs`; this only draws the answer. `text-anchor` and
+			  `dominant-baseline` centre the glyphs on the point the arithmetic chose, and the rotation
+			  is the line's own angle, never upside down.
+			*/}
+			<g>
+				{drawing.labels.map((entry) => (
+					<text
+						key={entry.id}
+						className="ego-edge-label"
+						transform={`translate(${entry.x} ${entry.y}) rotate(${entry.angle})`}
+						textAnchor="middle"
+						dominantBaseline="middle"
+					>
+						{entry.text}
+					</text>
+				))}
+			</g>
+
 			<g>
 				{nodes.map((node) => {
 					const point = placed.get(node.id);
 					if (!point) return null;
-					const radius = point.depth === 0 ? HUB_R : NODE_R + Math.min(6, (node.degree ?? 1) / 2);
+					const radius = nodeRadius(node, point.depth);
+					const name = namePlacement(node, point);
 					const isSelected = selected === node.id;
+					/*
+					  THE PIN IS TOLD APART WHEREVER IT LANDS. Usually it is the centre of its own
+					  component — two names share one about 2% of the time — but when the two ARE
+					  joined, the layout centres the component on the focus and the pin sits on a ring
+					  at a ring node's size, so the label arithmetic still holds. Either way it is drawn
+					  hollow in the text ink with "pinned" under its name: the name the reader chose to
+					  keep is never one more coloured circle to find.
+					*/
+					const isPinned = pinned !== null && node.id === pinned && node.id !== focus;
+					const isShared = Boolean(shared?.has(node.id));
+					const beyond = node.beyond ?? 0;
+					const text = String(node.label ?? node.id).split('\n')[0];
 					return (
 						<g
 							key={node.id}
 							className="ego-node"
 							data-selected={isSelected ? 'true' : undefined}
+							data-shared={isShared ? 'true' : undefined}
 							onClick={(event) => {
 								event.stopPropagation();
 								onSelect(node.id);
@@ -395,6 +345,15 @@ export function EgoGraph({
 							onPointerEnter={(event) => onHover(node.id, { x: event.clientX, y: event.clientY })}
 							onPointerLeave={() => onHover(null, null)}
 						>
+							{/*
+							  THE COUNT BEYOND, REPEATED IN WORDS on the node's own tooltip. The "+3" after
+							  the name is the promise; this is the same promise as a sentence.
+							*/}
+							{beyond > 0 ? (
+								<title>
+									{`${beyond} more ${beyond === 1 ? 'name' : 'names'} beyond “${text}”, not drawn`}
+								</title>
+							) : null}
 							{/*
 							  SHAPE CARRIES ROLE AND THE LABEL CARRIES THE NAME; colour is redundant with
 							  both. A kind past the eighth slot draws grey and still says what it is,
@@ -407,7 +366,15 @@ export function EgoGraph({
 							  and the legend's job is to decode the OTHERS. Drawing it in a kind colour
 							  makes it one more thing to look up.
 							*/}
-							{point.depth === 0 ? (
+							{isPinned ? (
+								<circle
+									cx={point.x}
+									cy={point.y}
+									r={radius}
+									fill="var(--surface)"
+									className="ego-shape ego-shape-pinned"
+								/>
+							) : point.depth === 0 ? (
 								<circle
 									cx={point.x}
 									cy={point.y}
@@ -435,18 +402,73 @@ export function EgoGraph({
 									strokeDasharray={node.marked ? '3 2' : undefined}
 								/>
 							)}
+							{/*
+							  THE NAME SITS ON THE FAR SIDE OF ITS NODE FROM THE HUB, as GraphFocus draws
+							  it: beside the nodes at the sides, above the ones at the top. That leaves
+							  the inside of the ring to the relation names and the outside to the node
+							  names, which is the whole reason both can be drawn at once.
+							*/}
 							<text
 								className={point.depth === 0 ? 'ego-label ego-label-hub' : 'ego-label'}
-								x={point.x}
-								y={point.y + radius + 14}
-								textAnchor="middle"
+								x={name.x}
+								y={name.y}
+								textAnchor={name.anchor}
 							>
-								{String(node.label ?? node.id).split('\n')[0]}
+								{text}
+								{/*
+								  WHAT LIES BEYOND, as a small count at the end of the name. "+3" is exact:
+								  the names one step past this one that the canvas does not hold, so a
+								  reader deciding whether to open it decides on a number rather than a
+								  hunch. It rides on the name so it sits on the far side of the node with
+								  it, outside the ring, where the relation names never go.
+								*/}
+								{beyondMarks && beyond > 0 ? (
+									<tspan className="ego-beyond" dx="5">
+										+{beyond}
+									</tspan>
+								) : null}
 							</text>
+							{isPinned ? (
+								<text
+									className="ego-label-pin"
+									x={name.x}
+									y={name.y + 13}
+									textAnchor={name.anchor}
+								>
+									pinned
+								</text>
+							) : null}
 						</g>
 					);
 				})}
 			</g>
+
+			{/*
+			  THE NUMBERED ONES: a relation with no room on its line wears a number on it instead, and
+			  the legend in the corner of the frame says which relation that is. Drawn over the nodes
+			  so a mark that had to sit near one is still findable.
+			*/}
+			<g>
+				{drawing.markers.map((marker) => (
+					<g key={marker.id} className="ego-marker" transform={`translate(${marker.x} ${marker.y})`}>
+						<circle r={MARKER_R} className="ego-marker-ring" />
+						<text className="ego-marker-text" textAnchor="middle" dominantBaseline="central">
+							{marker.number}
+						</text>
+					</g>
+				))}
+			</g>
+
+			{hoveredEdge && hoverText ? (
+				<text
+					className="ego-edge-hover"
+					x={hoveredEdge.x}
+					y={hoveredEdge.y - 14}
+					textAnchor="middle"
+				>
+					{hoverText}
+				</text>
+			) : null}
 		</svg>
 	);
 }

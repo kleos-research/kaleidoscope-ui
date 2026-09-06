@@ -40,8 +40,21 @@ import {
  * The frame is warn-tinted and the fill is not, and the button is `warn` rather than red. A red
  * button says "gone", which is the one thing this action does not mean.
  */
-export function RemovalConfirm({ selection, busy = false, onCancel, onConfirm, onEscalate }) {
+export function RemovalConfirm({
+	selection,
+	busy = false,
+	onCancel,
+	onConfirm,
+	onEscalate,
+	/*
+	  OVER THE MEMORY IT IS ABOUT, the list of one is the title already drawn 130px below it. The
+	  question keeps every word and drops the repetition; over the list, where the memory is a row
+	  among hundreds, the title stays in the prompt.
+	*/
+	compact = false,
+}) {
 	const copy = confirmation(selection);
+	const listed = compact && selection.length === 1 ? [] : copy.titles;
 
 	return (
 		<Prompt
@@ -69,19 +82,21 @@ export function RemovalConfirm({ selection, busy = false, onCancel, onConfirm, o
 					<>
 						{copy.escalation_prompt}{' '}
 						<Button tone="quiet" size="sm" onClick={onEscalate}>
-							{copy.escalation_title}
+							{copy.escalation_link}
 						</Button>
 					</>
 				) : null
 			}
 		>
-			<PromptList>
-				{copy.titles.map((title, index) => (
-					<li key={selection[index]?.memory_id ?? index}>
-						{title ?? <NotRecorded what="title" />}
-					</li>
-				))}
-			</PromptList>
+			{listed.length > 0 ? (
+				<PromptList>
+					{listed.map((title, index) => (
+						<li key={selection[index]?.memory_id ?? index}>
+							{title ?? <NotRecorded what="title" />}
+						</li>
+					))}
+				</PromptList>
+			) : null}
 
 			{/*
 			  THE LOAD-BEARING SENTENCE, in the body, never truncated, never behind a disclosure,

@@ -1,9 +1,9 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 import { IconButton } from './button.jsx';
 import { cx } from './cx.mjs';
 import { ChevronDown, ChevronLeft, More, Refresh, Search } from './icons.jsx';
-import { DropdownMenu, MenuItem, MenuLabel, MenuSeparator, Popover, Tooltip } from './overlays.jsx';
+import { Dialog, DropdownMenu, MenuItem, MenuLabel, MenuSeparator, Tooltip } from './overlays.jsx';
 
 /**
  * THE SHELL. One 56px bar over one region, and it is the same object on every screen.
@@ -12,7 +12,7 @@ import { DropdownMenu, MenuItem, MenuLabel, MenuSeparator, Popover, Tooltip } fr
  * A shell that is identical everywhere is what makes the screens under it comparable, so the two
  * bars below are two MODES of one component rather than two components:
  *
- *   ROOT   wordmark · vault · project · four destinations · find-or-ask · refresh · more
+ *   ROOT   wordmark · project · four destinations · find · refresh · more
  *   FOCUS  back · where you are · what you can do here
  *
  * Everything in either mode is reachable without scrolling. That is a direct fix: "I do see a
@@ -34,24 +34,26 @@ export function AppShell({ bar, notices = null, children }) {
 /**
  * The bar every list-level screen wears.
  *
- * `nav`, `project` and `vault` are given rather than derived here, because this component knows
- * nothing about the session, the routes or the payload — six screens compose it and none of them
- * should have to agree with this file about where the data comes from.
+ * `nav` and `project` are given rather than derived here, because this component knows nothing
+ * about the session, the routes or the payload — six screens compose it and none of them should
+ * have to agree with this file about where the data comes from.
+ *
+ * It is wordmark · divider · project · the four words, exactly as BrowseB draws it. There is no
+ * vault chip and no "of 396 in this vault" beside the project: the first was a label the owner
+ * would ask about (on his own install it read "Kaleidoscope  kaleidoscope"), and the second is
+ * the same number the filter rail's foot already carries.
  */
-export function RootBar({ vault, project, context = null, nav, find, onRefresh, refreshing = false, moved = false, menu = null }) {
+export function RootBar({ project, nav, find, onRefresh, refreshing = false, moved = false, menu = null }) {
 	return (
 		<header className="topbar">
 			<div className="topbar-group">
 				<a className="wordmark" href="#/">
 					Kaleidoscope
 				</a>
-				{vault}
 				<span className="topbar-divider" aria-hidden="true" />
 				{project}
-				{context ? <span className="topbar-context">{context}</span> : null}
+				{nav}
 			</div>
-
-			{nav}
 
 			<div className="topbar-group topbar-group-right">
 				{find}
@@ -120,24 +122,66 @@ export function FocusBar({ backTo = '#/', backLabel, trail = [], actions = null 
 }
 
 /**
- * The four destinations.
+ * THE FOUR DESTINATIONS — the one thing the approved mockups had not drawn.
  *
- * "I see Kaleidoscope, Memories, Needs a decision, Graph, New memory. I don't know what either of
- * them does." Two of the five are gone: "Graph" is now NAMES, which says what is in there rather
- * than what it is drawn as, and "New memory" was never a place — it is an action and it lives in
- * the More menu with the other actions.
+ * Every board draws the bar as wordmark · project · find · refresh · more, and nothing that moves
+ * between screens; the first build put a row of boxed links back because three of the four were
+ * otherwise unreachable, and a row of boxes was the first thing rejected: "I see Kaleidoscope,
+ * Memories, Needs a decision, Graph, New memory. I don't know what either of them does."
  *
- * Every remaining label is a plain noun a reader can act on without being told what it means, which
- * is the test the old set failed.
+ * So it is now drawn, in BrowseB.dc.html, as the quietest form that is still self-evident: four
+ * words set after the project chip, because everything sits under a project. No boxes, no icons.
+ * The screen you are on is the one word in ink with a 2px accent rule under it; the others sit in
+ * the muted grey. Each label says what its screen is FOR on its own — MEMORIES is the list; ASK is
+ * asking the way the agent does, which is the whole point of that screen and why it is not called
+ * "Search"; NAMES is what the memories talk about, said as what is in there rather than what it is
+ * drawn as ("Graph" failed that test); NEEDS A DECISION is the queue that waits on a person. "New
+ * memory" was never a place — it is an action and lives in the More menu with the other actions.
+ *
+ * `route` is the name `routeFromHash` gives the screen, and it is what `aria-current` is matched
+ * on — so it has to be the route's own name, not the path's. The curation queue is `#/decide` on
+ * the URL and `backlog` as a route, and a table that said `decide` here would never light up.
  */
 export const DESTINATIONS = [
-	{ href: '#/', route: 'list', label: 'Memories' },
-	{ href: '#/search', route: 'search', label: 'Search' },
-	{ href: '#/names', route: 'names', label: 'Names' },
-	{ href: '#/decide', route: 'decide', label: 'Needs a decision' },
+	{ href: '#/', route: 'list', label: 'Memories', key: '1' },
+	{ href: '#/search', route: 'search', label: 'Ask', key: '2' },
+	{ href: '#/names', route: 'names', label: 'Names', key: '3' },
+	{ href: '#/decide', route: 'backlog', label: 'Needs a decision', key: '4' },
 ];
 
+/**
+ * Whether a keystroke belongs to something else.
+ *
+ * A digit typed into the find box, the editor, a combobox or an open menu is text or typeahead,
+ * never a navigation. The check is on the TARGET rather than on which screen is open, because the
+ * screen does not know what is focused and a menu opened from the More button is not a screen.
+ */
+function keystrokeIsTaken(target) {
+	if (!(target instanceof Element)) return false;
+	if (target.isContentEditable) return true;
+	if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return true;
+	return target.closest('[role="menu"], [role="dialog"], [role="listbox"], [role="combobox"]') !== null;
+}
+
 export function Nav({ current }) {
+	/*
+	  1–4 go where the four words go. The listener lives here, with the words, so it is armed
+	  exactly where the words are visible — a focus screen wears no nav and gets no shortcuts, which
+	  is what keeps a stray digit from carrying a reader out of a half-finished edit.
+	*/
+	useEffect(() => {
+		function onKeyDown(event) {
+			if (event.defaultPrevented || event.isComposing) return;
+			if (event.metaKey || event.ctrlKey || event.altKey) return;
+			const entry = DESTINATIONS.find((candidate) => candidate.key === event.key);
+			if (!entry || keystrokeIsTaken(event.target)) return;
+			event.preventDefault();
+			window.location.hash = entry.href;
+		}
+		window.addEventListener('keydown', onKeyDown);
+		return () => window.removeEventListener('keydown', onKeyDown);
+	}, []);
+
 	return (
 		<nav className="topbar-nav" aria-label="Sections">
 			{DESTINATIONS.map((entry) => (
@@ -146,6 +190,8 @@ export function Nav({ current }) {
 					className="nav-link"
 					href={entry.href}
 					aria-current={entry.route === current ? 'page' : undefined}
+					aria-keyshortcuts={entry.key}
+					title={`Press ${entry.key}`}
 				>
 					{entry.label}
 				</a>
@@ -155,36 +201,36 @@ export function Nav({ current }) {
 }
 
 /**
- * THE VAULT, AS A SHORT NAME.
+ * ABOUT THIS VAULT — the readings, behind the last item of the "…" menu.
  *
  * "I don't know why we need to enter the entire folder path. It's too long."
  *
- * The button shows the last segment of the resolved root. The popover carries the full path and
- * every reading this app took from the machine — which engine answered, from where, which contract
- * it prints, whether the model is in it, and where this app keeps its copies. Nothing was removed;
- * a fingerprint stopped being a headline.
+ * The full path and every reading this app took from the machine — which engine answered, from
+ * where, which contract it prints and which ones this build was tested against, whether the model
+ * is in it, and where this app keeps its copies. Nothing was removed from what the old vault chip
+ * held; it stopped being resident in the bar, where no approved mockup draws it. The short name is
+ * the sheet's title, so the vault is still called what a person calls it.
  *
- * `readings` is [{ term, value }] so this component holds no opinion about what a session contains.
+ * `readings` is [{ term, value, mono }] so this component holds no opinion about what a session
+ * contains.
  */
-export function VaultName({ name, readings = [] }) {
+export function AboutVault({ open, onOpenChange, name, readings = [] }) {
 	return (
-		<Popover
-			trigger={
-				<button type="button" className="vault-name">
-					<span className="vault-name-text">{name ?? 'resolving…'}</span>
-					<ChevronDown size={11} />
-				</button>
-			}
+		<Dialog
+			open={open}
+			onOpenChange={onOpenChange}
+			title={name ? `About “${name}”` : 'About this vault'}
+			description="Where this vault is, which engine answers for it, and what this app was tested against."
 		>
 			<dl className="vault-sheet">
 				{readings.map((reading) => (
-					<div key={reading.term} className="vault-reading">
+					<div key={reading.term || reading.value} className="vault-reading">
 						<dt>{reading.term}</dt>
 						<dd className={reading.mono ? 'identifier' : undefined}>{reading.value}</dd>
 					</div>
 				))}
 			</dl>
-		</Popover>
+		</Dialog>
 	);
 }
 
@@ -205,17 +251,16 @@ export function VaultName({ name, readings = [] }) {
  * reader that choosing a project hides it, which is the opposite of what the engine does with an
  * unset scope.
  *
+ * THE CHIP IS A NAME ALONE, as BrowseB draws it. The count it used to carry is the same number the
+ * filter rail's foot prints ("396 of 396 shown") and the menu still says it per row, so on the chip
+ * it was a number twice on one screen — and "kaleidoscope 254 ⌄ of 396 in this vault" is not a
+ * control, it is a sentence.
+ *
  * @param projects  [{ value, label, count }] computed from the loaded records.
  * @param value     a project value, or `null` for "every project".
  * @param everywhereCount  how many memories carry no project at all.
  */
-export function ProjectSwitcher({
-	projects = [],
-	value = null,
-	onChange,
-	shown = null,
-	everywhereCount = 0,
-}) {
+export function ProjectSwitcher({ projects = [], value = null, onChange, everywhereCount = 0 }) {
 	const chosen = projects.find((entry) => entry.value === value) ?? null;
 
 	return (
@@ -225,7 +270,6 @@ export function ProjectSwitcher({
 			trigger={
 				<button type="button" className="project-switcher">
 					<span className="project-switcher-name">{chosen ? chosen.label : 'Every project'}</span>
-					{shown === null ? null : <span className="project-switcher-count">{shown}</span>}
 					<ChevronDown size={12} />
 				</button>
 			}
@@ -249,17 +293,22 @@ export function ProjectSwitcher({
 }
 
 /**
- * ONE BOX, TWO JOBS, AND IT RUNS NEITHER OF THEM.
+ * "FIND IN THESE MEMORIES" — the box BrowseB draws over the list, and it does two things, neither
+ * of which is a search.
  *
- * This control is a NAVIGATION. Typing here filters nothing and asks nothing; pressing Enter
- * carries the words to the search screen, where "Find these words" runs over the payload the
- * browser already holds and "Ask the way your agent does" is a separate, deliberate press.
+ * Typing NARROWS THE LIST when the caller hands it `value` and `onChange`: arithmetic over the
+ * payload the browser already holds, through the same filter the rail's foot counts. On any other
+ * screen the box is uncontrolled and holds the words until Enter, which CARRIES them to the search
+ * screen — where "Find these words" runs over the same payload and "Ask the way your agent does"
+ * is a separate, deliberate press.
  *
  * That is the whole reason the ranked door can be an explicit, user-initiated action: no keystroke
  * anywhere in this app reaches it, including here, in the box that most looks like it would.
  */
-export function FindOrAsk({ onSubmit, placeholder = 'Find or ask' }) {
-	const [text, setText] = useState('');
+export function FindOrAsk({ onSubmit, value, onChange, placeholder = 'Find in these memories' }) {
+	const [held, setHeld] = useState('');
+	const controlled = typeof onChange === 'function';
+	const text = controlled ? (value ?? '') : held;
 	return (
 		<form
 			className="findbox"
@@ -276,7 +325,7 @@ export function FindOrAsk({ onSubmit, placeholder = 'Find or ask' }) {
 				value={text}
 				placeholder={placeholder}
 				aria-label={placeholder}
-				onChange={(event) => setText(event.target.value)}
+				onChange={(event) => (controlled ? onChange(event.target.value) : setHeld(event.target.value))}
 			/>
 		</form>
 	);
@@ -317,10 +366,10 @@ export function OverflowMenu({ children, label = 'More' }) {
  * `narrow` is for a screen made of sentences rather than of columns. Prose at 1080px is not a page
  * a person reads; it is a page they lose their place in.
  */
-export function Page({ narrow = false, children }) {
+export function Page({ narrow = false, column = null, children }) {
 	return (
 		<div className="screen">
-			<div className={cx('page', narrow && 'page-narrow')}>{children}</div>
+			<div className={cx('page', narrow && 'page-narrow', column === 'read' && 'page-read')}>{children}</div>
 		</div>
 	);
 }

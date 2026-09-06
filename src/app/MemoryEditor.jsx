@@ -28,7 +28,10 @@ import {
 } from './editor-model.mjs';
 import { useFocusActions } from './focus-actions.mjs';
 import { markSyntax } from './markdown-syntax.mjs';
-import { axisCopy } from './records.mjs';
+import { axisCopy, orderAxes } from './records.mjs';
+
+/** "project" as a field label: the same word, capitalised, as EditValues draws it. */
+const capitalised = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word);
 import { deniedRelations, reservedRelationAdvice } from './reserved-relations.mjs';
 import {
 	Badge,
@@ -210,7 +213,12 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 	*/
 	const [attempted, setAttempted] = useState(false);
 
-	const axes = useMemo(() => childFieldNames(fields ?? {}, 'semantic_delta.scope').sort(), [fields]);
+	/*
+	  PROJECT FIRST, then branch, then file, then anything an engine adds later. An alphabetical
+	  sort put the file the owner did not understand above the project he did. The order is
+	  written once, beside the axis copy, and not here.
+	*/
+	const axes = useMemo(() => orderAxes(childFieldNames(fields ?? {}, 'semantic_delta.scope').sort()), [fields]);
 
 	// ------------------------------------------------------------------------- the load
 	//
@@ -970,12 +978,13 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 						  agent-written memories are in, and flagging it would be an outage rather than a
 						  guard.
 						*/}
-						{undeclared === null ? (
-							<p className="field-note">
-								This memory declares nothing by name, so every fact here commits and each name is
-								matched on its characters alone. Declaring one thing changes that for all of them.
-							</p>
-						) : undeclared.length > 0 ? (
+						{/*
+						  `null` means this memory declares nothing at all — a regime a large share of
+						  agent-written memories are in, and one the declaration prompt explains at the
+						  moment a first name is declared. Said here as well, it was resident jargon on the
+						  first frame of every new memory.
+						*/}
+						{undeclared !== null && undeclared.length > 0 ? (
 							<p className="field-note field-note-warn">
 								{undeclared.length} name{undeclared.length === 1 ? '' : 's'} used above{' '}
 								{undeclared.length === 1 ? 'is' : 'are'} not declared. Because this memory declares
@@ -1422,7 +1431,7 @@ function DetailsSheet({
 		<div className="sheet">
 			<Card title="What kind of memory this is">
 				<Field
-					note="Types are append-only: no operation takes one back, and a near-synonym persists forever beside the word it duplicates. Reuse one."
+					note="A type can’t be taken back once used — pick one this vault already has."
 					tone={typeBlocker ? 'warn' : 'neutral'}
 				>
 					<Combobox
@@ -1448,7 +1457,7 @@ function DetailsSheet({
 					const value = buffer.scope?.[axis] ?? null;
 					return (
 						<div key={axis} className="sheet-axis">
-							<span className="sheet-axis-label">{copy.label}</span>
+							<span className="sheet-axis-label">{capitalised(copy.label)}</span>
 							<span className="sheet-axis-control">
 								{value === null ? (
 									<UnsetField
@@ -1703,31 +1712,34 @@ function DeclaredThing({ row, blockers, kindOptions, known, onPatch, onRemove })
 			) : null}
 
 			{known ? (
-				<p className="field-note">
-					{known.memories} other memor{known.memories === 1 ? 'y' : 'ies'} in this vault use this
-					exact name.{' '}
+				<div className="field-note">
+					<p>
+						{known.memories} other memor{known.memories === 1 ? 'y uses' : 'ies use'} this exact
+						name.
+						{known.conflicted ? (
+							<span className="warn-text">
+								{' '}
+								It is glossed {known.glosses.length} different ways here — one thing spelled
+								twice, or two things sharing a name; only you can tell which.
+							</span>
+						) : null}
+					</p>
 					{suggestion && trimmed(row.is) !== suggestion.gloss ? (
-						<Button
-							tone="quiet"
-							onClick={() =>
-								onPatch(row.id, {
-									is: suggestion.gloss,
-									kind: trimmed(row.kind) || (known.kinds[0]?.kind ?? ''),
-								})
-							}
-						>
-							Use the gloss {suggestion.count} of them use
-						</Button>
+						<p>
+							<Button
+								tone="quiet"
+								onClick={() =>
+									onPatch(row.id, {
+										is: suggestion.gloss,
+										kind: trimmed(row.kind) || (known.kinds[0]?.kind ?? ''),
+									})
+								}
+							>
+								Use the gloss {suggestion.count} of them use
+							</Button>
+						</p>
 					) : null}
-					{known.conflicted ? (
-						<span className="warn-text">
-							{' '}
-							It is already glossed {known.glosses.length} different ways here, which is what one
-							thing spelled twice looks like — and also what two different things sharing a name
-							looks like. Only you can tell which.
-						</span>
-					) : null}
-				</p>
+				</div>
 			) : null}
 		</div>
 	);

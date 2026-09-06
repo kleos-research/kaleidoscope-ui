@@ -31,13 +31,22 @@ const AXIS_COPY = {
 
 export const axisCopy = (key) => AXIS_COPY[key] ?? { label: key, every: `every ${key}` };
 
+/**
+ * The axes in the order a reader meets them: project first — "projects should be on the top; all
+ * of this comes under a project at the end of the day" — then branch, then file, then anything an
+ * engine adds later in its own order. The table above is the one place that order is written.
+ */
+export function orderAxes(names) {
+	const known = Object.keys(AXIS_COPY);
+	const present = new Set(names);
+	return [...known.filter((key) => present.has(key)), ...names.filter((key) => !known.includes(key))];
+}
+
 /** The axes actually present on the loaded records, in a stable order. */
 export function scopeAxes(records) {
-	const known = Object.keys(AXIS_COPY);
 	const seen = new Set();
 	for (const record of records) for (const key of Object.keys(record.semantic?.scope ?? {})) seen.add(key);
-	const extra = [...seen].filter((key) => !known.includes(key)).sort();
-	return [...known.filter((key) => seen.has(key)), ...extra];
+	return orderAxes([...seen].sort());
 }
 
 const text = (value) => (typeof value === 'string' && value.trim().length > 0 ? value : null);

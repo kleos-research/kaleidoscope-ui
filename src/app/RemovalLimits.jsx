@@ -1,15 +1,7 @@
 import { useState } from 'react';
 
-import { ESCALATION, REMOVE_LABEL, vaultDeleteCommand } from './removal-model.mjs';
-import {
-	Button,
-	Identifier,
-	Note,
-	Page,
-	PageHead,
-	PageSection,
-	Verbatim,
-} from './ui/index.mjs';
+import { bulkBarLabel, ESCALATION, REMOVE_LABEL, vaultDeleteCommand } from './removal-model.mjs';
+import { Button, DetailRow, DetailRows, Note, Page, PageHead, PageSection, Verbatim } from './ui/index.mjs';
 
 /**
  * "What removal cannot do" — its own screen, and that is the design rather than a layout choice.
@@ -42,12 +34,12 @@ import {
  * and been given two options will hunt for a third; telling them there isn't one is faster and more
  * honest than letting them search.
  */
-export function RemovalLimits({ session, memory = null, busy = false, onRemove, onCancel }) {
+export function RemovalLimits({ session, memories = [], busy = false, onRemove, onCancel }) {
 	const [copied, setCopied] = useState(false);
 
 	const root = session?.vault?.root ?? null;
 	const command = vaultDeleteCommand(root);
-	const snapshotDirectory = session?.snapshots?.directory ?? null;
+	const listed = Array.isArray(memories) ? memories : [];
 
 	const copy = async () => {
 		if (!command) return;
@@ -62,22 +54,56 @@ export function RemovalLimits({ session, memory = null, busy = false, onRemove, 
 	};
 
 	return (
-		<Page narrow>
+		/*
+		  THE READING COLUMN'S MEASURE, and the decision in the head. This screen was 381 words in
+		  twelve blocks at 130 characters a line, with Cancel and Remove 250px under the sentence that
+		  makes that Remove different — below the fold on the engine the owner has installed. The
+		  buttons now sit where the merge chooser and the editor keep theirs, beside the title, and
+		  the one sentence about them is beside the buttons rather than three notes above.
+		*/
+		<Page narrow column="read">
 			<PageHead
 				title={ESCALATION.title}
 				subtitle={
-					memory ? (
+					listed.length === 1 ? (
 						<>
-							About <strong>{memory.title ?? 'this memory'}</strong>{' '}
-							<Identifier value={memory.memory_id} label="memory id" />
+							About <strong>{listed[0].title ?? 'this memory'}</strong>
+						</>
+					) : listed.length > 1 ? (
+						<>
+							About <strong>{listed.length} memories</strong>:{' '}
+							{listed.map((memory) => memory.title ?? memory.memory_id).join(' · ')}
 						</>
 					) : null
+				}
+				actions={
+					<div className="head-actions-stack">
+						<div className="head-actions">
+							<Button onClick={onCancel} disabled={busy}>
+								Cancel
+							</Button>
+							{/*
+							  The same label as everywhere else, and the same action — with one difference
+							  the note under it names: this run keeps no local copy. It is offered here
+							  because a user who has read this page and decided to remove the memory anyway
+							  should not have to go back to find the button. A bulk selection is handed
+							  through whole, so the no-copy path is open to it too.
+							*/}
+							{listed.length > 0 && onRemove ? (
+								<Button tone="warn" onClick={() => onRemove(listed)} disabled={busy}>
+									{busy ? 'Removing…' : listed.length > 1 ? bulkBarLabel(listed.length) : REMOVE_LABEL}
+								</Button>
+							) : null}
+						</div>
+						{listed.length > 0 && onRemove ? (
+							<p className="head-actions-note">{ESCALATION.no_snapshot_here}</p>
+						) : null}
+					</div>
 				}
 			/>
 
 			<PageSection>
 				<p className="copy">{ESCALATION.opening}</p>
-
 				{/*
 				  FIRST, and the one tinted block on the screen. Every other paragraph here moves bytes
 				  around; this is the only advice that changes anything.
@@ -98,7 +124,7 @@ export function RemovalLimits({ session, memory = null, busy = false, onRemove, 
 						</div>
 					</>
 				) : (
-					<Note tone="warn">
+					<Note>
 						This app has not resolved a vault path this session, so it will not print a command
 						with a hole in it. The vault readings in the top bar say what it did resolve.
 					</Note>
@@ -113,41 +139,22 @@ export function RemovalLimits({ session, memory = null, busy = false, onRemove, 
 						<li key={step}>{step}</li>
 					))}
 				</ol>
-				<Note>
-					{ESCALATION.steps_note}
-					{snapshotDirectory ? (
-						<>
-							{' '}
-							<Identifier value={snapshotDirectory} label="where the copies are kept" />
-						</>
-					) : null}
-				</Note>
-			</PageSection>
-
-			<PageSection>
-				{/* The behavioural difference, stated where it applies rather than left to be noticed. */}
-				<Note tone="warn">{ESCALATION.no_snapshot_here}</Note>
 				<p className="copy">{ESCALATION.elsewhere}</p>
-				<Note>{ESCALATION.exposure_rows}</Note>
 				<p className="copy">{ESCALATION.no_third_option}</p>
 			</PageSection>
 
-			<div className="head-actions">
-				<Button onClick={onCancel} disabled={busy}>
-					Cancel
-				</Button>
-				{/*
-				  The same label as everywhere else, and the same action — with one difference the
-				  paragraph above already named: this run keeps no local copy. It is offered here
-				  because a user who has read this page and decided to remove the memory anyway should
-				  not have to go back to find the button.
-				*/}
-				{memory && onRemove ? (
-					<Button tone="warn" onClick={() => onRemove(memory)} disabled={busy}>
-						{busy ? 'Removing…' : REMOVE_LABEL}
-					</Button>
-				) : null}
-			</div>
+			{/*
+			  WHAT THIS APP KEEPS, AND WHAT NOTHING REACHES — closed, because both are true of every
+			  removal and neither changes what a reader does next. The copies' folder is named in the
+			  terminal at launch and in the vault readings; an absolute path across this page was the
+			  owner's first complaint about the last design, drawn again.
+			*/}
+			<DetailRows>
+				<DetailRow label="What this app keeps, and what nothing reaches">
+					<p className="copy">{ESCALATION.steps_note}</p>
+					<p className="copy">{ESCALATION.exposure_rows}</p>
+				</DetailRow>
+			</DetailRows>
 		</Page>
 	);
 }

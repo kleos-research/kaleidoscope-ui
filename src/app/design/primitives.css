@@ -145,6 +145,15 @@
 	padding: var(--space-6) var(--space-8);
 }
 
+/* A note of two things — the sentence, then its one action on a line of its own. */
+.field-note > p {
+	margin: 0;
+}
+
+.field-note > p + p {
+	margin-top: var(--space-4);
+}
+
 .field-note-warn {
 	color: var(--warn);
 	background: var(--warn-soft);
@@ -640,6 +649,29 @@
 	overflow: hidden;
 }
 
+/*
+ * A TABLE WHOSE HEADER STICKS. `overflow: hidden` on the frame and `overflow-x: auto` on the
+ * scroller each make the wrapper the nearest scroll container, so `position: sticky` on the head
+ * stuck to a box that never scrolls — a screen down, "Connected to" and "In memories" were two
+ * columns of bare numbers. This frame clips nothing and the head sticks to the screen; the corners
+ * are rounded on the cells instead.
+ */
+.table-frame-open {
+	overflow: visible;
+}
+
+.table-frame-open .table-scroll {
+	overflow-x: clip;
+}
+
+.table-frame-open .table thead th:first-child {
+	border-top-left-radius: var(--radius-panel);
+}
+
+.table-frame-open .table thead th:last-child {
+	border-top-right-radius: var(--radius-panel);
+}
+
 .table {
 	width: 100%;
 	border-collapse: collapse;
@@ -727,6 +759,14 @@
 
 .degree-tick-provisional {
 	background: var(--warn-line);
+}
+
+/* The mark that says the ticks stopped short of the number beside them. */
+.degree-more {
+	margin-left: var(--space-1);
+	font-size: var(--text-eyebrow);
+	line-height: 1;
+	color: var(--faint);
 }
 
 /* ================================================================= badge / chip */
@@ -1405,11 +1445,110 @@
 	stroke-dasharray: 4 3;
 }
 
+/*
+ * A 1.4px line cannot be pointed at. The same line again, fourteen wide and painted in nothing,
+ * is what the pointer finds; the relation it carries is then named beside the pointer.
+ */
+.ego-edge-hit {
+	stroke: transparent;
+	stroke-width: 14;
+	fill: none;
+	pointer-events: stroke;
+}
+
+/*
+ * A relation name, rotated along its line. The halo is the paper's own colour and three pixels
+ * wide, so a name that a line or a neighbour's name comes near stays legible without a box behind
+ * it; where nothing comes near, the halo is invisible and the label is the mockup's bare grey text.
+ */
 .ego-edge-label {
 	font-family: var(--font-ui);
-	font-size: 10.5px;
+	font-size: var(--text-tag);
 	fill: var(--faint);
 	pointer-events: none;
+	paint-order: stroke;
+	stroke: var(--bg);
+	stroke-width: 3px;
+	stroke-linejoin: round;
+}
+
+/* The relation under the pointer, in full, on its own ground. */
+.ego-edge-hover {
+	font-family: var(--font-ui);
+	font-size: var(--text-caption);
+	font-weight: var(--weight-medium);
+	fill: var(--text);
+	pointer-events: none;
+	paint-order: stroke;
+	stroke: var(--surface);
+	stroke-width: 5px;
+	stroke-linejoin: round;
+}
+
+/* The number a relation wears when its line has no room for its name. Decoded in the corner. */
+.ego-marker {
+	pointer-events: none;
+}
+
+.ego-marker-ring {
+	fill: var(--surface);
+	stroke: var(--line-strong);
+	stroke-width: 1;
+}
+
+.ego-marker-text {
+	font-family: var(--font-mono);
+	font-size: var(--text-tag);
+	font-weight: var(--weight-medium);
+	fill: var(--muted);
+}
+
+/*
+ * The decode for the numbered relations, IN THE PANEL under "What is said about it" rather than
+ * as a box over the drawing. Over the drawing it covered nodes at two steps — chrome over content.
+ * It exists only when something is numbered, and its first line says how many — a drawing that
+ * dropped three relation names without saying so would look exactly like one whose relations were
+ * all drawn.
+ */
+.ego-fallbacks {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	padding-top: var(--space-4);
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--faint);
+}
+
+.ego-fallbacks-head {
+	color: var(--muted);
+	font-weight: var(--weight-medium);
+}
+
+.ego-fallbacks-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.ego-fallbacks-row {
+	display: flex;
+	gap: var(--space-6);
+	align-items: baseline;
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
+.ego-fallbacks-number {
+	flex-shrink: 0;
+	min-width: 1.4em;
+	text-align: right;
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	color: var(--faint);
 }
 
 .ego-node {
@@ -1432,13 +1571,13 @@
 
 .ego-label {
 	font-family: var(--font-ui);
-	font-size: 12.5px;
+	font-size: var(--text-small);
 	fill: var(--text);
 	pointer-events: none;
 }
 
 .ego-label-hub {
-	font-size: 15px;
+	font-size: var(--text-body);
 	font-weight: var(--weight-semibold);
 }
 
@@ -1612,10 +1751,16 @@
  * beside the words is only half the fix; staying beside the words while the words scroll is the
  * other half, and it is one line of CSS.
  */
+/*
+ * NOT A SCROLLER. The screen it stands in (`.screen`) is the one element that scrolls, and the rail
+ * below is `sticky` against it. When this carried `overflow-y: auto` of its own with no bounded
+ * height, IT became the sticky root — an element that never scrolled — so the rail scrolled away
+ * with the words on every reading page and on the merge composition, which is the one thing the
+ * rail exists not to do.
+ */
 .reading {
 	flex: 1;
 	min-height: 0;
-	overflow-y: auto;
 }
 
 .reading-inner {
@@ -1640,11 +1785,15 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-13);
-	/* Beside the words, and still beside them at the bottom of a long note. */
+	/*
+	 * Beside the words, and still beside them at the bottom of a long note. The rail is sized from
+	 * its own top — the page's top padding — rather than from the viewport, so its end is reachable
+	 * whatever sits above the page.
+	 */
 	position: sticky;
-	top: 0;
+	top: var(--space-16);
 	align-self: flex-start;
-	max-height: calc(100vh - var(--topbar-h) - var(--space-20));
+	max-height: calc(100vh - var(--topbar-h) - 2 * var(--space-16));
 	overflow-y: auto;
 }
 
@@ -1740,16 +1889,18 @@
 	min-width: 0;
 }
 
+/* Ink by default: a quoted sentence in the accent reads as a link that does nothing. */
 .evidence-ref {
 	font-size: var(--text-small);
 	line-height: var(--leading-ui);
-	color: var(--accent);
+	color: var(--text);
 }
 
-/* A path, a command, an id: the face is what says "you can paste this somewhere". */
+/* A path, a command, an id: the face and the accent are what say "you can paste this somewhere". */
 .evidence-ref-mono {
 	font-family: var(--font-mono);
 	font-size: var(--text-caption);
+	color: var(--accent);
 	overflow-wrap: anywhere;
 }
 
@@ -1787,6 +1938,21 @@
 }
 
 /* The writer's words and this app's gloss on them, stacked and told apart. See `NoteQuote`. */
+/*
+ * A correction's lead: what it corrects, before its words. The eyebrow is the warn row's label in
+ * the rail, so the two read as one thing seen twice — once as the reason, once as the count.
+ */
+.correction-lead {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin-bottom: var(--space-12);
+}
+
+.correction-lead .eyebrow {
+	color: var(--warn);
+}
+
 .note-quote-block {
 	display: flex;
 	flex-direction: column;
@@ -2052,7 +2218,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-10);
-	width: min(620px, 100%);
+	/* The reading column's own measure, so a question over a memory shares its left edge and width. */
+	width: min(var(--column-read), 100%);
 	padding: var(--space-14);
 	border: var(--border) solid var(--line);
 	border-radius: var(--radius-panel);
@@ -2508,6 +2675,69 @@
 	font-size: var(--text-caption);
 }
 
+/*
+ * THE MEMORIES BEHIND A FINDING, one row each: the title, the way to read it first, and under them
+ * what this memory contributed — the kind it declared, the sentence it wrote about the name.
+ *
+ * It used to be two lists: the sentences in quotes, then the memories, each with two accent
+ * controls and a "show more" of its own. Read together they were the heap the owner rejected —
+ * "I just put everything together at one place". A row carries ONE accent thing, the title, which
+ * is the way out; "read it first" is a quieter way in, and the evidence sits under the title of
+ * the memory that wrote it, which is the only place it can answer "which one called it a tool".
+ */
+.decision-memories {
+	gap: var(--space-6);
+}
+
+.decision-memories .decision-source {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: baseline;
+	column-gap: var(--space-8);
+	row-gap: var(--space-1);
+}
+
+.decision-memories .decision-source-note {
+	grid-column: 1 / -1;
+	line-height: var(--leading-snug);
+}
+
+/*
+ * A title that opens the editor. It wraps — a memory's title is a sentence, not a control label —
+ * and it hangs from the left: `.btn` centres its words and a grid cell stretches the button to the
+ * column, which together put every title in the middle of the row under nothing.
+ */
+.decision-source-open {
+	justify-self: start;
+	justify-content: flex-start;
+	white-space: normal;
+	text-align: left;
+	line-height: var(--leading-title);
+}
+
+/* The quieter way in. Not accent — one accent thing per row — and never a second button. */
+.decision-source-read {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: var(--text-caption);
+	color: var(--faint);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.decision-source-read:hover {
+	color: var(--accent);
+	text-decoration: underline;
+}
+
+/* What the memory said the name was, quoted, in the note's line and a shade darker than it. */
+.decision-source-gloss {
+	color: var(--muted);
+}
+
 /* ================================================================= rewrite */
 
 /*
@@ -2612,69 +2842,6 @@
 
 .head-titles {
 	display: flex;
-/*
- * THE MEMORIES BEHIND A FINDING, one row each: the title, the way to read it first, and under them
- * what this memory contributed — the kind it declared, the sentence it wrote about the name.
- *
- * It used to be two lists: the sentences in quotes, then the memories, each with two accent
- * controls and a "show more" of its own. Read together they were the heap the owner rejected —
- * "I just put everything together at one place". A row carries ONE accent thing, the title, which
- * is the way out; "read it first" is a quieter way in, and the evidence sits under the title of
- * the memory that wrote it, which is the only place it can answer "which one called it a tool".
- */
-.decision-memories {
-	gap: var(--space-6);
-}
-
-.decision-memories .decision-source {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: baseline;
-	column-gap: var(--space-8);
-	row-gap: var(--space-1);
-}
-
-.decision-memories .decision-source-note {
-	grid-column: 1 / -1;
-	line-height: var(--leading-snug);
-}
-
-/*
- * A title that opens the editor. It wraps — a memory's title is a sentence, not a control label —
- * and it hangs from the left: `.btn` centres its words and a grid cell stretches the button to the
- * column, which together put every title in the middle of the row under nothing.
- */
-.decision-source-open {
-	justify-self: start;
-	justify-content: flex-start;
-	white-space: normal;
-	text-align: left;
-	line-height: var(--leading-title);
-}
-
-/* The quieter way in. Not accent — one accent thing per row — and never a second button. */
-.decision-source-read {
-	margin: 0;
-	padding: 0;
-	border: 0;
-	background: none;
-	font: inherit;
-	font-size: var(--text-caption);
-	color: var(--faint);
-	white-space: nowrap;
-	cursor: pointer;
-}
-
-.decision-source-read:hover {
-	color: var(--accent);
-	text-decoration: underline;
-}
-
-/* What the memory said the name was, quoted, in the note's line and a shade darker than it. */
-.decision-source-gloss {
-	color: var(--muted);
-}
-
 	flex-direction: column;
 	gap: var(--space-2);
 	min-width: 0;
@@ -2690,6 +2857,28 @@
 	align-items: center;
 	gap: var(--space-6);
 	flex-shrink: 0;
+}
+
+/*
+ * The head's controls with the one sentence that belongs beside them — "keeps no local copy" under
+ * the Remove it is about, right-aligned with the buttons, at the caption size. It is not a note:
+ * a tinted block beside a warn button would be a second warning about the same thing.
+ */
+.head-actions-stack {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: var(--space-5);
+	flex-shrink: 0;
+	max-width: 320px;
+}
+
+.head-actions-note {
+	margin: 0;
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+	text-align: right;
 }
 
 /* A block inside a page: a heading, its explanation, and the thing itself. */
@@ -2953,8 +3142,23 @@
  * wraps to a second line rather than scrolling its own text out of sight.
  */
 .fact-part {
-	flex: 1 1 0;
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 100%;
+}
+
+/*
+ * AN ENDPOINT IS AS WIDE AS ITS WORDS. With a fixed share of the row each input scrolled its own
+ * text out of view — "remember mcp scher · weak_at · reserved predicate ch" — on two thirds of a
+ * real vault's endpoints. The control sizes to its content and the row wraps around it, so a long
+ * object takes its own line rather than being clipped; the floor is what keeps an empty one
+ * findable. A read-only fact rests as the sentence it will be read as.
+ */
+.fact-part .input {
+	field-sizing: content;
+	width: auto;
 	min-width: 11ch;
+	max-width: 100%;
 }
 
 /*
@@ -3022,7 +3226,8 @@
 	field-sizing: content;
 	width: auto;
 	min-width: 9ch;
-	max-width: 22ch;
+	/* No cap: a relation name is drawn whole, however this vault spells it. The row wraps around it. */
+	max-width: 100%;
 	height: var(--control-h-sm);
 	border-color: transparent;
 	border-radius: var(--radius-tag);
@@ -3051,13 +3256,34 @@
  * column of `Card`s in one dialog rather than four blocks down the side of the screen, which is
  * the whole of "two columns were never the problem, four things per column were".
  */
+/*
+ * TWO COLUMNS, AS EditValues DRAWS THEM. As one 880px column inside a 62vh box, a four-name memory
+ * showed 558 of 1,345px and opened scrolled to its last declaration; the cards stand side by side
+ * and the dialog itself is what scrolls.
+ */
 .sheet {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: var(--space-11);
+	align-items: start;
+}
+
+/* A block that takes the whole width of the sheet: the row about the save itself. */
+.sheet-span {
+	grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+	.sheet {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* A sheet made of readings rather than of cards — what the vault records, the record as it arrived. */
+.sheet-reading {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-11);
-	max-height: 62vh;
-	overflow-y: auto;
-	padding-right: var(--space-4);
+	gap: var(--space-8);
 }
 
 .sheet-grid {
@@ -3153,6 +3379,8 @@
  */
 .steps {
 	margin: 0;
+	/* The reset takes every list's marker away; these are the four numbered steps the copy refers to by number. */
+	list-style: decimal outside;
 	padding-left: var(--space-14);
 	font-size: var(--text-ui-lg);
 	line-height: var(--leading-body);
@@ -3675,6 +3903,64 @@
 	pointer-events: none;
 }
 
+/*
+ * THE EGO DRAWING'S LEGEND SITS ON BARE PAPER, as GraphFocus draws it: an ego network of nine
+ * nodes leaves the corner empty, so it needs no panel behind it. It lists only the kinds on THIS
+ * drawing, and it may wrap when a pin adds its two items.
+ */
+.name-canvas-legend {
+	flex-wrap: wrap;
+	max-width: calc(100% - 2 * var(--space-14));
+	padding: 0;
+	border: 0;
+	background: none;
+}
+
+/*
+ * The overview's legend, UNDER the frame beside the caption rather than over the picture. Over it,
+ * 18% of the drawn arcs at the opening fit sat behind the key.
+ */
+.overview-legend-below {
+	position: static;
+	flex-wrap: wrap;
+	padding: 0;
+	border: 0;
+	background: none;
+	pointer-events: auto;
+}
+
+/*
+ * The reading over a narrowed picture — which island, how big, and the way to the name — INSIDE
+ * the frame's top edge, where it is on screen with the picture it describes. Under the frame it
+ * sat at y≈908 on a 900px window, so a dimmed canvas read as a broken one.
+ */
+.overview-reading {
+	position: absolute;
+	left: var(--space-14);
+	right: var(--space-14);
+	top: var(--space-10);
+	margin: 0;
+	padding: var(--space-5) var(--space-9);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	background: var(--surface);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+	pointer-events: auto;
+}
+
+.overview-reading strong {
+	font-weight: var(--weight-medium);
+	color: var(--text);
+}
+
+.overview-reading a {
+	color: var(--accent);
+	font-weight: var(--weight-medium);
+	text-decoration: none;
+}
+
 .overview-legend-sep {
 	color: var(--line-strong);
 }
@@ -3686,11 +3972,30 @@
 	color: var(--warn);
 }
 
-/* The mark in the legend for the dashed link between two spellings of probably one thing. */
+/* The legend item for the dashed link between two spellings of probably one thing. */
+.overview-legend-pair {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3);
+	color: var(--muted);
+}
+
+/* Its mark. The line on the canvas takes its group's hue; here it takes the item's own ink. */
 .overview-dash {
 	display: inline-block;
 	width: 16px;
-	border-top: var(--border-emphasis) dashed var(--warn);
+	border-top: var(--border-emphasis) dashed currentColor;
+}
+
+/* The one link a transient reading under the picture can carry: the way to the island's name. */
+.overview-caption a {
+	color: var(--accent);
+	font-weight: var(--weight-medium);
+	text-decoration: none;
+}
+
+.overview-caption a:hover {
+	color: var(--accent-ink);
 }
 
 .kind-legend {
@@ -3761,12 +4066,26 @@
 	background: var(--bg);
 }
 
-.name-canvas-note {
+/*
+ * The sentences that sit over the top-left of the drawing: what was refused for size, and what a
+ * pinned name has in common with this one. A column rather than one absolutely-placed note, so two
+ * of them stack instead of overprinting; the column itself lets the pointer through to the canvas
+ * and each note takes it back, because the pin's sentence carries links.
+ */
+.name-canvas-notes {
 	position: absolute;
 	left: var(--space-14);
 	right: var(--space-14);
 	top: var(--space-14);
 	max-width: 520px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	pointer-events: none;
+}
+
+.name-canvas-note {
+	pointer-events: auto;
 }
 
 .name-panel {
@@ -3973,6 +4292,224 @@
 	display: block;
 	padding-top: var(--space-2);
 	color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- the pin, and what lies beyond */
+
+/*
+ * The pinned name in the bar: an accent chip, because it is a choice the reader made and the accent
+ * chip is how this product reads a choice back. Capped in width the way the breadcrumb beside it
+ * is — the bar is one line and a name from a real vault can be sixty characters.
+ */
+.pin-chip-text {
+	max-width: 220px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The pinned name on the canvas: the focus disc drawn hollow, same size, same ink. */
+.ego-shape-pinned {
+	stroke: var(--text);
+	stroke-width: 2.5;
+}
+
+/* A name joined to both the focus and the pin. The accent ring, as the overview marks a match. */
+.ego-node[data-shared='true'] .ego-shape {
+	stroke: var(--accent);
+	stroke-width: 2.5;
+}
+
+/*
+ * Two small marks on the canvas, both at the edge-label size — a label on a canvas is a mark, not
+ * running text, and 10.5px is the size the drawing already uses for its smallest one.
+ */
+.ego-label-pin {
+	font-family: var(--font-ui);
+	font-size: 10.5px;
+	letter-spacing: var(--tracking-micro);
+	text-transform: uppercase;
+	fill: var(--faint);
+	pointer-events: none;
+}
+
+.ego-beyond {
+	font-family: var(--font-ui);
+	font-size: 10.5px;
+	font-weight: var(--weight-medium);
+	fill: var(--faint);
+	pointer-events: none;
+}
+
+.name-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+/* The legend's copy of the two rings above, at the size of the kind dots beside them. */
+.name-legend-mark {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--surface);
+}
+
+.name-legend-mark-pinned {
+	border: 2px solid var(--text);
+}
+
+.name-legend-mark-shared {
+	border: 2px solid var(--accent);
+}
+
+/* ---------------------------------------------------------------- kind by kind */
+
+/*
+ * The matrix of statements between kinds. One hue, light to dark, and the two tokens it is mixed
+ * from are the accent's own, so it follows the theme without naming a colour.
+ *
+ * THE CELL IS 18px AND THE GAP IS 2px, and those two numbers are the component: a pitch of twenty
+ * is the smallest at which a reader can point at one cell and not its neighbour, and the gap is
+ * the surface showing between fills, which is what keeps fifty dark cells from reading as one
+ * dark block. The label column's 160px is the width at which a real vault's longest kind name is
+ * still recognisable before the ellipsis.
+ */
+.kk {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+}
+
+.kk-table {
+	border-collapse: separate;
+	border-spacing: 2px;
+	font-size: var(--text-eyebrow);
+	color: var(--muted);
+}
+
+.kk-table th {
+	font-weight: var(--weight-normal);
+}
+
+.kk-corner {
+	width: 160px;
+}
+
+/* A column heading reads bottom to top, so fifty of them fit at the cell pitch. */
+.kk-col {
+	height: 132px;
+	padding: 0;
+	text-align: left;
+	vertical-align: bottom;
+}
+
+.kk-col-text {
+	display: inline-block;
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	max-height: 128px;
+	line-height: 18px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kk-row {
+	max-width: 160px;
+	padding: 0 var(--space-6) 0 0;
+	text-align: right;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kk-cell {
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border-radius: 3px;
+	background: var(--surface);
+}
+
+.kk-cell[data-lit='true'] {
+	outline: 2px solid var(--text);
+	outline-offset: 0;
+}
+
+.kk-cell:focus-visible {
+	outline-offset: 0;
+}
+
+/* The rule between groups: a narrow spacer column or row carrying a hairline on its leading edge. */
+.kk-gap {
+	width: var(--space-6);
+	padding: 0;
+	border-left: var(--border) solid var(--line-strong);
+}
+
+.kk-gap-row td,
+.kk-gap-row th {
+	height: var(--space-6);
+	padding: 0;
+	border-top: var(--border) solid var(--line-strong);
+}
+
+.kk-gap-cell {
+	padding: 0;
+}
+
+.kk-total,
+.kk-total-head {
+	padding: 0 0 0 var(--space-6);
+	text-align: left;
+	vertical-align: bottom;
+	white-space: nowrap;
+	color: var(--faint);
+}
+
+.kk-label-undeclared {
+	font-style: italic;
+	color: var(--faint);
+}
+
+/* The reading of the cell under the pointer — a fixed line rather than a floating tip. */
+.kk-readout {
+	margin: 0;
+	min-height: var(--space-14);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--text);
+}
+
+.kk-key {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-11);
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+.kk-key-ramp {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.kk-swatch {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+}
+
+.kk-key-rule {
+	display: inline-block;
+	width: 14px;
+	height: 0;
+	border-top: var(--border) solid var(--line-strong);
+	vertical-align: middle;
 }
 
 /*
@@ -4336,18 +4873,269 @@
 	text-decoration-color: var(--line-strong);
 }
 
-/* Which of the two memories wrote it. A word, not a colour: three sources is too many hues. */
-.merge-fact-from {
-	font-size: var(--text-caption);
-	color: var(--faint);
-	white-space: nowrap;
-	margin-left: auto;
-	padding-left: var(--space-6);
+/*
+ * Which of the two memories wrote a fact is said ONCE, as the eyebrow over its group, rather than
+ * as a word at the right of every line — the word took ninety pixels of a 326px line and put nine
+ * of twelve facts on two lines.
+ */
+.merge-group + .merge-group {
+	margin-top: var(--space-10);
 }
 
-/* The one control in the head of the composition: name a different second memory. */
-.reading-meta .btn-quiet {
-	height: auto;
+.merge-group .eyebrow {
+	margin-bottom: var(--space-6);
+}
+
+/*
+ * THE JOIN — the duplicate's words, marked as such, under the survivor's. The marker the write
+ * carries is an HTML comment and it stays in the bytes; on the page the block is what says where
+ * the second memory begins. A warn rule down the left, as NoteQuote marks a writer's own words.
+ */
+.merge-join {
+	margin-top: var(--space-12);
+	padding-left: var(--space-10);
+	border-left: 3px solid var(--warn-line);
+}
+
+.merge-join .eyebrow {
+	color: var(--warn);
+	margin-bottom: var(--space-6);
+}
+
+/* The rail's one line about what a merge can and cannot take back. */
+.reading-rail-foot {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-5);
+	margin: 0;
+	padding-top: var(--space-6);
+	font-size: var(--text-caption);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.reading-rail-foot .icon {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+/* ================================================================= after the critics' pass, 2026-09-05 */
+
+/*
+ * THE ACCENT LINK THAT OPENS MORE OF THE SAME LIST — "5 more", "See all 7", "Show the ranking",
+ * "what it is". GraphFocus and Search draw it as one line of 12.5px accent at medium weight with
+ * no rule above or below; a chevron row with hairlines is a different object, for a different
+ * kind of thing (a closed section with a count), and it was being used for this.
+ */
+.link-more {
+	border: 0;
 	padding: 0;
-	font-size: inherit;
+	background: none;
+	font: inherit;
+	font-size: var(--text-small);
+	font-weight: var(--weight-medium);
+	color: var(--accent);
+	cursor: pointer;
+	text-align: left;
+}
+
+.link-more:hover {
+	color: var(--accent-ink);
+}
+
+/* The axis word over a group of facet values: "branch", "file". Once per group, never per row. */
+.filter-group {
+	padding: var(--space-5) var(--space-4) var(--space-2);
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-micro);
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+.filter-group:first-child {
+	padding-top: var(--space-1);
+}
+
+/*
+ * THE QUIET DIAL between the three renderings of the names — plain words at the tab height with
+ * the current one in ink, the way the bar's four words do it. The active tab is the one filled
+ * control on this screen; a second inverse-filled segment beside it was two.
+ */
+.view-dial {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-9);
+	font-size: var(--text-small);
+}
+
+.view-dial-item {
+	border: 0;
+	padding: 0;
+	background: none;
+	font: inherit;
+	color: var(--muted);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.view-dial-item:hover {
+	color: var(--text);
+}
+
+.view-dial-item[aria-current='true'] {
+	color: var(--text);
+	font-weight: var(--weight-medium);
+}
+
+.view-dial-sep {
+	color: var(--line-strong);
+}
+
+/* A declared name drawn on one line, with its definition one press away. */
+.named-line {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-5);
+}
+
+.named-compact .named-gloss {
+	font-size: var(--text-eyebrow);
+}
+
+/*
+ * THE MERGE RAIL'S FACTS, grouped by where they came from. The eyebrow says it once for the group;
+ * the word that used to sit at the right of every row stole ninety pixels of a 326px line and put
+ * nine of twelve facts onto two lines.
+ */
+.merge-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.merge-group + .merge-group {
+	padding-top: var(--space-6);
+}
+
+.merge-group-head {
+	font-size: var(--text-micro);
+	letter-spacing: var(--tracking-micro);
+	text-transform: uppercase;
+	color: var(--faint);
+}
+
+/*
+ * THE JOIN — the duplicate's words, drawn as a marked block under the survivor's rather than as an
+ * HTML comment in full-ink Newsreader. The eyebrow says whose words they are and what the reader is
+ * expected to do; the warn rule down the left is the same mark NoteQuote uses for "somebody else's
+ * words". The comment stays in the bytes the write sends; it never reaches the ink.
+ */
+.merge-join {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding-left: var(--space-11);
+	border-left: var(--border-emphasis) solid var(--warn-line);
+}
+
+.merge-join-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-6);
+	font-size: var(--text-small);
+	color: var(--warn);
+}
+
+.merge-join-head .eyebrow {
+	color: var(--warn);
+}
+
+/* One line at the rail's foot: the standing condition of the write, with an icon, as EditB's foot. */
+.rail-foot {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding-top: var(--space-4);
+	font-size: var(--text-small);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+}
+
+/* A confirmation that stands over a memory takes the memory's own column, exactly. */
+.prompt-read {
+	width: min(var(--column-read), 100%);
+}
+
+/* The bar's swap control on a merge composition: which of the two survives, as one press. */
+.merge-swap {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-5);
+}
+
+/*
+ * "Edit" on a finding's memory row: the secondary way out, drawn the way "read it first" was —
+ * quiet, accent, at the row's right — now that the title opens the reader.
+ */
+.decision-source-edit {
+	border: 0;
+	padding: 0;
+	background: none;
+	font: inherit;
+	font-size: var(--text-small);
+	color: var(--accent);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.decision-source-edit:hover {
+	color: var(--accent-ink);
+}
+
+/* The one relation decode list in the ego panel: the number, then the whole name. */
+.ego-fallbacks-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+/* A statement in the ego panel that is numbered on the drawing carries its number in front. */
+.statement-number {
+	display: inline-block;
+	min-width: 1.4em;
+	margin-right: var(--space-3);
+	font-family: var(--font-mono);
+	font-size: var(--text-micro);
+	color: var(--faint);
+	text-align: right;
+}
+
+/* The cluster review's method paragraph, closed: the same row shape the backlog uses for its order. */
+.review-method {
+	padding-top: var(--space-2);
+}
+
+/* The tier, said once at the top of a qualifiers sheet rather than under each of its four fields. */
+.sheet-tier {
+	grid-column: 1 / -1;
+}
+
+/* The readable values of an unverified field, as chips beside its box rather than as a sentence. */
+.value-hints {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	padding-top: var(--space-3);
+}
+
+/* The matrix's folded remainder: one row and column for the kinds past the ones drawn. */
+.kk-fold {
+	border: 0;
+	padding: 0;
+	background: none;
+	font: inherit;
+	color: var(--accent);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
 }

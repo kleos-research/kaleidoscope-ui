@@ -392,7 +392,7 @@ export function planMemoryMerge(survivor, duplicate) {
 	const body = [
 		text(survivor?.content_md) ?? '',
 		'',
-		`<!-- merged in from “${text(right?.title) ?? duplicate?.memory_id}” -->`,
+		joinMarker(text(right?.title) ?? duplicate?.memory_id),
 		'',
 		// The duplicate's body without its heading: a document may begin with exactly one, and two
 		// would make the composed body refuse on a rule about its first line.
@@ -436,6 +436,45 @@ export function planMemoryMerge(survivor, duplicate) {
 }
 
 /** The two writes, in the order they must happen, named so a screen can render the order. */
+/**
+ * THE JOIN MARKER, and the two functions that keep it out of the ink.
+ *
+ * The composed body carries the duplicate's words after the survivor's under an HTML comment that
+ * names where they came from. The comment is for the bytes — a reader of the stored record can see
+ * the seam — and it was also being DRAWN, in full-ink 17px Newsreader, as the only sign on the page
+ * that a second memory begins there. The composition now splits the body at the marker, draws each
+ * half as its own field under an eyebrow that says whose words they are, and puts the marker back
+ * between them at the write. `joinAtMarker(splitAtJoin(body))` is the identity, byte for byte, so
+ * a composition nobody edited is written exactly as it was planned.
+ */
+export const joinMarker = (title) => `<!-- merged in from “${title}” -->`;
+
+const JOIN_PATTERN = /(\n*)(<!-- merged in from “[^”]*” -->)(\n*)/;
+
+/**
+ * @returns {{ before: string, marker: string|null, after: string, gapBefore: string, gapAfter: string }}
+ *   the words before the marker, the marker as written, the words after, and the exact newlines
+ *   that sat on either side of it. With no marker the whole body is `before`.
+ */
+export function splitAtJoin(body) {
+	const source = text(body) ?? '';
+	const match = JOIN_PATTERN.exec(source);
+	if (!match) return { before: source, marker: null, after: '', gapBefore: '', gapAfter: '' };
+	return {
+		before: source.slice(0, match.index),
+		marker: match[2],
+		after: source.slice(match.index + match[0].length),
+		gapBefore: match[1],
+		gapAfter: match[3],
+	};
+}
+
+/** The inverse of `splitAtJoin`, with the same newlines around the same marker. */
+export function joinAtMarker({ before, marker, after, gapBefore = '\n\n', gapAfter = '\n\n' }) {
+	if (!marker) return before ?? '';
+	return `${before ?? ''}${gapBefore}${marker}${gapAfter}${after ?? ''}`;
+}
+
 export const MERGE_STEPS = Object.freeze([
 	Object.freeze({
 		step: 'update-survivor',

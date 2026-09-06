@@ -107,8 +107,22 @@ export const RUN_CAN_STOP =
 /** The way in to the escalation screen, from the confirmation. */
 export const ESCALATION_PROMPT = 'Need it genuinely gone?';
 
-/** The escalation screen's own name, used as its heading and as its menu entry. */
+/** The escalation screen's own name, used as its heading. */
 export const ESCALATION_TITLE = 'What removal cannot do';
+
+/**
+ * The menu entry that opens it, named for the situation rather than for the screen. "What removal
+ * cannot do" as a bare menu item beside "Remove" is a caveat a reader has to open to understand;
+ * this is the PRD's own name for the case, and a reader who is not in it reads past it.
+ */
+export const ESCALATION_MENU_LABEL = 'This memory holds a secret…';
+
+/**
+ * The same way in from a confirmation, for one memory or for several. "What removal cannot do"
+ * under a Remove button was a caveat about the button; this names the case a reader is in.
+ */
+export const escalationLink = (count) =>
+	count > 1 ? 'One of these holds a secret…' : ESCALATION_MENU_LABEL;
 
 // ---------------------------------------------------------------------------------------------
 // The receipt
@@ -289,6 +303,7 @@ export function confirmation(selection) {
 		cancel: 'Cancel',
 		escalation_prompt: ESCALATION_PROMPT,
 		escalation_title: ESCALATION_TITLE,
+		escalation_link: escalationLink(items.length),
 	};
 }
 

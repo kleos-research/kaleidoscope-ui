@@ -81,7 +81,7 @@ export const FINDING_KINDS = Object.freeze([
 	}),
 	Object.freeze({
 		id: 'island',
-		title: 'A fact joined to nothing else',
+		title: 'Facts an agent can never reach from anything else',
 		costs:
 			'This claim is true and unreachable. Nothing else you have written touches either end of ' +
 			'it, so it is found only by an agent that already knows the exact words in it — which is ' +
@@ -90,7 +90,7 @@ export const FINDING_KINDS = Object.freeze([
 	}),
 	Object.freeze({
 		id: 'once-used-predicate',
-		title: 'A relationship name used exactly once',
+		title: 'Relationship names nothing else shares',
 		costs:
 			'A relationship name used once groups nothing. Five ways of writing "depends on" are five ' +
 			'one-member sets, and no question about dependencies can be asked across them.',
@@ -98,7 +98,7 @@ export const FINDING_KINDS = Object.freeze([
 	}),
 	Object.freeze({
 		id: 'declared-never-used',
-		title: 'A name declared and then never used',
+		title: 'Names declared and then never written about',
 		costs:
 			'The memory declares this name and then never writes a fact about it. The declaration ' +
 			'does nothing: the name has no facts, no position and no way in — it is a promise the ' +

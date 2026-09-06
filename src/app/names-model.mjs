@@ -386,10 +386,71 @@ export function nameReading(graph, surface, duplicates = []) {
  *          `hidden` is how many neighbours the refused ring would have added. It is a real count,
  *          not an estimate, so the drawing can say "4 more at this depth" rather than "some".
  */
-export function egoElements(graph, surface, { depth = 1, palette = null, cap = EGO_CAP } = {}) {
-	const seed = graph.nodes.get(surface);
-	if (!seed) return { nodes: [], edges: [], depth, reachedDepth: 0, capped: false, hidden: 0 };
+export function egoElements(
+	graph,
+	surface,
+	{ depth = 1, palette = null, cap = EGO_CAP, direction = DEFAULT_DIRECTION } = {},
+) {
+	assertDirection(direction);
+	if (!graph.nodes.has(surface)) {
+		return { nodes: [], edges: [], depth, direction, reachedDepth: 0, capped: false, hidden: 0 };
+	}
+	const walked = walk(graph, surface, { depth, cap, direction });
+	return {
+		nodes: decorate(graph, walked.reached, { palette, direction }),
+		edges: edgesWithin(graph, walked.reached),
+		depth,
+		direction,
+		reachedDepth: walked.reachedDepth,
+		capped: walked.capped,
+		hidden: walked.hidden,
+	};
+}
 
+/**
+ * THE DIRECTION DIAL. A fact has a subject and an object, so "what does this name say" and "what
+ * is said about it" are two different questions, and a drawing that answers only their union
+ * cannot tell a reader which of the nine spokes point in.
+ *
+ * The ids are what the model accepts and the labels are what the control shows. They are one list
+ * so the control cannot offer a position the walk does not know: an unknown direction is refused
+ * below rather than quietly drawn as "both ways", because a dial that did the same thing in two of
+ * its three positions would look exactly like one that worked.
+ */
+export const EGO_DIRECTIONS = Object.freeze([
+	{ id: 'all', label: 'Both ways' },
+	{ id: 'out', label: 'From it' },
+	{ id: 'in', label: 'To it' },
+]);
+
+export const DEFAULT_DIRECTION = EGO_DIRECTIONS[0].id;
+
+function assertDirection(direction) {
+	if (!EGO_DIRECTIONS.some((entry) => entry.id === direction)) {
+		throw new TypeError(
+			`"${direction}" is not a direction this drawing knows. It follows ${EGO_DIRECTIONS.map(
+				(entry) => entry.id,
+			).join(', ')}.`,
+		);
+	}
+}
+
+/**
+ * The names one step from `from`, following the dial. `out` follows a statement from its subject
+ * to its object; `in` follows it the other way; `all` follows both. A self-statement contributes
+ * `from` itself, which the callers discard as already reached.
+ */
+function stepsAlong(graph, from, direction) {
+	const next = [];
+	for (const edge of graph.incident.get(from) ?? []) {
+		if (direction !== 'in' && edge.source === from) next.push(edge.target);
+		if (direction !== 'out' && edge.target === from) next.push(edge.source);
+	}
+	return next;
+}
+
+/** Grow the neighbourhood a ring at a time. See `egoElements` for why a ring is all or nothing. */
+function walk(graph, surface, { depth, cap, direction }) {
 	const reached = new Map([[surface, 0]]);
 	let frontier = [surface];
 	let reachedDepth = 0;
@@ -400,12 +461,10 @@ export function egoElements(graph, surface, { depth = 1, palette = null, cap = E
 		const ring = [];
 		const inRing = new Set();
 		for (const from of frontier) {
-			for (const edge of graph.incident.get(from) ?? []) {
-				for (const end of [edge.source, edge.target]) {
-					if (reached.has(end) || inRing.has(end)) continue;
-					inRing.add(end);
-					ring.push(end);
-				}
+			for (const end of stepsAlong(graph, from, direction)) {
+				if (reached.has(end) || inRing.has(end)) continue;
+				inRing.add(end);
+				ring.push(end);
 			}
 		}
 		if (ring.length === 0) break;
@@ -419,8 +478,28 @@ export function egoElements(graph, surface, { depth = 1, palette = null, cap = E
 		reachedDepth = step;
 	}
 
+	return { reached, reachedDepth, capped, hidden };
+}
+
+/**
+ * WHAT LIES BEYOND A DRAWN NAME, as an exact count.
+ *
+ * A reader looking at a neighbour is deciding whether to open it, and the thing they need to know
+ * is what they would find — one more name, or nine. Degree does not answer that: a name of degree
+ * four with three of its neighbours already on the canvas has one thing beyond it. So this counts
+ * the names one step on, along the dial, that are NOT drawn, and the drawing prints it on the
+ * node. It is a promise, not an estimate: on a vault of this shape the number is single digits and
+ * it is exactly what the next step would add through that name.
+ */
+function beyondCount(graph, id, drawn, direction) {
+	const beyond = new Set();
+	for (const end of stepsAlong(graph, id, direction)) if (!drawn.has(end)) beyond.add(end);
+	return beyond.size;
+}
+
+function decorate(graph, reached, { palette, direction }) {
 	const slotOf = palette?.slotOf ?? (() => -1);
-	const nodes = [...reached.keys()].map((id) => {
+	return [...reached.keys()].map((id) => {
 		const node = graph.nodes.get(id);
 		const kind = primaryKind(node);
 		return {
@@ -431,13 +510,23 @@ export function egoElements(graph, surface, { depth = 1, palette = null, cap = E
 			degree: node.degree,
 			depth: reached.get(id),
 			memoryCount: node.memories.length,
+			beyond: beyondCount(graph, id, reached, direction),
 		};
 	});
+}
 
-	// Every export edge whose BOTH ends are drawn. Never a synthesised one: an edge on this canvas
-	// that the export does not literally contain is a claim this app invented about the reader's
-	// memories, and the direction of that error is somebody merging two things that were never one.
-	const edges = graph.edges
+/**
+ * Every export edge whose BOTH ends are drawn. Never a synthesised one: an edge on this canvas
+ * that the export does not literally contain is a claim this app invented about the reader's
+ * memories, and the direction of that error is somebody merging two things that were never one.
+ *
+ * And never a suppressed one either. The dial decides which names are REACHED; once two names are
+ * on the canvas, every statement between them is drawn whichever way it points, because a canvas
+ * that showed two names side by side with the line between them missing would be read as "these
+ * two are not connected", which is the one claim the export contradicts.
+ */
+function edgesWithin(graph, reached) {
+	return graph.edges
 		.filter((edge) => reached.has(edge.source) && reached.has(edge.target))
 		.map((edge) => ({
 			id: edge.id,
@@ -445,8 +534,76 @@ export function egoElements(graph, surface, { depth = 1, palette = null, cap = E
 			target: edge.target,
 			label: edge.predicate,
 		}));
+}
 
-	return { nodes, edges, depth, reachedDepth, capped, hidden };
+/**
+ * TWO NAMES ON ONE CANVAS — the pin.
+ *
+ * There is no path between two names in this product, on evidence: two names share a component
+ * about 2% of the time, and where they do the component is a tree and the answer is a breadcrumb.
+ * What a reader comparing two names actually needs is both neighbourhoods in front of them at
+ * once, which needs no path at all. So a name can be PINNED: it stays on the canvas while the
+ * reader opens another, each drawn around its own centre, and the names both are joined to are
+ * reported as a list rather than left for the eye to find.
+ *
+ * The union is drawn under the same rules as one neighbourhood: every reached name, every export
+ * statement between reached names, nothing invented. "What lies beyond" is recomputed over the
+ * union, because a name beyond one neighbourhood may be inside the other.
+ *
+ * @returns the shape `egoElements` returns, plus:
+ *   `centres` — the names each component is drawn around, focus first;
+ *   `pinned`  — null when nothing extra was drawn (no pin, or the pin is this name), otherwise
+ *               `{ surface, found, reachedDepth, capped, hidden }` for the pinned walk;
+ *   `shared`  — the names reached from BOTH, most connected first, neither centre among them.
+ */
+export function egoWithPin(graph, surface, pinned, options = {}) {
+	const primary = egoElements(graph, surface, options);
+	if (!pinned || pinned === surface) {
+		return { ...primary, centres: [surface], pinned: null, shared: [] };
+	}
+	if (!graph.nodes.has(pinned)) {
+		return {
+			...primary,
+			centres: [surface],
+			pinned: { surface: pinned, found: false, reachedDepth: 0, capped: false, hidden: 0 },
+			shared: [],
+		};
+	}
+
+	const { depth = 1, cap = EGO_CAP, direction = DEFAULT_DIRECTION, palette = null } = options;
+	const first = walk(graph, surface, { depth, cap, direction });
+	const second = walk(graph, pinned, { depth, cap, direction });
+
+	// A name in both keeps the smaller depth. The layout re-derives depth from each component's
+	// centre anyway; this is the number the panel could quote.
+	const reached = new Map(first.reached);
+	for (const [id, at] of second.reached) {
+		if (!reached.has(id) || at < reached.get(id)) reached.set(id, at);
+	}
+
+	const shared = [...first.reached.keys()]
+		.filter((id) => second.reached.has(id) && id !== surface && id !== pinned)
+		.map((id) => ({ id, degree: graph.nodes.get(id).degree }))
+		.sort((a, b) => b.degree - a.degree || compareText(a.id, b.id));
+
+	return {
+		nodes: decorate(graph, reached, { palette, direction }),
+		edges: edgesWithin(graph, reached),
+		depth,
+		direction,
+		reachedDepth: first.reachedDepth,
+		capped: first.capped,
+		hidden: first.hidden,
+		centres: [surface, pinned],
+		pinned: {
+			surface: pinned,
+			found: true,
+			reachedDepth: second.reachedDepth,
+			capped: second.capped,
+			hidden: second.hidden,
+		},
+		shared,
+	};
 }
 
 /**
@@ -489,6 +646,28 @@ export function overviewElements(graph, { palette = null, duplicates = [] } = {}
 		target: edge.target,
 	}));
 
+	/*
+	  ONE HUE PER GROUP OF SPELLINGS, so a pair reads as a pair at a glance.
+
+	  Eighteen dashed lines cross a whole-vault canvas and their ends are hundreds of pixels apart;
+	  a reader matching one end to the other by following the line is doing the work the picture
+	  is supposed to do. So each group of near-identical spellings takes a hue, its dashed line and
+	  the ring on each of its ends are drawn in that hue, and the two ends of one question look like
+	  one question. The hues are the eight slot tokens the kinds already use — the drawing owns no
+	  second palette — and a ring is a ring, not a fill, so it is not read as a kind. Groups past the
+	  eighth share a hue with an earlier one; on a vault with more than eight open questions of this
+	  kind the dashed line still joins the pair.
+	*/
+	const hues = new Map();
+	const hueOf = (key) => {
+		if (!hues.has(key)) hues.set(key, hues.size % DUPLICATE_HUES);
+		return hues.get(key);
+	};
+	for (const node of nodes) {
+		const entry = index.get(node.id);
+		node.duplicateHue = entry ? hueOf(entry.keys[0]) : null;
+	}
+
 	// One link per unordered pair inside a strict group, keyed so a group of three yields three.
 	const seen = new Set();
 	const duplicateLinks = [];
@@ -497,11 +676,15 @@ export function overviewElements(graph, { palette = null, duplicates = [] } = {}
 			const key = surface < other ? `${surface}\u0000${other}` : `${other}\u0000${surface}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
+			// The group both spellings belong to decides the hue, so a spelling in two groups still
+			// shares a hue with each partner along the line that joins them.
+			const shared = entry.keys.find((groupKey) => index.get(other)?.keys.includes(groupKey)) ?? entry.keys[0];
 			duplicateLinks.push({
 				id: `d${duplicateLinks.length}`,
 				source: surface,
 				target: other,
 				sameComponent: entry.sameComponent,
+				hue: hueOf(shared),
 			});
 		}
 	}
@@ -524,6 +707,93 @@ export function overviewElements(graph, { palette = null, duplicates = [] } = {}
 		elementCount: nodes.length + edges.length + duplicateLinks.length,
 		overCeiling: nodes.length + edges.length + duplicateLinks.length > OVERVIEW_CEILING,
 	};
+}
+
+/** How many hues a duplicate group can take — the kind palette's own eight slots. */
+export const DUPLICATE_HUES = 8;
+
+/** How many islands a query may open at once before the overview shows only the busiest of them. */
+export const FOCUS_ISLANDS = 4;
+
+/**
+ * The most of the whole picture a set of lit islands may span before the focus narrows to fewer.
+ * Four islands at the four corners of the canvas is the whole canvas with most of it dimmed — the
+ * "three rings in a field of confetti" this focus exists to replace — so past this share the
+ * islands are dropped, least connected match first, until what is lit is something the view can
+ * actually move to.
+ */
+export const FOCUS_SPAN = 0.4;
+
+/**
+ * WHAT THE OVERVIEW ISOLATES: the island a name lives on, not the name alone.
+ *
+ * A ring on one dot in a field of fourteen hundred is findable and it is not useful — the reader
+ * asked where a name sits, and where it sits is a component. So a selection or a query resolves to
+ * COMPONENTS: everything on them stays lit and gets a label, everything else dims, and the canvas
+ * fits its view to them. A query that matches names on more islands than a reader can look at
+ * shows the islands of the most connected matches and says how many it did not open.
+ *
+ * @param {Array}       nodes     from `overviewElements`
+ * @param {string|null} selected  the name the reader clicked, if any — it wins over the query
+ * @param {Set|null}    matches   from `highlightSet`; `null` means no query
+ * @param {object|null} placement from `overviewLayout`, when the picture is laid out: its
+ *                                `components` boxes and `bounds` decide whether the lit islands
+ *                                together span too much of the canvas to be a focus at all
+ * @returns {null | {components: Set, marked: Set, islands: number, shown: number, reason}}
+ *          `null` when nothing narrows the picture. `islands` is how many components the marked
+ *          names span; `shown` is how many of those are lit, at most `FOCUS_ISLANDS`.
+ */
+export function overviewFocus(
+	nodes,
+	{ selected = null, matches = null, limit = FOCUS_ISLANDS, placement = null, span = FOCUS_SPAN } = {},
+) {
+	const byId = new Map(nodes.map((node) => [node.id, node]));
+	if (selected && byId.has(selected)) {
+		return {
+			components: new Set([byId.get(selected).componentId]),
+			marked: new Set([selected]),
+			islands: 1,
+			shown: 1,
+			reason: 'selected',
+		};
+	}
+	if (matches === null) return null;
+	const ordered = [...matches]
+		.map((id) => byId.get(id))
+		.filter(Boolean)
+		.sort((a, b) => b.degree - a.degree || compareText(a.id, b.id));
+	const islands = new Set(ordered.map((node) => node.componentId)).size;
+	const chosen = [];
+	for (const node of ordered) {
+		if (chosen.includes(node.componentId)) continue;
+		if (chosen.length >= limit) continue;
+		chosen.push(node.componentId);
+	}
+
+	// Drop islands from the least connected end while the lit ones together span too much of the
+	// picture to be somewhere the view can go. The first — the most connected match's — always stays.
+	if (placement?.components && placement?.bounds) {
+		const boxes = new Map(placement.components.map((box) => [box.id, box]));
+		const whole = placement.bounds.width * placement.bounds.height;
+		const spanOf = (ids) => {
+			let minX = Number.POSITIVE_INFINITY;
+			let minY = Number.POSITIVE_INFINITY;
+			let maxX = Number.NEGATIVE_INFINITY;
+			let maxY = Number.NEGATIVE_INFINITY;
+			for (const id of ids) {
+				const box = boxes.get(id);
+				if (!box) continue;
+				minX = Math.min(minX, box.x - box.radius);
+				maxX = Math.max(maxX, box.x + box.radius);
+				minY = Math.min(minY, box.y - box.radius);
+				maxY = Math.max(maxY, box.y + box.radius);
+			}
+			return Number.isFinite(minX) ? (maxX - minX) * (maxY - minY) : 0;
+		};
+		while (chosen.length > 1 && whole > 0 && spanOf(chosen) > whole * span) chosen.pop();
+	}
+
+	return { components: new Set(chosen), marked: new Set(matches), islands, shown: chosen.length, reason: 'query' };
 }
 
 /**
@@ -570,17 +840,45 @@ export const FOCUS_CAPTION =
  * screen exists to show — and a route key that was a position in a sorted list would address a
  * different name after the next write.
  */
-export const nameRoute = (surface) => `#/names/${encodeURIComponent(surface)}`;
+export const nameRoute = (surface, { pinned = null } = {}) =>
+	`#/names/${encodeURIComponent(surface)}${pinned ? `?with=${encodeURIComponent(pinned)}` : ''}`;
 
-/** The inverse. Returns null for anything that is not a name route, so the caller can fall through. */
+/**
+ * The inverse. Returns null for anything that is not a name route, so the caller can fall through.
+ *
+ * The surface ends at the first raw `?`. A surface that CONTAINS one is encoded as `%3F` by the
+ * route above, so a raw one can only be the pin that follows — which is what lets the pin ride in
+ * the URL without any spelling of a name being off limits.
+ */
 export function surfaceFromRoute(hash) {
-	const match = String(hash ?? '').match(/^#\/names\/(.+)$/);
+	const match = String(hash ?? '').match(/^#\/names\/([^?]+)(?:\?.*)?$/);
 	if (!match) return null;
 	try {
 		const surface = decodeURIComponent(match[1]);
 		return surface.length > 0 ? surface : null;
 	} catch {
 		// A hand-edited or truncated percent-escape. Not a name, and not a crash.
+		return null;
+	}
+}
+
+/**
+ * THE PIN IS IN THE URL, because it is where the reader is rather than who they are.
+ *
+ * The project switcher is deliberately NOT in the URL: a link to a memory should open that memory
+ * whatever project the follower is reading. A comparison of two names is the opposite case — "these
+ * two, side by side" is a place, it should survive a reload, and it should be something one person
+ * can hand to another as a link. It is also what keeps the pin across a navigation at all: the
+ * focus screen is keyed on the name it shows, so state held inside it is gone the moment the
+ * reader opens the next name, which is exactly when the pin has to still be there.
+ */
+export function pinnedFromRoute(hash) {
+	const match = String(hash ?? '').match(/^#\/names\/[^?]+\?(.*)$/);
+	if (!match) return null;
+	try {
+		const pinned = new URLSearchParams(match[1]).get('with');
+		return pinned && pinned.length > 0 ? pinned : null;
+	} catch {
 		return null;
 	}
 }

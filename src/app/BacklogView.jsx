@@ -14,8 +14,8 @@ import {
 	DetailRows,
 	EmptyState,
 	ErrorState,
+	glossDefinition,
 	Identifier,
-	Input,
 	LoadingState,
 	Note,
 	PageHead,
@@ -25,10 +25,18 @@ import {
 	Stat,
 	StatNote,
 	StatStrip,
+	useToast,
 } from './ui/index.mjs';
 
 /** How many findings of one kind go into the DOM before the reader asks for more. */
 const PAGE = 25;
+
+/**
+ * The one reason a one-press dismissal records. Both screens — this backlog and the cluster review
+ * — dismiss on one press with this sentence, so a reader is not asked why on one screen and not on
+ * the other; the way back is the toast's "Put it back" and the row at the foot of the page.
+ */
+const DISMISSED_BECAUSE = 'they really are two different things';
 
 /** How many of a finding's memories are on screen before the rest are one press away. */
 const SOURCES = 4;
@@ -65,8 +73,9 @@ const SOURCES = 4;
  * directory; the vault is not touched and no agent is told anything. The merge writes, and it does
  * it from behind a preview on its own screen.
  */
-export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowGraph }) {
+export function BacklogView({ records, onEdit, onOpen, onBack, onReread, focusName = null }) {
 	const graph = useMemo(() => buildGraph(records), [records]);
+	const { toast } = useToast();
 
 	const [dismissed, setDismissed] = useState(null);
 	const [storeError, setStoreError] = useState(null);
@@ -79,7 +88,8 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 	  is this one, and the browser Back button still leaves the whole surface, which is what a reader
 	  reaching for it here actually means.
 	*/
-	const [reviewing, setReviewing] = useState(false);
+	// A link that names a pair — "Merge?" on the names table — opens straight onto the review.
+	const [reviewing, setReviewing] = useState(Boolean(focusName));
 
 	const load = useCallback(async () => {
 		setStoreError(null);
@@ -125,9 +135,22 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 		[load],
 	);
 
+	/*
+	  ONE PRESS, AND THE WAY BACK IS ON SCREEN. The record carries the one reason above; the toast
+	  offers to put it back, because the row that lists dismissals is at the foot of a long page and
+	  a dismissal a reader cannot undo where they made it is one they stop trusting the screen over.
+	*/
 	const dismiss = useCallback(
-		(finding, reason) => act('dismiss', dismissalRecordFor(finding, { reason })),
-		[act],
+		async (finding, reason = DISMISSED_BECAUSE) => {
+			const record = dismissalRecordFor(finding, { reason });
+			await act('dismiss', record);
+			toast({
+				title: 'Dismissed',
+				description: finding.label,
+				action: { label: 'Put it back', onSelect: () => act('restore', { key: record.key }) },
+			});
+		},
+		[act, toast],
 	);
 
 	if (storeError) {
@@ -154,6 +177,7 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 				onReread={onReread}
 				onOpen={onOpen}
 				onEdit={onEdit}
+				focusName={focusName}
 				onDone={() => setReviewing(false)}
 			/>
 		);
@@ -181,12 +205,20 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 
 	return (
 		<div className="page">
+			{/*
+			  THE HEAD'S ONE ACTION IS THE ONE THING WORTH DOING FIRST. "See these names" went to the
+			  whole names table, not to these; the review of the duplicates is the only finding this app
+			  can resolve for you, so it is the filled control, and it is here.
+			*/}
 			<PageHead
 				title="Needs a decision"
 				subtitle={`${backlog.counts.findings.toLocaleString()} things to decide · ordered by ${backlog.ranking.short}`}
 				actions={
-					onShowGraph ? (
-						<Button onClick={onShowGraph}>See these names</Button>
+					clusters.counts.clusters > 0 ? (
+						<Button tone="primary" onClick={() => setReviewing(true)}>
+							Review {clusters.counts.clusters.toLocaleString()}{' '}
+							{clusters.counts.clusters === 1 ? 'name' : 'names'}
+						</Button>
 					) : null
 				}
 			/>
@@ -200,9 +232,7 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 
 			<Shape backlog={backlog} clusters={clusters} />
 
-			{clusters.counts.clusters > 0 ? (
-				<Lead clusters={clusters} onReview={() => setReviewing(true)} />
-			) : null}
+			{clusters.counts.clusters > 0 ? <Lead clusters={clusters} /> : null}
 
 			<PageSection
 				title="Everything else"
@@ -228,14 +258,16 @@ export function BacklogView({ records, onEdit, onOpen, onBack, onReread, onShowG
 							label={group.kind.title}
 							count={group.counts.findings.toLocaleString()}
 							/*
-							  The biggest group opens, the rest wait. One worked example is what turns a
-							  page of closed rows into a page a reader understands the shape of; opening
-							  all five is the information overload this screen was rebuilt to answer.
+							  The biggest group opens ON ONE FINDING, the rest wait. One worked example is
+							  what turns a page of closed rows into a page a reader understands the shape
+							  of; the comment used to promise one and the code shipped twenty-five — 6,757px
+							  of open content with the other four groups thirteen screens down.
 							*/
 							defaultOpen={index === 0}
 						>
 							<Group
 								group={group}
+								initial={index === 0 ? 1 : PAGE}
 								busyKey={busyKey}
 								onEdit={onEdit}
 								onOpen={onOpen}
@@ -273,7 +305,8 @@ function Shape({ backlog, clusters }) {
 				{share(counts.memories_touched, counts.memory_count)}%
 			</Stat>
 			<Stat value={counts.facts_touched.toLocaleString()}>
-				of {counts.fact_count.toLocaleString()} facts are split or unreachable
+				of {counts.fact_count.toLocaleString()} facts are cut off from the rest, or split across two
+				spellings
 			</Stat>
 			<Stat value={clusters.counts.clusters.toLocaleString()} tone="warn">
 				{clusters.counts.clusters === 1
@@ -296,8 +329,13 @@ function Shape({ backlog, clusters }) {
  * is the only finding this app can resolve for you, and it is the only change on this screen that
  * makes the vault more useful to an agent rather than merely tidier to look at.
  */
-function Lead({ clusters, onReview }) {
+function Lead({ clusters }) {
 	const { counts } = clusters;
+	/*
+	  The number is said ONCE on this screen — on the button in the head, which is what acts on it
+	  — and the warn card in the strip carries it as the shape of the vault. This card is the
+	  argument, not a third telling.
+	*/
 	return (
 		<div className="card card-accent">
 			<div className="card-head">
@@ -308,31 +346,23 @@ function Lead({ clusters, onReview }) {
 			</div>
 			<p>
 				{counts.clusters === 1
-					? 'One name in this vault is written two ways.'
-					: `${counts.clusters.toLocaleString()} names in this vault are written more than one way.`}{' '}
+					? 'One name here is written two ways.'
+					: 'Some names here are written more than one way.'}{' '}
 				Each spelling is a separate thing to the store, so an agent that reaches one of them
 				never sees the other one’s facts — and neither half looks incomplete from where it is
 				standing.
 				{counts.joining > 0
 					? ` ${counts.joining.toLocaleString()} of them would join two parts of your vault that nothing currently connects.`
-					: ''}
+					: ''}{' '}
+				Nothing is written until you have seen exactly what would change.
 			</p>
-			<div className="decision-actions">
-				<Button tone="primary" onClick={onReview}>
-					Review {counts.clusters.toLocaleString()}{' '}
-					{counts.clusters === 1 ? 'name' : 'names'}
-				</Button>
-				<span className="item-count">
-					Nothing is written until you have seen exactly what would change.
-				</span>
-			</div>
 		</div>
 	);
 }
 
 /** One kind of problem: what it costs, what resolves it, and every instance in stake order. */
-function Group({ group, busyKey, onEdit, onOpen, onDismiss }) {
-	const [visible, setVisible] = useState(PAGE);
+function Group({ group, initial = PAGE, busyKey, onEdit, onOpen, onDismiss }) {
+	const [visible, setVisible] = useState(initial);
 	const shown = group.findings.slice(0, visible);
 
 	if (group.counts.findings === 0) {
@@ -407,9 +437,6 @@ function Group({ group, busyKey, onEdit, onOpen, onDismiss }) {
  * were the heap the owner described as "just put everything together at one place".
  */
 function Finding({ finding, busy, onEdit, onOpen, onDismiss }) {
-	const [asking, setAsking] = useState(false);
-	const [reason, setReason] = useState('');
-
 	return (
 		<Decision
 			lead={<span>{finding.label}</span>}
@@ -419,11 +446,17 @@ function Finding({ finding, busy, onEdit, onOpen, onDismiss }) {
 				finding.memories.length === 1 ? 'memory' : 'memories'
 			}`}
 			actions={
-				asking ? null : (
-					<Button size="sm" onClick={() => setAsking(true)}>
-						Not a problem
+				<>
+					<Button size="sm" disabled={busy} onClick={() => onDismiss(finding)}>
+						{busy ? 'Saving…' : 'Not a problem'}
 					</Button>
-				)
+					{/*
+					  Said at the point of the click, not in a footer. This app has no way to tell the
+					  store that a person decided two names are different — no published operation
+					  records it — so a dismissal is this app's own note about this app's own screen.
+					*/}
+					<span className="item-count">Changes what this app shows you; your vault is not touched.</span>
+				</>
 			}
 		>
 			<Detail finding={finding} />
@@ -435,46 +468,8 @@ function Finding({ finding, busy, onEdit, onOpen, onDismiss }) {
 					vault.
 				</Note>
 			) : (
-				<Memories memories={finding.memories} onEdit={onEdit} onOpen={onOpen} />
+				<Memories memories={finding.memories} finding={finding} onEdit={onEdit} onOpen={onOpen} />
 			)}
-
-			{asking ? (
-				<form
-					className="decision-actions"
-					onSubmit={(event) => {
-						event.preventDefault();
-						onDismiss(finding, reason);
-						setAsking(false);
-					}}
-				>
-					<label className="meta" htmlFor={`why-${finding.key}`}>
-						Why is this not a problem?
-					</label>
-					<Input
-						id={`why-${finding.key}`}
-						value={reason}
-						autoComplete="off"
-						placeholder="they really are two different things"
-						onChange={(event) => setReason(event.target.value)}
-					/>
-					<Button type="submit" size="sm" disabled={busy}>
-						{busy ? 'Saving…' : 'Dismiss it'}
-					</Button>
-					<Button size="sm" onClick={() => setAsking(false)}>
-						Cancel
-					</Button>
-					{/*
-					  Said at the point of the click, not in a footer. This app has no way to tell the
-					  store that a person decided two names are different — no published operation
-					  records it — so a dismissal is this app's own note about this app's own screen, and
-					  a user who thought otherwise would believe their agents had been told something
-					  they have not.
-					*/}
-					<span className="item-count">
-						This changes what this app shows you. Your vault is not touched.
-					</span>
-				</form>
-			) : null}
 		</Decision>
 	);
 }
@@ -494,10 +489,19 @@ function Finding({ finding, busy, onEdit, onOpen, onDismiss }) {
  * plus the exact number of the rest is the same information at a tenth of the height, and the rest
  * are one press away rather than gone.
  */
-function Memories({ memories, onEdit, onOpen }) {
+function Memories({ memories, finding = null, onEdit, onOpen }) {
 	const [all, setAll] = useState(false);
 	const shown = all ? memories : memories.slice(0, SOURCES);
+	const name = finding?.names?.[0] ?? finding?.label ?? null;
 
+	/*
+	  THE TITLE OPENS THE READER; "Edit" is the secondary way out. It was the other way round, with
+	  a faint "read it first" repeated at the right of a hundred rows. A reader deciding which of
+	  four memories called a thing a tool reads them first; the editor is one press further.
+
+	  The gloss is quoted ONCE and only its definition clause — the stored `surface | kind |
+	  definition` repeated the kind the row already names.
+	*/
 	return (
 		<>
 			<Sources className="decision-memories">
@@ -506,24 +510,24 @@ function Memories({ memories, onEdit, onOpen }) {
 						<button
 							type="button"
 							className="btn btn-quiet decision-source-open"
-							onClick={() => onEdit(memory.memory_id)}
+							onClick={() => onOpen(memory.memory_id)}
 						>
 							{memory.title ?? memory.memory_id}
 						</button>
 						<button
 							type="button"
-							className="decision-source-read"
-							onClick={() => onOpen(memory.memory_id)}
+							className="decision-source-edit"
+							onClick={() => onEdit(memory.memory_id)}
 						>
-							read it first
+							Edit
 						</button>
 						{memory.notes.length > 0 || memory.glosses.length > 0 ? (
 							<span className="decision-source-note">
 								{memory.notes.join(' · ')}
-								{memory.glosses.map((gloss) => (
+								{memory.glosses.slice(0, 1).map((gloss) => (
 									<span key={gloss}>
-										{' · '}
-										<span className="decision-source-gloss">“{gloss}”</span>
+										{memory.notes.length > 0 ? ' · ' : ''}
+										<span className="decision-source-gloss">“{glossDefinition(gloss, name, null) ?? gloss}”</span>
 									</span>
 								))}
 							</span>
@@ -553,9 +557,10 @@ function Detail({ finding }) {
 	if (finding.kind === 'kind-conflict') {
 		return (
 			<div className="decision-lead">
+				{/* Neutral chips: with every kind chip in the warn tint, seventy of them on one page emphasised nothing. */}
 				<span className="meta">Declared as</span>
 				{finding.detail.kinds.map((entry) => (
-					<Badge key={entry.kind} tone="warn">
+					<Badge key={entry.kind}>
 						{entry.kind} · {entry.count}
 					</Badge>
 				))}

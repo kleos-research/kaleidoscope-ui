@@ -155,3 +155,13 @@ export function Filter(props) {
 		</Glyph>
 	);
 }
+
+/** A drawing pin, for the control that keeps a name on the canvas while another is opened. */
+export function Pin(props) {
+	return (
+		<Glyph {...props}>
+			<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3z" />
+			<line x1="12" y1="15" x2="12" y2="21" />
+		</Glyph>
+	);
+}

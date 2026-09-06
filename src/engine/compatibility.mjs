@@ -53,6 +53,18 @@ export const TESTED_CONTRACTS = [
 		engine: 'kscope 0.0.5',
 		tested_on: '2026-09-01',
 	},
+	/*
+	  The same version string, a different contract. `/opt/homebrew/bin/kscope` was replaced under
+	  the tree on 2026-09-05 by a build that still prints 0.0.5 and prints its write contract
+	  differently — which is the case the version string cannot see and the digest can. The parser
+	  was re-run against it: twelve entity kinds, the predicate list, the memory types and the
+	  request ceiling all come out, and the whole suite passes on a clone through it.
+	*/
+	{
+		digest: '62005f249bb0902e0cdd401df1f144d0578515dded59e3a5ded1204feb805b96',
+		engine: 'kscope 0.0.5',
+		tested_on: '2026-09-05',
+	},
 ];
 
 /**
