@@ -19,6 +19,7 @@ import test from 'node:test';
 
 import { relationIndex, toRow } from '../src/app/records.mjs';
 import {
+	answerIsStale,
 	budgetReading,
 	bytesLabel,
 	findTheseWords,
@@ -29,6 +30,7 @@ import {
 	rankingControls,
 	servedCaption,
 	whyThese,
+	controlWords,
 } from '../src/app/search-model.mjs';
 
 /** A listing record, in the shape the listing door serves. Invented content throughout. */
@@ -296,12 +298,16 @@ test('the caption counts what was served and what was left out', () => {
 test('the ranking disclosure shows the controls the engine echoed, and invents no score', () => {
 	const controls = rankingControls({ search: { candidate_pool: 200, ledger: true, top_k: 8 } });
 	assert.deepEqual(controls, [
-		{ name: 'candidate_pool', value: '200' },
-		{ name: 'ledger', value: 'true' },
-		{ name: 'top_k', value: '8' },
+		{ name: 'candidate_pool', value: '200', words: 'looked at 200 candidates' },
+		{ name: 'ledger', value: 'true', words: 'recorded the read in the vault' },
+		{ name: 'top_k', value: '8', words: 'kept up to 8' },
 	]);
-	// Spelled the way the engine spells them. Nothing here translates a control name into a
-	// friendlier one, because a renamed control cannot be looked up in the engine's own schema.
+	// The name and the value stay spelled the way the engine spells them — a renamed control cannot
+	// be looked up in the engine's own schema — and the SENTENCE is added beside them, not instead
+	// of them. `candidate_pool 200` as a bare label was an identifier the owner would have to ask
+	// about; a control this build has no words for is drawn as the engine spells it.
+	assert.deepEqual(controlWords('rerank_depth', 3), 'rerank_depth 3');
+	assert.deepEqual(controlWords('candidate_pool', 'many'), 'candidate_pool many');
 	assert.deepEqual(rankingControls({}), []);
 });
 
@@ -420,3 +426,36 @@ test('the ranked door is not called on load, on a poll, on a keystroke or on a r
 	assert.ok(submit.includes('onFind?.()'), 'the form submits the free search');
 	assert.equal(submit.includes('onAsk'), false, 'pressing Enter must not reach the ranked door');
 });
+
+/*
+  THE SCREEN STOPS CLAIMING CURRENCY WHEN THE QUESTION MOVES.
+
+  Found by driving the built app: type a follow-up over the question, and the box showed the new
+  words while the panel below still showed the old answer — under a banner asserting it was
+  "exactly what it would have been given for this question". The input updated, the count did not,
+  and nothing on screen was dimmed or disabled. The one screen whose purpose is not misdescribing
+  what the agent sees was stating the only false thing available to it.
+
+  These assert the property rather than the mechanism: whether the answer on screen still answers
+  the question in the box.
+*/
+test('is not stale while the question is the one that produced it', () => {
+	assert.equal(answerIsStale({ asked_for: 'why is the cache cold' }, 'why is the cache cold'), false);
+	});
+
+test('is stale the moment the question in the box differs', () => {
+	assert.equal(answerIsStale({ asked_for: 'why is the cache cold' }, 'retention policy'), true);
+	});
+
+test('treats trailing space as the same question, because it is', () => {
+	assert.equal(answerIsStale({ asked_for: 'why is the cache cold' }, 'why is the cache cold  '), false);
+	});
+
+test('an empty screen is never stale — there is nothing on it to be wrong about', () => {
+	assert.equal(answerIsStale(null, 'anything at all'), false);
+	});
+
+test('an answer that never recorded its question reads as stale rather than as current', () => {
+		// Failing closed: an answer we cannot prove is current must not claim to be.
+		assert.equal(answerIsStale({}, 'why is the cache cold'), true);
+	});

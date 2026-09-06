@@ -998,6 +998,50 @@ test('the composition keeps the heading out of the words pane and writes it back
 		.split('\n')
 		.filter((line) => !line.trim().startsWith('//'))
 		.join('\n');
-	assert.match(screen, /content_md: composeBody\(\{ body, title: survivorTitle, heading \}\)/);
-	assert.doesNotMatch(screen, /content_md: body[,\s]/, 'the merge screen sends the pane’s words without their heading');
+	// The two halves the page draws go back around the join marker, and THEN under the heading.
+	assert.match(
+		screen,
+		/content_md: composeBody\(\{\s*body: joinAtMarker\(\{[\s\S]*?before: words, after: joined \}\),\s*title: survivorTitle,\s*heading,?\s*\}\)/,
+	);
+	assert.doesNotMatch(screen, /content_md: (body|words)[,\s]/, 'the merge screen sends the pane’s words without their heading');
+});
+
+test('the join marker is put back byte for byte, and never reaches the drawn words', () => {
+	// THE COMPOSITION SPLITS THE BODY AT THE MARKER AND DRAWS EACH HALF AS ITS OWN FIELD. The
+	// marker is for the bytes — a reader of the stored record can see the seam — and it used to be
+	// drawn as well, in full-ink prose, as the only sign on the page that a second memory begins
+	// there. Two properties make the split safe: an unedited composition round-trips exactly, and
+	// an edited one is joined around the same marker with the same newlines.
+	const plan = merge.planMemoryMerge(
+		{
+			memory_id: 'mem_s',
+			content_md: '# Survivor\n\nThe first words.\n',
+			semantic_delta: { title: 'Survivor', facts: [] },
+		},
+		{
+			memory_id: 'mem_d',
+			content_md: '# Duplicate\n\nThe second words.\n',
+			semantic_delta: { title: 'Duplicate', facts: [] },
+		},
+	);
+	const { heading, body } = splitLeadingHeading(plan.content_md, 'Survivor');
+	const halves = merge.splitAtJoin(body);
+	assert.equal(halves.marker, merge.joinMarker('Duplicate'));
+	assert.equal(halves.before.includes('merged in from'), false, 'the survivor field carries no marker');
+	assert.equal(halves.after.includes('merged in from'), false, 'the duplicate field carries no marker');
+	assert.match(halves.after, /The second words/);
+	assert.equal(
+		composeBody({ body: merge.joinAtMarker(halves), title: 'Survivor', heading }),
+		plan.content_md,
+		'an unedited composition is written exactly as it was planned',
+	);
+
+	// An edit to either half is joined around the same marker.
+	const edited = merge.joinAtMarker({ ...halves, before: 'Rewritten.', after: 'Also rewritten.' });
+	assert.equal(edited, `Rewritten.${halves.gapBefore}${halves.marker}${halves.gapAfter}Also rewritten.`);
+
+	// A body with no marker is one field, and joining it adds nothing.
+	const plain = merge.splitAtJoin('Just words.');
+	assert.equal(plain.marker, null);
+	assert.equal(merge.joinAtMarker(plain), 'Just words.');
 });

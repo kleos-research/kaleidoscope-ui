@@ -120,3 +120,26 @@
 	overscroll-behavior: contain;
 	padding-bottom: 2px;
 }
+
+/*
+  THE ASK SCREEN'S TWO MEASURED FAULTS.
+
+  The rail stopped at y=751 while the results column ran to y=1819 — 1,068px of empty gutter, and
+  scrolling to the last result carried the budget reading off the screen, so the numbers that
+  explain the list were gone exactly when a reader was deep enough in it to want them. It sticks
+  now. It is the shorter column, so nothing is lost by pinning it.
+
+  And a panel whose question has moved on is dimmed rather than left asserting. The banner says
+  which question it answers; this makes that visible at a glance instead of only in words.
+*/
+.ask-rail {
+	position: sticky;
+	top: 16px;
+	align-self: start;
+}
+
+.ask-split.is-stale .ask-column,
+.ask-split.is-stale .ask-rail {
+	opacity: 0.45;
+	transition: opacity 120ms ease;
+}

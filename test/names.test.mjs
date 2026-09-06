@@ -449,10 +449,10 @@ test('a neighbourhood grows with depth and draws no edge the export does not con
 	assert.ok(three.nodes.length >= two.nodes.length);
 	assert.equal(three.capped, false);
 
-	const real = new Set(graph.edges.map((edge) => `${edge.source} ${edge.target}`));
+	const real = new Set(graph.edges.map((edge) => `${edge.source}\u0000${edge.target}`));
 	for (const edge of three.edges) {
 		assert.ok(
-			real.has(`${edge.source} ${edge.target}`),
+			real.has(`${edge.source}\u0000${edge.target}`),
 			`the drawing invented the link ${edge.source} → ${edge.target}. The cost of a drawn edge ` +
 				`that does not exist is somebody merging two things that were never one`,
 		);

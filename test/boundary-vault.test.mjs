@@ -97,6 +97,10 @@ const ALLOWED = [
 	// but it sits close enough to the engine's own decisions to be a judgement rather than a rule,
 	// and a judgement is exactly what "a clean check is not a clean review" reserves for a person.
 	['the admission block', 'names a block in the record the export door returns'],
+	// The row the retrieval door writes on every search — this product's own name for it since PRD
+	// 0001, and the word every screen that reads uses to say that reading is recorded. It reached the
+	// vault the way `selected_hits` did: agents building the engine wrote memories about it.
+	['exposure row', "this product's own name for the record a search leaves behind, in every PRD since M1"],
 ];
 
 /**

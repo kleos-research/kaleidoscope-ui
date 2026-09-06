@@ -338,3 +338,22 @@ export function controlWords(name, value) {
 function numberOr(value, fallback) {
 	return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
+
+/**
+ * IS THE ANSWER ON SCREEN STILL AN ANSWER TO THE QUESTION IN THE BOX?
+ *
+ * The one sentence this screen must never get wrong is "exactly what it would have been given FOR
+ * THIS QUESTION". Typing over the box used to leave the previous answer standing under that
+ * sentence, so the screen whose entire purpose is not misdescribing the agent's view stated the
+ * single false thing available to it. The error path already reasoned this way — it clears the
+ * answer rather than let old memories stand under a new question; this is the same rule applied to
+ * the keystroke path.
+ *
+ * It is a comparison and not new state: `asked_for` is stamped onto the answer when it is asked.
+ * Trimmed on both sides because trailing space is not a different question. An absent answer is
+ * never stale — there is nothing on screen to be wrong about.
+ */
+export function answerIsStale(answer, query) {
+	if (!answer) return false;
+	return String(answer.asked_for ?? '').trim() !== String(query ?? '').trim();
+}

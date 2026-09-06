@@ -7,6 +7,7 @@ import {
 	bytesLabel,
 	budgetReading,
 	findTheseWords,
+	answerIsStale,
 	isRankedAnswer,
 	omittedRows,
 	rankedRows,
@@ -81,6 +82,15 @@ export function SearchView({
 	const [answer, setAnswer] = useState(null);
 	const [askError, setAskError] = useState(null);
 	const [busy, setBusy] = useState(false);
+
+	/*
+	  IS THE ANSWER ON SCREEN STILL AN ANSWER TO THE QUESTION IN THE BOX?
+
+	  `asked_for` is stamped onto every answer at the moment it is asked, so this is a comparison and
+	  not new state. Trimmed on both sides because trailing space is not a different question, and
+	  guarded on `answer` so an empty screen is never "stale".
+	*/
+	const stale = answerIsStale(answer, query);
 
 	// Cancels a press that is still out when a second one arrives. It never starts a request; it
 	// only stops one this screen already sent.
@@ -176,6 +186,8 @@ export function SearchView({
 					busy={busy}
 					error={askError}
 					result={answer}
+					answer={answer}
+					stale={stale}
 					rows={rows}
 					relations={relations}
 					project={project}
@@ -245,7 +257,7 @@ function FoundWords({ query, found, total, onOpen }) {
 /**
  * THE RANKED HALF: what the agent would have been given, and everything true about it.
  */
-function Answer({ busy, error, result, rows, relations, project, onOpen }) {
+function Answer({ busy, error, result, answer, stale, rows, relations, project, onOpen }) {
 	const [ranking, setRanking] = useState(false);
 	if (error) {
 		return <ErrorState heading="That question did not reach the engine" error={error} />;
@@ -288,16 +300,41 @@ function Answer({ busy, error, result, rows, relations, project, onOpen }) {
 			  results rather than in a footnote under them, which is the difference between
 			  disclosing something and admitting it.
 			*/}
-			<Card tone="accent" className="banner-row">
+			{/*
+			  THE BANNER STOPS CLAIMING CURRENCY THE MOMENT THE QUESTION MOVES.
+
+			  The answer already carries `asked_for` — the exact question that produced it — so
+			  staleness is a comparison, not new plumbing. Typing over the box used to leave the old
+			  answer standing under a sentence promising it was "exactly what it would have been given
+			  FOR THIS QUESTION", which made the one screen whose whole purpose is not misdescribing
+			  the agent's view say the single false thing it must never say.
+
+			  The error path already reasoned this way — it clears the answer rather than let old
+			  memories stand under a new question. This applies the same rule to the keystroke path.
+			  The answer is DIMMED rather than cleared: it was true of a real question and a reader may
+			  still want it, so it stays readable and stops asserting.
+			*/}
+			<Card tone={stale ? 'default' : 'accent'} className="banner-row">
 				<Icon.Info size={15} className="icon banner-icon" />
 				<p className="banner-copy">
-					This is the same door your agent reads through, so what you see below is{' '}
-					<strong>exactly what it would have been given</strong> for this question. Asking is
-					recorded in the vault, the way your agent's own reads are — the words you type are not.
+					{stale ? (
+						<>
+							This answer is for <strong>“{answer?.asked_for}”</strong>, which is no longer the
+							question in the box. Press Ask to run the one you have typed.
+						</>
+					) : (
+						<>
+							This is the same door your agent reads through, so what you see below is{' '}
+							<strong>exactly what it would have been given</strong> for this question. Asking is
+							recorded in the vault, the way your agent's own reads are — the words you type are
+							not.
+						</>
+					)}
 				</p>
 			</Card>
 
 			<AskLayout
+				stale={stale}
 				rail={
 					<>
 						<Card title="How much it got">

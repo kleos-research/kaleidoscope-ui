@@ -14,9 +14,22 @@ import { RankBadge } from './badge.jsx';
  * `rail` is a prop rather than a child for the same reason it is there: nothing can put the results
  * in the rail or the rail above the results.
  */
-export function AskLayout({ rail = null, children }) {
+/*
+  THE RAIL STICKS, AND A STALE PANEL SAYS SO.
+
+  Measured on the built screen at 1440x900: the column ran to y=1819 while the rail stopped at
+  y=751, so a third of the page was an empty 326px gutter, and scrolling to the last result took
+  the budget reading — the thing that explains the list — off the screen entirely. Sticking the
+  rail keeps the reading beside the results it describes for the whole scroll, and costs nothing:
+  it is already the shorter of the two.
+
+  `stale` dims the whole panel when the question in the box is no longer the question that produced
+  it. Dimmed rather than hidden: the answer was true of a real question, so it stays readable and
+  stops presenting itself as current.
+*/
+export function AskLayout({ rail = null, stale = false, children }) {
 	return (
-		<div className="ask-split">
+		<div className={stale ? 'ask-split is-stale' : 'ask-split'} aria-stale={stale || undefined}>
 			<div className="ask-column">{children}</div>
 			{rail ? <aside className="ask-rail">{rail}</aside> : null}
 		</div>

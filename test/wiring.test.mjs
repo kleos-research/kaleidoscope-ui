@@ -171,3 +171,93 @@ test('the one door to an API path carries the token, and it is the only one', ()
 		assert.doesNotMatch(source, /\bfetch\s*\(/, `${file} calls fetch directly instead of api.mjs`);
 	}
 });
+
+test('every word in the top bar names a route the router mints, at the hash it links to', () => {
+	// THE ROW THAT COULD NEVER LIGHT UP. `Nav` decides `aria-current` by comparing each entry's
+	// `route` with the name `routeFromHash` gave the open screen, and that name is minted in one
+	// place. The curation queue is `#/decide` on the URL and `backlog` in the router; the table used
+	// to say `decide`, so three words lit and the fourth never did — a screen a reader could be on
+	// while the bar said they were nowhere. Not an error, not a crash, and nothing red said so.
+	//
+	// Read from both files rather than transcribed here, so a renamed route or a moved hash fails
+	// this test instead of quietly parting the word from its screen again.
+	const shell = readFileSync(join(APP, 'ui', 'shell.jsx'), 'utf8');
+	const destinations = [
+		...shell.matchAll(/\{ href: '([^']+)', route: '(\w+)', label: '([^']+)', key: '(\d)' \}/g),
+	].map(([, href, route, label, key]) => ({ href, route, label, key }));
+	assert.equal(destinations.length, 4, 'the bar carries four words; a fifth needs a drawing first');
+	assert.deepEqual(
+		destinations.map((entry) => entry.key),
+		['1', '2', '3', '4'],
+		'1–4 go where the four words go, in the order the words are read',
+	);
+
+	const app = sources.get('App.jsx');
+	const router = app.slice(app.indexOf('function routeFromHash'), app.indexOf('export function App'));
+	assert.ok(router.length > 0, 'routeFromHash is where every route name is minted');
+	// Code only: a comment that mentions a hash reads nothing and mints nothing.
+	const code = router.split('\n').filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line));
+	// The bare list is the router's fallthrough — the `: { name: … }` after the last ternary — rather
+	// than a line that tests for `'#/'`, so it is read from that shape.
+	const fallthrough = router.match(/\? \{ name: '\w+'[^\n]*: \{ name: '(\w+)' \};/);
+	assert.ok(fallthrough, 'the router ends in a fallthrough that names the bare list');
+
+	for (const { href, route, label } of destinations) {
+		const escaped = href.replace(/\//g, '\\/');
+		const at = code.findIndex((candidate) => candidate.includes(`'${href}'`) || candidate.includes(escaped));
+		assert.ok(href === '#/' || at !== -1, `"${label}" links to ${href}, and no line of routeFromHash reads that hash`);
+		// The name is minted on the line that reads the hash, or on the one right after it when the
+		// read is a match held in a variable first — which is how the search hash is read.
+		const line = href === '#/' ? fallthrough[0] : code.slice(at, at + 2).find((candidate) => candidate.includes('name:'));
+		assert.ok(line, `"${label}" links to ${href}, and the line that reads it mints no route name`);
+		assert.ok(
+			line.includes(`name: '${route}'`),
+			`"${label}" lights only when the router names ${href} '${route}', and the line that reads it says:\n  ${line.trim()}`,
+		);
+	}
+});
+
+test('the receipt’s way into “What removal cannot do” lets go of the receipt', () => {
+	// A receipt's own link routed to #/limits and the route effect keeps `report` on that route on
+	// purpose — so the same receipt re-rendered, minus the link, and the press did nothing visible.
+	// `showLimits` is the one door to that route from a report, and it has to clear the report.
+	const app = sources.get('App.jsx');
+	const at = app.indexOf('const showLimits = useCallback(');
+	assert.ok(at !== -1, 'showLimits is the callback that opens the escalation route');
+	const body = app.slice(at, app.indexOf('}, []);', at));
+	assert.ok(body.includes('setReport(null)'), 'showLimits clears the report before changing the route');
+	assert.ok(body.includes("'#/limits'"), 'showLimits routes to the escalation screen');
+});
+
+test('the escalation screen is handed the memories the app resolved, under the name it reads', () => {
+	// `App` passed `memories={…}` and the screen read `memory` — so the Remove it exists to offer,
+	// with the no-copy note beside it, never rendered on the installed engine, for one memory or for
+	// a bulk selection. Every test of the copy passed, because the copy was right.
+	const app = sources.get('App.jsx');
+	const limits = sources.get('RemovalLimits.jsx');
+	const mount = app.slice(app.indexOf('<RemovalLimits'), app.indexOf('/>', app.indexOf('<RemovalLimits')));
+	assert.match(mount, /memories=\{limitsMemories\}/, 'App hands the screen `memories`');
+	assert.match(limits, /export function RemovalLimits\(\{[^}]*\bmemories\b/, 'the screen reads `memories`');
+	assert.doesNotMatch(limits, /export function RemovalLimits\(\{[^}]*\bmemory\b[^}]*\}/, 'and not a singular `memory`');
+	assert.ok(limits.includes('onRemove(listed)'), 'the Remove on it hands the whole selection back');
+});
+
+test('a hover on the overview repaints; only the frame and the layout refit the view', () => {
+	// SIX WHEEL TICKS IN, CROSS ONE DOT, LEAVE IT: the canvas hashed identical to the opening fit.
+	// `paint` is rebuilt on every hover and selection, `schedule` was rebuilt from it, and the fit
+	// effect listed `schedule` — so a hover re-ran the fit and threw the reader's zoom and pan away.
+	// The draw now lives in a ref the scheduler reads through, and the fit depends on the frame and
+	// the layout only. Read from the source, because the property is in the dependency lists.
+	const canvas = readFileSync(join(APP, 'ui', 'vault-canvas.jsx'), 'utf8');
+	const scheduler = canvas.match(/const schedule = useCallback\(\(\) => \{([\s\S]*?)\}, \[([^\]]*)\]\);/);
+	assert.ok(scheduler, 'the scheduler is a useCallback');
+	assert.equal(scheduler[2].trim(), '', 'the scheduler depends on nothing, so it is never rebuilt');
+	assert.match(scheduler[1], /paintRef\.current\(\)/, 'and it draws through the ref');
+	const fit = canvas.match(/view\.current = \{\s*fit,[\s\S]*?\}, \[([^\]]*)\]\);/);
+	assert.ok(fit, 'the fit effect sets view.current');
+	const deps = fit[1].split(',').map((entry) => entry.trim()).filter(Boolean);
+	assert.deepEqual(deps, ['size', 'layout', 'schedule'], 'the fit refits on the frame and the layout only');
+	for (const forbidden of ['paint', 'hovered', 'selected', 'focus']) {
+		assert.ok(!deps.includes(forbidden), `a change of ${forbidden} must not refit the view`);
+	}
+});

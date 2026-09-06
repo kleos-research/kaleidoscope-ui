@@ -204,15 +204,19 @@ test('exit 3: a batch applies in part, and the per-item results say which', asyn
 			},
 		});
 
-		// The second item is refused on its own terms — its body does not open with a heading —
+		// The second item is refused on its own terms — one of its facts has an empty subject —
 		// which is per-item validation. A field the schema does not name would fail deserialization
 		// instead, before any item is written, and cost the whole call rather than part of it.
+		// (It used to be a body with no heading; the 2026-09-05 build of 0.0.5 accepts that, and
+		// the empty endpoint is the per-item refusal it still makes.)
+		const refusedItem = item('A batch item that does not', '# A batch item that does not\n\nIt has a heading.');
+		refusedItem.semantic_delta.facts = [{ subject: '', predicate, object: 'the batch door' }];
 		const envelope = await writeMemory(
 			{
 				mode: 'create',
 				items: [
 					item('A batch item that lands', '# A batch item that lands\n\nIt has its heading.'),
-					item('A batch item that does not', 'this body opens with no heading at all'),
+					refusedItem,
 				],
 			},
 			where,
