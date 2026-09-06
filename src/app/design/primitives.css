@@ -5139,3 +5139,197 @@
 	font-weight: var(--weight-medium);
 	cursor: pointer;
 }
+
+/* ================================================================= first run */
+
+/*
+ * THE SCREEN THAT RUNS WHEN THE ENGINE IS NOT THERE.
+ *
+ * One centred column, one story, and everything on it above the fold at 1440×900 — it is the first
+ * thing anybody sees, and a person who has to scroll to find the command is a person who concludes
+ * the app is broken. It wears no top bar: there is no vault to browse, no project to switch and
+ * nothing to search, so a bar would be four dead controls framing the one live one.
+ */
+.firstrun {
+	min-height: 100vh;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: var(--space-22) var(--space-16);
+	background: var(--bg);
+}
+
+.firstrun-panel {
+	width: 100%;
+	max-width: 620px;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-13);
+	padding: var(--space-20);
+	background: var(--surface);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-panel);
+}
+
+.firstrun-eyebrow {
+	margin: 0;
+	font-size: var(--text-eyebrow);
+	letter-spacing: var(--tracking-eyebrow);
+	text-transform: uppercase;
+	font-weight: var(--weight-medium);
+	color: var(--faint);
+}
+
+.firstrun-title {
+	margin: 0;
+	font-family: var(--font-prose);
+	font-variation-settings: 'opsz' var(--optical-display);
+	font-size: var(--display-md);
+	line-height: var(--leading-display);
+	font-weight: var(--weight-normal);
+	color: var(--text);
+}
+
+.firstrun-lede {
+	margin: 0;
+	font-size: var(--text-body);
+	line-height: var(--leading-body);
+	color: var(--muted);
+}
+
+/*
+ * The engine client's own words, whole and unwrapped. `pre` because those messages are written as
+ * lines and the line breaks carry the shape of them; re-flowing the text would be this screen
+ * rewriting copy it deliberately does not own.
+ */
+.firstrun-verbatim {
+	margin: 0;
+	padding: var(--space-12) var(--space-13);
+	background: var(--warn-soft);
+	border: var(--border) solid var(--warn-line);
+	border-radius: var(--radius-card);
+	font-family: var(--font-ui);
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+	color: var(--warn);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.firstrun-step {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.firstrun-step-title {
+	margin: 0;
+	font-size: var(--text-ui-lg);
+	font-weight: var(--weight-semibold);
+	color: var(--text);
+}
+
+.firstrun-command {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	padding: var(--space-8) var(--space-9);
+	background: var(--raised);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+}
+
+.firstrun-command-text {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--text-ui);
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+/* The one filled control on this screen, with room around it. */
+.firstrun-do {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.firstrun-still {
+	font-size: var(--text-small);
+	color: var(--muted);
+}
+
+.firstrun-path {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.firstrun-input {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-ui);
+}
+
+.firstrun-note {
+	margin: 0;
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--muted);
+}
+
+.firstrun-trail {
+	margin-top: var(--space-1);
+}
+
+.firstrun-places {
+	margin: 0;
+	padding: var(--space-6) 0 var(--space-8);
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.firstrun-place {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-8);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+}
+
+.firstrun-place .identifier {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/*
+ * The reason holds its line. Left to wrap it breaks "no such file" over three lines against a long
+ * path, and a trail whose right-hand column is unreadable is a trail nobody reads — which is the
+ * whole failure this section exists to prevent.
+ */
+.firstrun-reason {
+	flex: 0 0 auto;
+	white-space: nowrap;
+	color: var(--faint);
+}
+
+.firstrun-failure {
+	margin: 0;
+	font-size: var(--text-ui-lg);
+	line-height: var(--leading-ui);
+	color: var(--warn);
+}
+
+.firstrun-quiet {
+	margin: 0;
+	padding-top: var(--space-4);
+	border-top: var(--border) solid var(--line);
+	font-size: var(--text-small);
+	line-height: var(--leading-ui);
+	color: var(--faint);
+}

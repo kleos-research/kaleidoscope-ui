@@ -21,14 +21,24 @@ import { cx } from './cx.mjs';
  * behind it takes no filter and no page — so saying so turns a wait into an explanation, and it is
  * also the sentence that tells the reader why nothing after this point ever waits again.
  */
-export function LoadingState({ what = 'Reading your memories' }) {
+export function LoadingState({ what = 'Reading your memories', children = null }) {
 	return (
 		<section className="state state-loading" aria-busy="true" aria-live="polite">
 			<h2 className="state-title">{what}</h2>
+			{/*
+			  The default sentence is about the one wait this app has, and a caller REPLACES it rather
+			  than adding to it. There is a second wait now — opening a different vault, which stops
+			  and restarts the local server — and it is a different explanation, not an extra one. Two
+			  paragraphs would leave the reader deciding which of them they are in.
+			*/}
 			<p className="state-body">
-				This is one read of the whole vault. The door behind it takes no filter and no page, so
-				everything after it — filtering, sorting, opening a memory — happens in this window and
-				waits for nothing.
+				{children ?? (
+					<>
+						This is one read of the whole vault. The door behind it takes no filter and no page,
+						so everything after it — filtering, sorting, opening a memory — happens in this
+						window and waits for nothing.
+					</>
+				)}
 			</p>
 		</section>
 	);

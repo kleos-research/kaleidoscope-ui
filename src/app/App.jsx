@@ -7,8 +7,10 @@ import {
 	fetchSession,
 	removeMemories,
 	resolvePendingMerge,
+	switchVault,
 } from './api.mjs';
 import { BacklogView } from './BacklogView.jsx';
+import { FirstRun } from './FirstRun.jsx';
 /*
   THE BROWSE SCREEN IS ONE COMPONENT, and that is the point of it.
 
@@ -27,6 +29,7 @@ import { NamesView } from './NamesView.jsx';
 import { MemoryDetail } from './MemoryDetail.jsx';
 import { MemoryEditor } from './MemoryEditor.jsx';
 import { FocusActionsContext } from './focus-actions.mjs';
+import { UnsavedContext } from './unsaved.mjs';
 import { EMPTY_FILTERS } from './browse-model.mjs';
 import {
 	HalfFinishedMerge,
@@ -62,6 +65,11 @@ import {
 	ToastProvider,
 	TooltipProvider,
 	AboutVault,
+	VaultSwitcher,
+	Dialog,
+	Prompt,
+	PromptNote,
+	PromptSentence,
 	Icon,
 	IconButton,
 } from './ui/index.mjs';
@@ -189,6 +197,16 @@ function routeFromHash() {
 export function App() {
 	const [session, setSession] = useState(null);
 	const [sessionError, setSessionError] = useState(null);
+	/*
+	  THE ENGINE IS NOT THERE, and that is a screen rather than an error.
+
+	  It is held apart from `sessionError` for the same reason a refused listing is held apart from
+	  a failed one: they need opposite things from the reader. A failed reading is a machine to
+	  investigate; an absent engine is a program to install, and the app is running perfectly. The
+	  sidecar answers every engine-backed route with 503 and `error.engine` carrying everywhere it
+	  looked, which is what lands here.
+	*/
+	const [engineAbsent, setEngineAbsent] = useState(null);
 
 	const [payload, setPayload] = useState(null);
 	const [payloadError, setPayloadError] = useState(null);
@@ -219,6 +237,42 @@ export function App() {
 	  the person following it happens to be in.
 	*/
 	const [project, setProject] = useState(readProject);
+
+	/*
+	  WHICH VAULT, AND WHAT IS HAPPENING TO IT.
+
+	  `null` is the ordinary state. Anything else is a switch part-way through, and it carries the
+	  offer it is about plus the phase, because the three phases are three different questions:
+
+	    'busy'     a call is in flight and this cannot happen yet — wait, do not discard
+	    'confirm'  there are unsaved words on the screen — ask, they are the user's to abandon
+	    'opening'  the server is being relaunched against the other vault — this is a whole screen
+
+	  It is NOT in the URL. A vault is not where you are, it is which memories exist at all, and a
+	  link that carried one would open somebody's other vault when they followed it.
+	*/
+	const [switching, setSwitching] = useState(null);
+	/** A switch that was asked for and did not happen, carrying the ENGINE's own refusal. */
+	const [switchFailure, setSwitchFailure] = useState(null);
+
+	/*
+	  What the screens below say a reload would cost. See `unsaved.mjs`: a ref rather than state
+	  because nothing renders differently for it — it is read once, at the moment somebody asks to
+	  throw the page away, and re-rendering the whole app on every keystroke in the editor to keep a
+	  boolean current would be a cost paid on every screen for one press on one of them.
+	*/
+	const unsavedWork = useRef({ unsaved: false, busy: false });
+	const declareUnsaved = useCallback((state) => {
+		unsavedWork.current = state;
+	}, []);
+
+	/*
+	  Bumped on every switch, and read by every asynchronous read that stores what it fetched. See
+	  the note in `load`: without it, a listing begun against the old vault lands on the new vault's
+	  screen, and every row of it is a real memory from somewhere else.
+	*/
+	const vaultGeneration = useRef(0);
+
 	const [pending, setPending] = useState(null);
 	/** The engine's last health reading, whole. Read by the graph's fidelity strip. */
 	const [health, setHealth] = useState(null);
@@ -279,8 +333,22 @@ export function App() {
 	const load = useCallback(async ({ refresh = false } = {}) => {
 		setLoading(true);
 		setPayloadError(null);
+		/*
+		  WHICH VAULT THIS READ IS ABOUT.
+
+		  A whole-vault listing takes seconds, and a vault switch replaces the server underneath it.
+		  Without this, a read begun against the old vault can land after the new one is open and put
+		  the previous vault's memories on the new vault's screen — every row a real record, the
+		  header naming a different store, and no error anywhere. So the counter is read here and
+		  checked before anything is stored: a read from a vault nobody is looking at any more is
+		  ABANDONED, which is a different thing from being cancelled and is the honest one — the
+		  server already did the work, and this is the app declining to believe it.
+		*/
+		const generation = vaultGeneration.current;
+		const stale = () => vaultGeneration.current !== generation;
 		try {
 			const body = await fetchMemories({ refresh });
+			if (stale()) return null;
 
 			// CHECKED BEFORE THE PAYLOAD IS BELIEVED. A refused listing carries no `memories` key,
 			// so a caller that stores it and reads `body.memories ?? []` renders zero rows and the
@@ -312,41 +380,63 @@ export function App() {
 			// a loop that has to yield to React between two writes is a loop with a race in it.
 			return body.memories ?? [];
 		} catch (error) {
+			// A failure that belongs to a vault nobody is reading any more is not this vault's news.
+			if (stale()) return null;
 			setPayloadError(error);
 			return null;
 		} finally {
-			setLoading(false);
+			if (!stale()) setLoading(false);
 		}
 	}, []);
 
 	// Launch: the readings first, because they carry the vocabulary every control is built from and
 	// the count that decides whether the whole-vault load is attempted at all.
+	//
+	// A CALLBACK RATHER THAN AN EFFECT BODY, because it runs twice on exactly one path: a session
+	// that opened on the setup screen and then found an engine walks back in here. The same
+	// function both times, so the app the second reader gets is assembled the way the first one's
+	// would have been.
+	const start = useCallback(async () => {
+		let readings = null;
+		try {
+			readings = await fetchSession();
+			setSession(readings);
+			setEngineAbsent(null);
+		} catch (error) {
+			// The one failure that is not a failure. See `engineAbsent` above.
+			const engine = error?.payload?.error?.engine ?? null;
+			if (engine && engine.present === false) {
+				setEngineAbsent(engine);
+				// Nothing is asked for behind a door that is not there. A listing attempt would
+				// answer 503 too and put a second, worse sentence on a screen that already has the
+				// right one.
+				setLoading(false);
+				return;
+			}
+			setSessionError(error);
+		}
+
+		// The listing is asked for unconditionally, and the size decision is NOT taken here.
+		//
+		// R24 requires the count to come from a cheap reading rather than from the export a
+		// refusal would decline to perform, so that an oversized vault yields a sentence rather
+		// than a timeout. That is satisfied — by the sidecar, which reads the count from the
+		// health door before it spawns an export and answers `refused` without attempting one.
+		// Repeating the test here on fields the sidecar does not publish satisfied nothing.
+		await load();
+	}, [load]);
+
 	useEffect(() => {
 		let cancelled = false;
 		(async () => {
-			let readings = null;
-			try {
-				readings = await fetchSession();
-				if (cancelled) return;
-				setSession(readings);
-			} catch (error) {
-				if (cancelled) return;
-				setSessionError(error);
-			}
-
-			// The listing is asked for unconditionally, and the size decision is NOT taken here.
-			//
-			// R24 requires the count to come from a cheap reading rather than from the export a
-			// refusal would decline to perform, so that an oversized vault yields a sentence rather
-			// than a timeout. That is satisfied — by the sidecar, which reads the count from the
-			// health door before it spawns an export and answers `refused` without attempting one.
-			// Repeating the test here on fields the sidecar does not publish satisfied nothing.
-			if (!cancelled) load();
+			await start();
+			if (cancelled) return;
 		})();
 		return () => {
 			cancelled = true;
 		};
-	}, [load]);
+	}, [start]);
+
 
 	/**
 	 * Detect in the background; fetch on the user's word.
@@ -449,6 +539,149 @@ export function App() {
 		setProject(next);
 		writeProject(next);
 	}, []);
+
+	/* -------------------------------------------------------------------- opening another vault */
+
+	/**
+	 * WAIT FOR THE OTHER VAULT TO ANSWER, ON THE SAME ADDRESS.
+	 *
+	 * A switch is a relaunch: the server this page is talking to closes, and a new one reading the
+	 * chosen vault binds the same port with the same token. There is nothing to listen to in between,
+	 * so this asks — and a failure to connect is the EXPECTED middle of the operation rather than an
+	 * error, which is why nothing here treats one as the answer.
+	 *
+	 * A refusal is only believed AFTER the old server has gone. Without that, the very first poll can
+	 * be answered by the outgoing process still carrying the previous attempt's failure, and a second
+	 * try at the same vault would report the first try's refusal as its own.
+	 */
+	const waitForVault = useCallback(async (key, { timeoutMs = 90_000 } = {}) => {
+		const deadline = Date.now() + timeoutMs;
+		let sawTheGap = false;
+
+		while (Date.now() < deadline) {
+			await new Promise((settle) => setTimeout(settle, 400));
+			let readings;
+			try {
+				readings = await fetchSession();
+			} catch {
+				sawTheGap = true;
+				continue;
+			}
+
+			const failure = readings?.vaults?.switch_failure ?? null;
+			if (sawTheGap && failure && failure.key === key) return { ok: false, failure };
+
+			const offer = (readings?.vaults?.offers ?? []).find((entry) => entry.key === key);
+			if (offer?.current) return { ok: true, readings };
+			// Answered, and still the vault we came from: the old server has not finished going.
+		}
+
+		return {
+			ok: false,
+			failure: {
+				message:
+					`The app asked to open that vault and the local server has not answered for ` +
+					`${Math.round(timeoutMs / 1000)} seconds. Nothing was written. Look at the terminal ` +
+					`this app was started from — it prints what happened to the switch.`,
+			},
+		};
+	}, []);
+
+	/**
+	 * OPEN IT.
+	 *
+	 * Everything the previous vault put on this page is dropped BEFORE the request rather than after
+	 * it: the counter is bumped first, so a listing already in flight is abandoned instead of landing
+	 * on the new vault's screen with the old vault's rows in it.
+	 *
+	 * The POST failing at the network level is not a failure of the switch. The server answers and
+	 * then closes every connection, so the reply and the teardown race — and the honest response to
+	 * "I could not tell" is to go and look, which is what the poll does. Only a refusal the server
+	 * actually spelled out (a status code) is taken as one.
+	 */
+	const beginSwitch = useCallback(
+		async (offer) => {
+			setSwitchFailure(null);
+			setSwitching({ offer, phase: 'opening' });
+			vaultGeneration.current += 1;
+
+			try {
+				const answer = await switchVault(offer.key);
+				if (answer?.switched === false) {
+					setSwitching(null);
+					setSwitchFailure({ name: offer.name, message: answer.message ?? null, reason: answer.reason });
+					return;
+				}
+			} catch (error) {
+				if (Number.isInteger(error?.status)) {
+					setSwitching(null);
+					setSwitchFailure({
+						name: offer.name,
+						// The sidecar's own sentence. It names what it offers and says nothing was read,
+						// written or changed, which is the whole of what a reader needs here.
+						message: error?.payload?.error?.message ?? error.message,
+					});
+					return;
+				}
+			}
+
+			const settled = await waitForVault(offer.key);
+			if (!settled.ok) {
+				setSwitching(null);
+				setSwitchFailure({ name: offer.name, root: offer.root, message: settled.failure.message });
+				// The old vault is still the one open. Re-reading it is what puts the app back where it
+				// was, rather than leaving a screen built from a payload this switch already discarded.
+				await start();
+				return;
+			}
+
+			/*
+			  A DIFFERENT VAULT IS A DIFFERENT SET OF EVERYTHING, so what was chosen about the last one
+			  is dropped rather than carried. The project in particular: a project name is a scope value
+			  that exists in the vault that has memories in it, and keeping it would filter the new
+			  vault down to nothing while the chip still named something the reader recognised.
+			*/
+			chooseProject(null);
+			setFilters(EMPTY_FILTERS);
+			setSort(DEFAULT_SORT);
+			setSelection(new Map());
+			setConfirm(null);
+			setReport(null);
+			setRemovalError(null);
+			setPayload(null);
+			setRefusal(null);
+			setPayloadError(null);
+			setHealth(null);
+			setPending(null);
+			setLastLooked(null);
+			setHalfFinished(null);
+			window.location.hash = '#/';
+
+			setSwitching(null);
+			await start();
+			await readPending();
+		},
+		[chooseProject, readPending, start, waitForVault],
+	);
+
+	/**
+	 * SOMEBODY PICKED A VAULT. Three answers, and only one of them opens anything.
+	 *
+	 * The order is the argument. A call in flight is checked first because it is the only one of the
+	 * three that is not the user's to decide: the vault is mid-change, and closing the server under a
+	 * write would leave a state nothing can report on. Unsaved words come second, and those ARE
+	 * theirs — so they are asked about rather than protected from.
+	 */
+	const chooseVault = useCallback(
+		(offer) => {
+			if (!offer || offer.current || !offer.usable) return;
+			const held = unsavedWork.current;
+			if (held.busy || removing || resolving) return setSwitching({ offer, phase: 'busy' });
+			if (held.unsaved) return setSwitching({ offer, phase: 'confirm' });
+			return beginSwitch(offer);
+		},
+		[beginSwitch, removing, resolving],
+	);
 
 	const openMemory = useCallback((memoryId) => {
 		savedScroll.current = listScroll.current?.scrollTop ?? 0;
@@ -581,6 +814,69 @@ export function App() {
 		}
 	}, [route]);
 
+	/*
+	  THE SETUP SCREEN, AND IT IS THE WHOLE SCREEN.
+
+	  Returned before the shell rather than inside it: with no engine there is no vault to browse,
+	  no project to switch and nothing to search, so the bar would be four dead controls framing the
+	  one live one. `onReady` re-runs the launch in place — the tab keeps the token it read from the
+	  fragment at startup, which a reload would have thrown away.
+	*/
+	if (engineAbsent) {
+		return (
+			<TooltipProvider>
+				<FirstRun status={engineAbsent} onReady={start} />
+			</TooltipProvider>
+		);
+	}
+
+	/*
+	  OPENING ANOTHER VAULT, AND IT IS THE WHOLE SCREEN.
+
+	  Returned before the shell for the same reason the setup screen is: for these few seconds there
+	  is no vault behind the bar. The project chip would name a project of the vault being left, the
+	  four destinations would lead to screens built from a payload already discarded, and Refresh
+	  would re-read a server that is not listening. One story per screen, and this screen's story is
+	  that the app is moving.
+	*/
+	if (switching?.phase === 'opening') {
+		return (
+			<TooltipProvider>
+				<LoadingState what={`Opening ${switching.offer.name}`}>
+					<>
+						The local server is stopping and starting again against{' '}
+						<span className="identifier">{switching.offer.root}</span>. Nothing is being written
+						to either vault, and the one you were reading is exactly as you left it.
+					</>
+				</LoadingState>
+			</TooltipProvider>
+		);
+	}
+
+	/*
+	  IT DID NOT OPEN, AND THE ENGINE'S OWN SENTENCE SAYS WHY.
+
+	  The engine refuses a root that is not a vault, and its refusal names the path, where the path
+	  came from, and what to do about it. It is printed as it arrived. A summary here would be this
+	  app paraphrasing the one sentence that fixes the machine — and the app is still reading the
+	  vault it was reading before, which is the other half of what the reader needs to know.
+	*/
+	if (switchFailure) {
+		return (
+			<TooltipProvider>
+				<ErrorState
+					heading={`${switchFailure.name} did not open`}
+					error={{ message: switchFailure.message }}
+					action={
+						<Button tone="primary" onClick={() => setSwitchFailure(null)}>
+							Back to {shortVaultName(session?.vault?.root) ?? 'your memories'}
+						</Button>
+					}
+				/>
+			</TooltipProvider>
+		);
+	}
+
 	return (
 		<TooltipProvider>
 			<ToastProvider>
@@ -593,12 +889,22 @@ export function App() {
 				  `useFocusActions` and takes them back when it unmounts, so a Save button cannot
 				  outlive the screen that knew what it would write.
 				*/}
+				{/*
+				  AND THE OTHER DIRECTION: what the screen below says a reload would COST.
+
+				  The bar carries the one control that throws this whole page away, and it cannot see a
+				  paragraph that exists only in the editor's buffer. So a screen declares two words
+				  upwards — unsaved, and busy — and the switch reads them at the moment somebody asks.
+				  See `unsaved.mjs`.
+				*/}
+				<UnsavedContext.Provider value={declareUnsaved}>
 				<FocusActionsContext.Provider value={setFocusActions}>
 				<AppShell
 					bar={
 						<AppBar
 							route={route}
 							session={session}
+							onVault={chooseVault}
 							filters={filters}
 							setFilters={setFilters}
 							moved={Boolean(pending)}
@@ -1117,7 +1423,64 @@ export function App() {
 					</>
 				)}
 				</AppShell>
+
+				{/*
+				  THE TWO QUESTIONS A SWITCH HAS TO ASK, AND THEY ARE DIALOGS.
+
+				  This app does not cover what a person is reading with an overlay — a removal
+				  confirmation is inline, ON the page, because the reader is authorising the rows they
+				  can see. These two are the other shape: the reader is not authorising anything on this
+				  page, they have asked to leave it, and the answer decides whether the page survives.
+				  "A popover holds something the reader can ignore; a dialog holds something they must
+				  answer" — and neither of these can be ignored without deciding it.
+				*/}
+				<Dialog
+					open={switching?.phase === 'busy'}
+					onOpenChange={(open) => (open ? null : setSwitching(null))}
+					title="Something is still being written"
+					description="Opening another vault would stop the local server part-way through a call it has already made."
+				>
+					<Prompt title={`Not yet — ${switching?.offer?.name ?? 'that vault'} can wait`}>
+						<PromptSentence>
+							A call is in flight against the vault you are reading now, and this app cannot say
+							what the engine has already done with it.
+						</PromptSentence>
+						<PromptNote>
+							Nothing was changed by asking. Let it finish and pick the vault again — it takes a
+							moment, and it is the difference between a run with a report and a run nobody can
+							account for.
+						</PromptNote>
+					</Prompt>
+				</Dialog>
+
+				<Dialog
+					open={switching?.phase === 'confirm'}
+					onOpenChange={(open) => (open ? null : setSwitching(null))}
+					title="There are words here that are not saved"
+					description="Opening another vault closes this screen, and what has been typed on it exists nowhere else."
+					footer={
+						<>
+							<Button onClick={() => setSwitching(null)}>Stay and keep typing</Button>
+							<Button tone="primary" onClick={() => beginSwitch(switching.offer)}>
+								Discard and open {switching?.offer?.name}
+							</Button>
+						</>
+					}
+				>
+					<Prompt title="This cannot be undone" tone="warn">
+						<PromptSentence>
+							What you have typed has not been written to the vault, and this app keeps no copy
+							of it — the copies it keeps are of what a memory was BEFORE a save, and there has
+							not been one.
+						</PromptSentence>
+						<PromptNote>
+							Save it first if you want to keep it. Opening{' '}
+							{switching?.offer?.name ?? 'another vault'} will still be there afterwards.
+						</PromptNote>
+					</Prompt>
+				</Dialog>
 				</FocusActionsContext.Provider>
+				</UnsavedContext.Provider>
 			</ToastProvider>
 		</TooltipProvider>
 	);
@@ -1190,6 +1553,7 @@ function AppBar({
 	shown,
 	total,
 	onProject,
+	onVault,
 	filters,
 	setFilters,
 	focusActions = null,
@@ -1217,17 +1581,41 @@ function AppBar({
 
 	const vaultRoot = session?.vault?.root ?? null;
 	/*
-	  "ABOUT THIS VAULT" IS IN THE MENU, NOT IN THE BAR. The bar used to carry a vault-name chip between
-	  the wordmark and the project chip — no approved mockup draws one, and on the owner's own install
-	  the vault is called `kaleidoscope`, so the bar opened "Kaleidoscope  kaleidoscope": the wordmark
-	  repeated in lower case, a label he would ask about. The readings it held are unchanged and one
-	  press further away, as the last item of the "…" menu.
+	  "ABOUT THIS VAULT" IS STILL IN THE MENU, AND THE VAULT IS NOW IN THE BAR — two different things.
+
+	  What used to sit between the wordmark and the project chip was a vault LABEL, and it read
+	  "Kaleidoscope  kaleidoscope" on the owner's own install: the wordmark again, in lower case,
+	  saying nothing and doing nothing. What sits there now is the picker — it answers "which memories
+	  am I looking at" and it is the way to go and look at others, which is a question no screen in
+	  this product could previously answer.
+
+	  The READINGS stay where they were put. Which engine answered, which contract it prints, whether
+	  the model is in it, where the copies go: none of that is part of choosing a vault, and putting
+	  it back in the bar with the picker would rebuild the block that was rejected.
 	*/
 	const [about, setAbout] = useState(false);
 
 	return (
 		<>
 		<RootBar
+			/*
+			  WHICH MEMORIES, then WHICH OF THEM. A vault is the store; a project is a slice of one. The
+			  two sit together because they are one question asked at two levels, and in that order.
+			*/
+			vault={
+				<VaultSwitcher
+					offers={session?.vaults?.offers ?? []}
+					refusals={session?.vaults?.refusals ?? []}
+					switchable={session?.vaults?.switchable !== false}
+					/*
+					  A vault opened by a route the engine no longer lists is still open and still
+					  readable, and the chip has to name it. The readings always know what is open even
+					  when the offer list does not contain it.
+					*/
+					fallbackName={shortVaultName(vaultRoot)}
+					onChoose={onVault}
+				/>
+			}
 			project={<ProjectSwitcher projects={projects} value={project} onChange={onProject} everywhereCount={everywhereCount} />}
 			nav={<Nav current={route.name} />}
 			/*

@@ -1192,6 +1192,27 @@ test('a ranked search happens only on an explicit press, and only at one door', 
 		// paste all do — cannot perform the search. Only a POST can, and a POST needs a matching
 		// Origin, a JSON content type and a body. The third movement below presses it properly.
 		['GET', '/api/ask'],
+		// THE VAULT PICKER'S ONE ROUTE, walked with GET so it answers 405 rather than relaunching
+		// this server out from under the sweep.
+		//
+		// It belongs on this list for the usual reason and for a sharper one. A menu naming several
+		// vaults is the most tempting place in the product to add "and here is what is in each of
+		// them" — a ranked query per vault, per open of a dropdown, into vaults the user has not even
+		// chosen to look at. What the route DOES is not measured here: this test's fingerprint
+		// assertion is about the vault this sidecar has open, and a switch would leave it reading a
+		// different one.
+		['GET', '/api/vault'],
+		// THE TWO SETUP ROUTES, which answer whether or not this machine has an engine.
+		//
+		// They are on this list for the reason every other entry is: each is a place a ranked call
+		// could be added without anybody noticing. And for a second reason that is particular to
+		// them — they are the routes that run when the product is at its least equipped, so a
+		// "let me show you what is already in your vault" flourish on the setup screen would write
+		// exposure rows into a vault on a launch that has not even found the engine yet. The POST
+		// collapses onto the recheck path and is counted as swept; what it DOES is measured in
+		// `test/first-run.test.mjs`, which drives it from both states.
+		['GET', '/api/engine'],
+		['GET', '/api/engine/recheck'],
 		// The routes a user reaches by mistake, which is where an ad-hoc "let me just look it up"
 		// fallback would live.
 		['GET', `/api/memories/${absentIdLike(id, listed)}`],

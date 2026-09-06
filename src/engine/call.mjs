@@ -35,7 +35,7 @@ const LICENCE_TRAILER = /^[a-z-]*entitlement-refusal:\s*(\S+)\s*$/im;
  *
  * @returns {Promise<{exitCode: number|null, signal: string|null, stdout: string, stdoutBytes: Buffer, stderr: string, durationMs: number, timedOut: boolean}>}
  */
-function spawnEngine(enginePath, args, { root, stdin, timeoutMs }) {
+function spawnEngine(enginePath, args, { root, cwd, stdin, timeoutMs }) {
 	if (typeof enginePath !== 'string' || enginePath.length === 0) {
 		throw new TypeError('enginePath is required: locate the engine before calling it.');
 	}
@@ -49,6 +49,12 @@ function spawnEngine(enginePath, args, { root, stdin, timeoutMs }) {
 
 		const child = spawn(enginePath, args, {
 			env,
+			// WHERE the engine is standing, which for one reading is the whole question. `kscope
+			// where` resolves the vault from the directory it runs in, so the only way to ask "and
+			// which vault would you open outside this project?" is to ask it from another directory.
+			// It is never derived from user text: the two values ever passed are this process's own
+			// working directory and the OS's home directory.
+			cwd: cwd ?? undefined,
 			shell: false, // no user-controlled text ever reaches a shell
 			windowsHide: true,
 			stdio: ['pipe', 'pipe', 'pipe'],
@@ -251,12 +257,13 @@ export async function call(operation, request, { enginePath, root, timeoutMs, ke
  * @param {object} [options]
  * @param {string} options.enginePath
  * @param {string} [options.root]
+ * @param {string} [options.cwd]   the directory to run in; only the vault-address readings use it
  * @param {number} [options.timeoutMs]
  * @returns {Promise<{exitCode: number, stdout: string, stdoutBytes: Buffer, stderr: string, durationMs: number}>}
  */
-export async function run(args, { enginePath, root, timeoutMs } = {}) {
+export async function run(args, { enginePath, root, cwd, timeoutMs } = {}) {
 	const limit = timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
-	const raw = await spawnEngine(enginePath, args, { root, timeoutMs: limit });
+	const raw = await spawnEngine(enginePath, args, { root, cwd, timeoutMs: limit });
 	const operation = args.join(' ');
 
 	if (raw.timedOut) {

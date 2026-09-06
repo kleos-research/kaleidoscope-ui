@@ -47,12 +47,32 @@ export function captureToken() {
 
 /** A failure that came from the sidecar rather than from the engine behind it. */
 export class SidecarError extends Error {
-	constructor(message, { status = null, url = null, body = null } = {}) {
+	constructor(message, { status = null, url = null, body = null, payload = null } = {}) {
 		super(message);
 		this.name = 'SidecarError';
 		this.status = status;
 		this.url = url;
 		this.body = body;
+		/**
+		 * The refusal PARSED, when it was JSON, and null when it was not.
+		 *
+		 * Beside `body` rather than instead of it, because the two have different readers. `body` is
+		 * what a person is shown — the bytes that came back, printed as they arrived — and `payload`
+		 * is what a screen branches on. Folding them into one field is how a caller that wanted to
+		 * read `error.body.error.kind` came to be reading a character of a string instead: it is
+		 * `undefined`, so the branch simply never fires and the app renders the generic failure it
+		 * had a specific screen for. That happened here, and the setup screen was the casualty.
+		 */
+		this.payload = payload;
+	}
+}
+
+/** A refusal body, parsed when it is JSON. Never throws: a refusal that is not JSON is ordinary. */
+function parsed(text) {
+	try {
+		return text.length > 0 ? JSON.parse(text) : null;
+	} catch {
+		return null;
 	}
 }
 
@@ -86,6 +106,7 @@ async function get(path, { signal } = {}) {
 			status: response.status,
 			url: path,
 			body,
+			payload: parsed(body),
 		});
 	}
 
@@ -121,6 +142,12 @@ function sidecarMessageFor(status, path) {
 		);
 	}
 	if (status === 404) return `This build of the app asked for ${path}, which its server does not serve.`;
+	if (status === 503) {
+		// Not "the server is down": the server answered. What it does not have is the engine, and
+		// the caller reads `body.error.engine` for everywhere it looked. This sentence is the
+		// fallback for a caller that does not.
+		return 'The local server is running and has not found the Kaleidoscope engine.';
+	}
 	if (status === 413) return 'The server declined to load this vault because of its size.';
 	if (status === 504) return 'The engine took longer to answer than the server was willing to wait.';
 	return `The local server answered ${status} for ${path}.`;
@@ -164,20 +191,17 @@ async function post(path, payload, { signal } = {}) {
 	}
 
 	const text = await response.text();
-	let body = null;
-	try {
-		body = text.length > 0 ? JSON.parse(text) : null;
-	} catch {
-		body = null;
-	}
+	const body = parsed(text);
 
 	if (!response.ok) {
 		// The sidecar's own refusals carry a structured error; the engine's arrive with HTTP 200 and
 		// are the caller's to branch on. Both are handed back rather than flattened into a string.
-		throw new SidecarError(
-			body?.error?.message ?? sidecarMessageFor(response.status, path),
-			{ status: response.status, url: path, body },
-		);
+		throw new SidecarError(body?.error?.message ?? sidecarMessageFor(response.status, path), {
+			status: response.status,
+			url: path,
+			body,
+			payload: body,
+		});
 	}
 	if (body === null) {
 		throw new SidecarError(`${path} answered with something that is not JSON.`, {
@@ -226,6 +250,37 @@ export function createMemory({ content_md, semantic_delta }, options) {
 }
 
 /**
+ * IS THE ENGINE THERE, and if not, everywhere this launch looked for it.
+ *
+ * The one call in this file that answers on a machine with no engine on it, which is why it is
+ * separate from the readings rather than a field on them: `/api/preflight` is built out of eight
+ * things the engine printed, and there is nothing to print.
+ *
+ * It spawns nothing. On a launch that already has an engine it is a field read.
+ */
+export function fetchEngine(options) {
+	return get('/api/engine', options);
+}
+
+/**
+ * RUN THE SEARCH AGAIN, IN THE SERVER THAT IS ALREADY RUNNING.
+ *
+ * The whole reason the setup screen is a screen. Somebody who has just installed the engine in
+ * another terminal should not have to go back to this one and start the app again — and a terminal
+ * could not have offered them the button in the first place.
+ *
+ * `engine_path`, when given, is what `--kscope` is: a named path, authoritative and terminal. It is
+ * accepted only while there is no engine; once this launch has one it is fixed for the session.
+ *
+ * A failed re-check is NOT an exception. It comes back with HTTP 200 and `present: false` carrying
+ * a newer reason, because it is the same state the screen was already in — the rule that a status
+ * code describes the sidecar and never the machine it is reporting on.
+ */
+export function recheckEngine({ engine_path = '' } = {}, options) {
+	return post('/api/engine/recheck', { engine_path }, options);
+}
+
+/**
  * The readings: which engine, which vault, whether the gate is open, whether the model is bundled,
  * and the vocabulary parsed out of the engine's own printed contract a moment ago.
  *
@@ -244,6 +299,23 @@ export async function fetchSession(options) {
 		if (error instanceof SidecarError && error.status === 404) return get('/api/session', options);
 		throw error;
 	}
+}
+
+/**
+ * OPEN A DIFFERENT VAULT — BY KEY, AND A KEY IS THE ONLY THING THIS APP MAY SAY ABOUT ONE.
+ *
+ * The key is one of the ones `fetchSession` returned. This module cannot name a root, a profile or a
+ * directory, and not because it is careful: every endpoint refuses `root`, `vault`, `path`,
+ * `profile`, `dir`, `cwd` and `workspace` outright, which is what keeps a memory browser from being
+ * an arbitrary local-file reader. What a key means is decided by the process that read the engine.
+ *
+ * The server answers BEFORE it acts, because acting closes this connection: it relaunches itself
+ * against the chosen vault, on the same port, and the page waits for that origin to answer again by
+ * polling `fetchSession`. A caller that treated this reply as "done" would be reading the old
+ * server's last words.
+ */
+export function switchVault(key, options) {
+	return post('/api/vault', { key }, options);
 }
 
 /**

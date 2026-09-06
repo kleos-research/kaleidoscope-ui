@@ -23,9 +23,26 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BOUNDARY_DOC = 'docs/BOUNDARY.md';
 
-// Sibling public repositories in the same namespace. Everything else under it is a private crate
-// until someone publishes it, so this list is deny-by-default and short on purpose.
-const PUBLIC_SIBLINGS = ['sdk', 'docs', 'benchmarks'];
+// Names under the project namespace that the public can already read. Everything else under it is
+// a private crate until someone publishes it, so this list is deny-by-default and short on purpose.
+//
+// The first three are sibling public repositories. The rest are the engine's PUBLISHED per-platform
+// packages: the engine ships as an optional dependency of this package, so npm writes one entry per
+// platform into `package-lock.json` — a committed file — and every one of them is a name anyone can
+// already fetch from the public registry. The test for membership here is exactly that, and it is
+// the same test the three repositories pass: not "we decided it is fine", but "it is already
+// published, and a reader who types the name gets it".
+//
+// A stale entry cannot widen this into a blanket. Each is a whole name, not a prefix.
+const PUBLIC_SIBLINGS = [
+  'sdk',
+  'docs',
+  'benchmarks',
+  'darwin-arm64',
+  'darwin-x64',
+  'linux-arm64',
+  'linux-x64',
+];
 
 // A documentation example is not a machine trace. These stand in for a real account name.
 const PLACEHOLDER_NAMES = new Set(['you', 'your-name', 'user', 'username', 'name', 'me', 'someone', 'runner']);
@@ -109,7 +126,12 @@ function engineInternals({ name }, ns) {
     class: name,
     scope: 'content',
     re: new RegExp(ns.prefix + '[-_]([a-z][a-z0-9_-]*)', 'g'),
-    allow: (m) => allowed.has(m[1]),
+    // A registry URL repeats the package name with the version glued on —
+    // `…/kaleidoscope-darwin-arm64-0.0.5.tgz` — so the captured token is the allowed name plus a
+    // trailing version. One trailing `-<digit>…` run is stripped before the lookup, and nothing
+    // else is: the comparison is still against a WHOLE name, so no private crate becomes allowed
+    // by sharing a prefix with a published one.
+    allow: (m) => allowed.has(m[1]) || allowed.has(m[1].replace(/-\d[\w.]*$/, '')),
     note: 'a name under the project namespace that is not a public repository',
   }];
 }

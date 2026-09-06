@@ -27,6 +27,7 @@ import {
 	withValidUntil,
 } from './editor-model.mjs';
 import { useFocusActions } from './focus-actions.mjs';
+import { useUnsaved } from './unsaved.mjs';
 import { markSyntax } from './markdown-syntax.mjs';
 import { axisCopy, orderAxes } from './records.mjs';
 
@@ -754,6 +755,18 @@ export function MemoryEditor({ memoryId = null, session, rows, onSaved, onCancel
 	saveRef.current = attemptSave;
 	const cancelRef = useRef(null);
 	cancelRef.current = () => (dirty ? setResult({ kind: 'confirm_cancel' }) : onCancel());
+
+	/*
+	  AND THE SAME TWO FACTS, DECLARED TO THE SHELL.
+
+	  Cancel above asks because it is a control on this screen and this screen knows what is in the
+	  buffer. A vault switch is the other way round: it is a control in the BAR, it discards the whole
+	  page, and it has no way to see a paragraph that exists only here. So the two states go up —
+	  `unsaved` is the user's to abandon and earns a question, `busy` is a call already in flight and
+	  earns a wait — and the guard is cleared on unmount, so it can never speak for a screen that has
+	  gone. See `unsaved.mjs`.
+	*/
+	useUnsaved({ unsaved: dirty, busy: saving });
 
 	useFocusActions(
 		() => (

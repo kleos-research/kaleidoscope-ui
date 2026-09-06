@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 
 import { IconButton } from './button.jsx';
 import { cx } from './cx.mjs';
-import { ChevronDown, ChevronLeft, More, Refresh, Search } from './icons.jsx';
+import { ChevronDown, ChevronLeft, More, Refresh, Search, Vault } from './icons.jsx';
 import { Dialog, DropdownMenu, MenuItem, MenuLabel, MenuSeparator, Tooltip } from './overlays.jsx';
 
 /**
@@ -38,12 +38,19 @@ export function AppShell({ bar, notices = null, children }) {
  * about the session, the routes or the payload — six screens compose it and none of them should
  * have to agree with this file about where the data comes from.
  *
- * It is wordmark · divider · project · the four words, exactly as BrowseB draws it. There is no
- * vault chip and no "of 396 in this vault" beside the project: the first was a label the owner
- * would ask about (on his own install it read "Kaleidoscope  kaleidoscope"), and the second is
- * the same number the filter rail's foot already carries.
+ * It is wordmark · divider · vault · project · the four words. BrowseB draws the project chip and
+ * this adds one thing to the left of it: which vault is being read. There is no "of 396 in this
+ * vault" beside either — that is the same number the filter rail's foot already carries.
+ *
+ * THE VAULT IS NOT A SECOND CHIP, and the difference is deliberate. The bar once carried a vault
+ * LABEL between the wordmark and the project, which on the owner's own install read
+ * "Kaleidoscope  kaleidoscope" — the wordmark again, in lower case, saying nothing and doing
+ * nothing. What is here now is a control: it answers "which memories am I looking at" and it is how
+ * you go and look at others. It is drawn quiet — no box, muted, a mark and a chevron — so that the
+ * bar still holds ONE boxed control, which is the project. Two bordered chips side by side is the
+ * row of controls the owner rejected, wearing different words.
  */
-export function RootBar({ project, nav, find, onRefresh, refreshing = false, moved = false, menu = null }) {
+export function RootBar({ vault = null, project, nav, find, onRefresh, refreshing = false, moved = false, menu = null }) {
 	return (
 		<header className="topbar">
 			<div className="topbar-group">
@@ -51,6 +58,7 @@ export function RootBar({ project, nav, find, onRefresh, refreshing = false, mov
 					Kaleidoscope
 				</a>
 				<span className="topbar-divider" aria-hidden="true" />
+				{vault}
 				{project}
 				{nav}
 			</div>
@@ -232,6 +240,130 @@ export function AboutVault({ open, onOpenChange, name, readings = [] }) {
 			</dl>
 		</Dialog>
 	);
+}
+
+/**
+ * THE VAULT PICKER — which memories am I looking at, and how do I go and look at others.
+ *
+ * A project is a slice of one vault. A VAULT is the store the memories are in, so it sits one level
+ * above the project and directly beside it: the two together are the answer to "whose memories, and
+ * which of them", and neither is a filter.
+ *
+ * WHAT IT OFFERS IS WHAT THE ENGINE REPORTED. Not a directory picker, not a recent list, not a path
+ * this app remembered. The engine decides which vault it opens — `KSCOPE_ROOT`, then the
+ * repository's default, then a project marker, then the working directory — and it refuses a
+ * resolved root that is not a vault instead of creating one. A picker that offered a path of its own
+ * would be a second resolver, and the user would meet the disagreement as a vault full of memories
+ * they do not recognise. So every row here came out of `kscope where` or `kscope profile list`, in
+ * that order, and the row says which.
+ *
+ * THE CHIP IS A NAME AND THE MENU IS THE PATH. "I don't know why we need to enter the entire folder
+ * path. It's too long." A root is 60 characters of which four matter, and a bar carrying one is a
+ * bar nobody reads; a name is what a person calls the place their work lives. Nothing is hidden by
+ * that — the full path is on the row, in the mono face, one press away — and where two vaults share
+ * a name the row and the chip both carry enough of the directory to tell them apart, because they
+ * ARE different directories and a chip that showed the same word for both would be a lie.
+ *
+ * @param offers      [{ key, name, root, kind, source, profile, aliases, usable, current }] from the
+ *                    server, which built them from the engine's own output. Never composed here.
+ * @param switchable  whether picking one can actually do anything. A server with no launcher behind
+ *                    it can only read the vault it opened, and the menu says so rather than offering
+ *                    a control that quietly does nothing.
+ * @param busy        a switch is under way. The menu closes; the chip says what is happening.
+ */
+export function VaultSwitcher({
+	offers = [],
+	fallbackName = null,
+	switchable = true,
+	busy = false,
+	refusals = [],
+	onChoose,
+}) {
+	const current = offers.find((offer) => offer.current) ?? null;
+	// A vault opened by a route the engine no longer lists is still open and still readable. The
+	// honest chip names it from the readings rather than wearing the first row's label.
+	const name = busy ? 'Opening…' : (current?.name ?? fallbackName ?? 'this vault');
+
+	const trigger = (
+		<button type="button" className="vault-switcher" disabled={busy}>
+			<Vault size={13} />
+			<span className="vault-switcher-name">{name}</span>
+			<ChevronDown size={12} />
+		</button>
+	);
+
+	// Nothing to choose between and nothing to say: one vault, no other, no refusal to report. The
+	// full path still has to be reachable, so it stays a menu rather than becoming a label — but it
+	// is the same menu, not a second shape.
+	return (
+		<DropdownMenu align="start" className="vault-menu" trigger={trigger}>
+			<MenuLabel>Reading</MenuLabel>
+			{offers.map((offer) => (
+				<MenuItem
+					key={offer.key}
+					disabled={offer.current || !offer.usable || !switchable}
+					hint={offer.current ? 'open now' : null}
+					onSelect={() => onChoose?.(offer)}
+				>
+					<span className="vault-row">
+						<span className="vault-row-name">{offer.name}</span>
+						<span className="vault-row-origin">{originOf(offer)}</span>
+						{/*
+						  THE PATH, IN FULL, IN THE MONO FACE. This is the thing the chip cannot say and
+						  the one thing that settles which vault a row means — two rows can share a
+						  name, and no two share a directory.
+						*/}
+						<span className="vault-row-path identifier">{offer.root}</span>
+						{offer.unusable_because ? (
+							<span className="vault-row-note">{offer.unusable_because}</span>
+						) : null}
+					</span>
+				</MenuItem>
+			))}
+
+			{/*
+			  THE ENGINE'S OWN WORDS, VERBATIM, and this is the one place in the menu that is not a
+			  row. A directory that is not a vault and a profile store one stale entry has wedged are
+			  both refusals the engine already writes well: each names the path, where the path came
+			  from, and what to do about it. A sentence written here in its place would be this app
+			  guessing at a machine it did not read.
+			*/}
+			{refusals.map((refusal) => (
+				<Fragment key={refusal.of}>
+					<MenuSeparator />
+					<p className="vault-menu-refusal">{refusal.message}</p>
+				</Fragment>
+			))}
+
+			{switchable ? null : (
+				<>
+					<MenuSeparator />
+					<p className="vault-menu-note">
+						This app can read only the vault it opened. Start it from the directory that vault
+						belongs to, or with <span className="identifier">KSCOPE_ROOT</span> naming it.
+					</p>
+				</>
+			)}
+		</DropdownMenu>
+	);
+}
+
+/**
+ * Where a vault came from, as the row's second line.
+ *
+ * The engine's own word for the started vault's provenance, spaced out and otherwise untouched: it
+ * prints the same word on stderr beside every call, and a picker that renamed it would make the app
+ * and the terminal disagree about one fact.
+ */
+function originOf(offer) {
+	const also =
+		offer.aliases?.length > 0
+			? ` · also the profile ${offer.aliases.map((alias) => `“${alias}”`).join(', ')}`
+			: '';
+	if (offer.kind === 'profile') return `profile “${offer.profile}”${also}`;
+	if (offer.kind === 'global') return `outside any project${also}`;
+	const source = offer.source ? offer.source.replace(/_/g, ' ') : 'the engine';
+	return `where this app was started · ${source}${also}`;
 }
 
 /**

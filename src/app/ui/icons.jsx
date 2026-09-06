@@ -156,6 +156,23 @@ export function Filter(props) {
 	);
 }
 
+/**
+ * An archive box, for the one control that names WHERE the memories are.
+ *
+ * A box rather than a folder or a disc: a folder is what every file picker on the machine already
+ * means by "a directory you are browsing", and this is not a directory the user is browsing — it is
+ * the store their memories live in, which they open one of and read through.
+ */
+export function Vault(props) {
+	return (
+		<Glyph {...props}>
+			<rect x="3" y="4" width="18" height="4.5" rx="1" />
+			<path d="M5 8.5v10.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5" />
+			<line x1="10" y1="13" x2="14" y2="13" />
+		</Glyph>
+	);
+}
+
 /** A drawing pin, for the control that keeps a name on the canvas while another is opened. */
 export function Pin(props) {
 	return (

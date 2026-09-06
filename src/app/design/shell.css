@@ -70,9 +70,12 @@
 }
 
 /*
- * ABOUT THIS VAULT — the readings, in a dialog behind the "…" menu. The vault chip that used to sit
- * between the wordmark and the project is gone: no approved mockup draws one, and on the owner's
- * own install it repeated the wordmark in lower case.
+ * ABOUT THIS VAULT — the readings, in a dialog behind the "…" menu.
+ *
+ * What sits in the bar now is the PICKER below, which is a different object from the label this
+ * replaced: that one repeated the wordmark in lower case and did nothing. These readings — which
+ * engine answered, which contract it prints, where the copies go — are not part of choosing a
+ * vault, so they stay one press away in the menu rather than moving back into the bar with it.
  */
 .vault-sheet {
 	display: flex;
@@ -98,6 +101,110 @@
 	font-size: var(--text-small);
 	color: var(--text);
 	overflow-wrap: anywhere;
+}
+
+/*
+ * THE VAULT PICKER — one level above the project, and drawn one level quieter.
+ *
+ * The bar holds ONE boxed control and it is the project chip. This sits immediately to its left with
+ * no border and no fill: a mark, a name and a chevron. The reason is the rejection that removed the
+ * old vault label — two bordered chips side by side is the row of equal controls the owner could see
+ * without being able to name, and a bar he could not read is a bar he does not use.
+ *
+ * The name is capped and clipped rather than allowed to grow. A qualified name ("archive/lantern")
+ * is two segments at most by construction, and a root that fell back to a whole path belongs in the
+ * menu, where it has a line to itself.
+ */
+.vault-switcher {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-5);
+	height: 28px;
+	padding: 0 var(--space-5);
+	border: var(--border) solid transparent;
+	border-radius: var(--radius-control);
+	background: none;
+	color: var(--muted);
+	font-size: var(--text-ui-lg);
+	font-weight: var(--weight-normal);
+	cursor: pointer;
+	max-width: 220px;
+	white-space: nowrap;
+}
+
+.vault-switcher:hover:not(:disabled) {
+	background: var(--bg);
+	color: var(--text);
+}
+
+.vault-switcher:disabled {
+	cursor: default;
+	color: var(--faint);
+}
+
+.vault-switcher-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/*
+ * The menu is wider than the others because a row carries a path, and a clipped path is worse than
+ * no path: the end of a root is where two vaults differ.
+ */
+.vault-menu {
+	min-width: 340px;
+	max-width: 460px;
+}
+
+.vault-row {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.vault-row-name {
+	font-size: var(--text-ui);
+	color: inherit;
+}
+
+.vault-row-origin {
+	font-size: var(--text-eyebrow);
+	color: var(--faint);
+}
+
+.vault-row-path {
+	font-size: var(--text-eyebrow);
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
+.vault-row-note {
+	font-size: var(--text-eyebrow);
+	color: var(--warn);
+}
+
+/*
+ * THE ENGINE'S OWN REFUSAL, SET AS IT ARRIVED. Pre-wrapped, because the engine writes it as lines —
+ * the path, where the path came from, and what to do — and reflowing it into a paragraph loses the
+ * shape that makes it readable.
+ */
+.vault-menu-refusal {
+	margin: 0;
+	padding: var(--space-4) var(--space-8) var(--space-6);
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--muted);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.vault-menu-note {
+	margin: 0;
+	padding: var(--space-4) var(--space-8) var(--space-6);
+	font-size: var(--text-eyebrow);
+	line-height: var(--leading-snug);
+	color: var(--muted);
 }
 
 /*

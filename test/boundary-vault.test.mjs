@@ -101,6 +101,16 @@ const ALLOWED = [
 	// 0001, and the word every screen that reads uses to say that reading is recorded. It reached the
 	// vault the way `selected_hits` did: agents building the engine wrote memories about it.
 	['exposure row', "this product's own name for the record a search leaves behind, in every PRD since M1"],
+	// The two readings the vault picker is built on, and they are published commands: `kscope --help`
+	// prints both under OPERATOR. `docs/BOUNDARY.md` permits this repository to describe the engine's
+	// published surface, and the picker's whole contract is that it offers what the engine reported —
+	// a comment that could not name the command it read would be describing a mechanism the reader
+	// cannot check. They are in the vault because agents wrote memories about building the engine.
+	['kscope profile list', 'a published command name, and the door the vault picker reads profiles from'],
+	// The engine's own word for where it resolves a project's vault, printed in its `--help` and in
+	// the refusal it prints when that root is not a vault. The picker's doc comment has to say which
+	// directory the default came from, and this is the engine's name for it.
+	['main checkout', "the engine's published term for the repository a vault resolves against"],
 ];
 
 /**

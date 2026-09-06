@@ -129,4 +129,5 @@ export {
 	ProjectSwitcher,
 	RootBar,
 	AboutVault,
+	VaultSwitcher,
 } from './shell.jsx';

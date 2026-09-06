@@ -33,8 +33,11 @@ class EngineError extends Error {
  * Renders one entry of the search trail. The trail is the substance of the not-found message: a user
  * told only "not found" cannot tell a search that skipped PATH from one that read it and came back
  * empty, and those two have opposite remedies.
+ *
+ * Exported because the first-run screen shows the same trail in a browser. One renderer, so the
+ * terminal and the screen cannot come to describe one search two ways.
  */
-function describePlace(place) {
+export function describePlace(place) {
 	switch (place.kind) {
 		case 'explicit':
 			return `${place.path} (named with --${PROGRAM})`;
