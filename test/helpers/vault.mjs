@@ -142,7 +142,13 @@ export function cloneVault({ source, label = 'kaleidoscope-ui' }) {
     root,
     remove() {
       // Only ever the directory this function created.
-      rmSync(holder, { recursive: true, force: true });
+      // Retried, because teardown can race a kscope call the test's own server is still finishing:
+      // the child writes its journal into the clone while this deletes it, the recursive remove sees
+      // the directory refill, and it throws ENOTEMPTY. Measured: a call that has RETURNED writes
+      // nothing afterwards (1,672 files before, after and 3s later), so this is a child still in
+      // flight, never an engine that keeps writing. It surfaced only once calls slowed under a loaded,
+      // parallel run; the assertions had already passed and the failure was the cleanup.
+      rmSync(holder, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
     },
   };
 }

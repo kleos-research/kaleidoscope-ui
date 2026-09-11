@@ -66,6 +66,7 @@ import test from 'node:test';
 import { locateEngine } from '../src/engine/locate.mjs';
 import { preflight } from '../src/engine/preflight.mjs';
 import { countExposureRecords } from './helpers/vault.mjs';
+import { callArgv } from '../scripts/engine-argv.mjs';
 
 /** Invented surfaces, prefixed so nothing here could collide with a real name. */
 const MARK = 'ui-restore-probe';
@@ -104,7 +105,7 @@ function kscope(args, { root, stdin = '' } = {}) {
 
 /** A call that must succeed. Returns the parsed response and the engine's own bytes beside it. */
 function ok(root, operation, requestText, where) {
-	const result = kscope(['call', operation], { root, stdin: requestText });
+	const result = kscope(callArgv(ENGINE, operation), { root, stdin: requestText });
 	assert.equal(
 		result.code,
 		0,
@@ -121,7 +122,7 @@ function ok(root, operation, requestText, where) {
  * detect, and the message says what to do about it rather than treating it as breakage.
  */
 function refused(root, operation, requestText, where) {
-	const result = kscope(['call', operation], { root, stdin: requestText });
+	const result = kscope(callArgv(ENGINE, operation), { root, stdin: requestText });
 	if (result.code === 0) {
 		assert.fail(
 			`${where} was expected to be REFUSED and it applied.\n\n` +
@@ -626,7 +627,7 @@ test('a snapshot cannot return a removed memory to service, and every door says 
 		// passes hardest when it is broken, so the census is shown to be capable of moving — on a
 		// vault this file created for the purpose and deletes on the way out.
 		const before = countExposureRecords(occupied.root);
-		const query = kscope(['call', 'search'], {
+		const query = kscope(callArgv(ENGINE, 'search'), {
 			root: occupied.root,
 			stdin: JSON.stringify({ query: `${MARK} does the census move` }),
 		});

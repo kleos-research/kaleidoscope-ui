@@ -146,12 +146,56 @@ function parseOrCrash(raw, { operation, kind = 'unparseable' }) {
  * @throws {EngineUnlicensedError} exit 4
  * @throws {EngineCrashedError}    any other exit code, a timeout, or a spawn failure
  */
+/**
+ * WHETHER THIS ENGINE MUST BE ASKED FOR JSON — decided once per engine, and never by guessing.
+ *
+ * Newer engines changed what `call search` and `call remember` print on success: a short text
+ * receipt ("Created | mem_…") by default, and the full response object only when `--json` is on
+ * the line. Every write and every ranked search in this app parses that object, so on a newer
+ * engine without the flag each one fails — and it fails as a successful call with an unparsable
+ * body, not as a refusal, which is why nothing in the compatibility tiers caught it: Tier B
+ * promises "the engine refuses what it cannot accept", and a changed success shape is not a
+ * refusal.
+ *
+ * The flag cannot simply always be sent. An older engine reads `--json` as the call's optional
+ * DURABILITY argument and exits 2 with "durability must be process-local or durable-local", so
+ * sending it unconditionally would break everyone still on the older build.
+ *
+ * So the engine is asked what it supports, through its own documentation: an engine that takes
+ * the flag documents it in `--help`, and one that does not never mentions it — measured on both
+ * builds, 1 match against 0. The answer is cached per engine path, because the app talks to one
+ * engine for its whole run and the probe costs a process.
+ */
+const jsonFlagSupport = new Map();
+
+function engineTakesJsonFlag(enginePath) {
+	if (!jsonFlagSupport.has(enginePath)) {
+		jsonFlagSupport.set(
+			enginePath,
+			spawnEngine(enginePath, ['--help'], { timeoutMs: DEFAULT_CALL_TIMEOUT_MS })
+				.then((raw) => raw.exitCode === 0 && `${raw.stdout}\n${raw.stderr}`.includes('--json'))
+				// A help probe that fails says nothing about the flag. Treat it as the older, flagless
+				// contract: the call that follows then succeeds on an old engine and reports its own
+				// parse failure on a new one, rather than failing here for a reason nobody can see.
+				.catch(() => false),
+		);
+	}
+	return jsonFlagSupport.get(enginePath);
+}
+
+/** The two verbs whose default output became a receipt. Every other operation still prints JSON. */
+const RECEIPT_VERBS = new Set(['search', 'remember']);
+
 export async function call(operation, request, { enginePath, root, timeoutMs, keepStdout } = {}) {
 	if (typeof operation !== 'string' || operation.length === 0) {
 		throw new TypeError('call() needs a named operation.');
 	}
 
-	const raw = await spawnEngine(enginePath, ['call', operation], {
+	// `--json` goes BEFORE the verb. After it, an older engine takes it for the durability argument.
+	const asksForJson = RECEIPT_VERBS.has(operation) && (await engineTakesJsonFlag(enginePath));
+	const argv = asksForJson ? ['call', '--json', operation] : ['call', operation];
+
+	const raw = await spawnEngine(enginePath, argv, {
 		root,
 		stdin: JSON.stringify(request ?? {}),
 		timeoutMs: timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,

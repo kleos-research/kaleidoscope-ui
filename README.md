@@ -21,7 +21,7 @@ npx @kleos-research/kaleidoscope-ui
 
 It prints a link. Open the link.
 
-That's the whole thing — nothing to configure, no account, no server to set up.
+That's the whole thing for this app — no server to set up. The engine it talks to needs a licence key once; see below.
 
 ---
 
@@ -51,6 +51,12 @@ This app is a window onto your memories. The program that actually stores and re
 
 ```
 npm install -g @kleos-research/kaleidoscope
+```
+
+Then activate it with the licence key you were given — once per machine:
+
+```
+kscope activate <your-key>
 ```
 
 Check it worked:
@@ -93,7 +99,9 @@ copy of a memory before changing it.
 **Can I undo a deletion?** No — and the app says so before you delete. Removing hides a memory from
 your agent for good.
 
-**Is it safe to try?** Yes. Reading changes nothing.
+**Is it safe to try?** Yes. Browsing and reading change nothing. **Ask** is the one exception: it
+uses the same door your agent does, so each question you ask is recorded in the vault — including
+the words you typed.
 
 ---
 

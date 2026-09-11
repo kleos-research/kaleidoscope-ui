@@ -24,6 +24,7 @@
 // directory must not already be one.
 
 import { spawnSync } from 'node:child_process';
+import { callArgv } from './engine-argv.mjs';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -292,14 +293,14 @@ export async function createSyntheticVault({ directory, enginePath, memories = D
 	const written = [];
 	for (let index = 0; index < Math.min(memories, SUBJECTS.length); index += 1) {
 		const payload = composeMemory(parsed, declarable[index % declarable.length], SUBJECTS[index], index);
-		const reading = run(engine.path, ['call', 'remember'], { root, input: JSON.stringify(payload) });
+		const reading = run(engine.path, callArgv(engine.path, 'remember'), { root, input: JSON.stringify(payload) });
 		if (reading.code !== 0) refuse(`The engine refused synthetic memory ${index + 1}.`, reading);
 		written.push(JSON.parse(reading.stdout).memory_id);
 	}
 
 	for (let batch = 0; hub && batch < HUB_MEMORIES; batch += 1) {
 		const payload = composeHubMemory(parsed, declarable[batch % declarable.length], batch);
-		const reading = run(engine.path, ['call', 'remember'], { root, input: JSON.stringify(payload) });
+		const reading = run(engine.path, callArgv(engine.path, 'remember'), { root, input: JSON.stringify(payload) });
 		if (reading.code !== 0) refuse(`The engine refused hub memory ${batch + 1}.`, reading);
 		written.push(JSON.parse(reading.stdout).memory_id);
 	}

@@ -326,8 +326,8 @@ function Answer({ busy, error, result, answer, stale, rows, relations, project, 
 						<>
 							This is the same door your agent reads through, so what you see below is{' '}
 							<strong>exactly what it would have been given</strong> for this question. Asking is
-							recorded in the vault, the way your agent's own reads are — the words you type are
-							not.
+							recorded in the vault the way your agent's own reads are, and that record includes the
+							question you typed — it stays in the vault.
 						</>
 					)}
 				</p>
