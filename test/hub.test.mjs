@@ -526,7 +526,7 @@ test('the whole hub path runs on the 100,000-edge fixture inside its stated budg
 	// 300 ms. The bound here is eight seconds, which is more than ten times that: it is a bound on
 	// USABILITY, not a benchmark, and its job is to fail when something turns linear work quadratic
 	// rather than to police a hundred milliseconds on a slower machine. The measured figures are in
-	// docs/M7-HUB-STATUS.md, where a regression can be read against them.
+	// stated here rather than elsewhere, so a regression can be read against them where it fires.
 	const BUDGET_MS = 8_000;
 	const INTERACTIVE_BUDGET_MS = 2_000;
 

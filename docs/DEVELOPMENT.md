@@ -24,7 +24,7 @@ npm run boundary    # the boundary gate — must be clean before any push
 ```
 
 **This repository is public and the engine it drives is not.** The gate derives every pattern from
-the tables in [`docs/BOUNDARY.md`](docs/BOUNDARY.md) at run time, so the document and the check
+the tables in [`docs/BOUNDARY.md`](BOUNDARY.md) at run time, so the document and the check
 cannot drift apart. It runs on every push and every pull request, because a public git history
 cannot be un-pushed. A clean gate is not a clean review.
 
@@ -38,15 +38,24 @@ stops rather than falling back. There is no default vault and no built-in path.
 
 ```
 npm run build
-KALEIDOSCOPE_TEST_VAULT=<path-to-a-vault> node --test \
-  test/round-trip.test.mjs test/call-contract.test.mjs test/server.test.mjs \
-  test/editor.test.mjs test/editor-model.test.mjs test/graph-model.test.mjs \
-  test/snapshots.test.mjs test/removal.test.mjs test/backlog.test.mjs \
-  test/merge.test.mjs test/restore.test.mjs test/wiring.test.mjs \
-  test/compatibility.test.mjs test/packaging.test.mjs test/release.test.mjs
+KALEIDOSCOPE_TEST_VAULT=<path-to-a-vault> node --test test/*.test.mjs
 ```
 
-Name the files explicitly — `node --test test/` does not work on current Node.
+Name the files explicitly — `node --test test/` does not work on current Node, so the glob above is
+the shell doing the naming. Spelled out, the suite is all twenty-seven of these, and a hand-written
+subset is how a run comes to look green while a third of it never ran:
+
+```
+test/backlog.test.mjs        test/boundary-vault.test.mjs  test/browse.test.mjs
+test/call-contract.test.mjs  test/cluster.test.mjs         test/compatibility.test.mjs
+test/editor-model.test.mjs   test/editor.test.mjs          test/ego-layout.test.mjs
+test/first-run.test.mjs      test/graph-features.test.mjs  test/graph-model.test.mjs
+test/hub.test.mjs            test/merge.test.mjs           test/names.test.mjs
+test/overview.test.mjs       test/packaging.test.mjs       test/prose-pane.test.mjs
+test/release.test.mjs        test/removal.test.mjs         test/restore.test.mjs
+test/round-trip.test.mjs     test/search.test.mjs          test/server.test.mjs
+test/snapshots.test.mjs      test/vault-picker.test.mjs    test/wiring.test.mjs
+```
 
 Three of those do not need your vault at all:
 
@@ -62,9 +71,15 @@ Three of those do not need your vault at all:
 
 `npx` re-resolves a package on a cold machine, so a runtime dependency is a download the user waits
 through on first launch, on every machine. The build inputs here run to tens of megabytes; the
-bundle they produce is a few hundred kilobytes. A tool whose pitch is *local, offline, no network
+bundle they produce is about a megabyte, a third of which is the fonts it embeds so the page
+renders without reaching a font host. A tool whose pitch is *local, offline, no network
 call* cannot contradict itself at install time. Every UI, graph and build library is a
 `devDependency`, and the release test asserts the property where it actually matters — that
 installing the published tarball adds exactly one package, with the network switched off.
 
-The plan this is built against is in [`docs/prd/README.md`](docs/prd/README.md).
+The plan this is built against is in [`docs/prd/README.md`](prd/README.md).
+
+Two documents are worth reading before you change behaviour rather than code:
+[`LIMITATIONS.md`](LIMITATIONS.md), which is what this app does not do and what it cannot
+promise, and [`DECISIONS.md`](DECISIONS.md), which is the handful of measured
+findings that explain why parts of the source take the long way round.

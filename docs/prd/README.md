@@ -355,22 +355,23 @@ and irreversible, and it has no user interface in it at all.** Everything visibl
 > passing, and every screen has since been redrawn against the approved mockups in `design/`:
 > **282 tests across 20 files** against `kscope 0.0.5` and a clone of a 363-memory vault, a clean
 > boundary check, and a browser bundle of **674 kB of JS and CSS** — down from 883 kB — plus 339 kB
-> of bundled fonts. Each milestone below carries its status and the document that reports it.
-> **A milestone marked landed is not a milestone with no gaps** — every status document ends in an
-> honest-gaps section, and the requirements those sections name as unbuilt are listed under M8 and M9
-> rather than being counted as delivered.
+> of bundled fonts. Each milestone below carries its status.
+> **A milestone marked landed is not a milestone with no gaps.** What this app does not do, cannot
+> promise, or is known to be weak at is in [`../LIMITATIONS.md`](../LIMITATIONS.md); the measured
+> findings that shaped it are in [`../DECISIONS.md`](../DECISIONS.md). Requirements named there as
+> unbuilt are not counted as delivered.
 >
-> | milestone | status | reported in |
-> | --- | --- | --- |
-> | M1 The round trip | **landed** | `docs/M1-STATUS.md` |
-> | M2 See everything | **landed** | `docs/M2-STATUS.md` |
-> | M3 Fix one memory | **landed** | `docs/M3-STATUS.md` |
-> | M4 Remove, honestly | **landed** | `docs/M4-M6-STATUS.md` |
-> | M5 The backlog | **landed** | `docs/M4-M6-STATUS.md` |
-> | M6 Curation transactions | **landed** | `docs/M4-M6-STATUS.md` |
-> | M7 The reconstructed graph | **landed**, and photographed in a browser | `docs/M7-HUB-STATUS.md`, `docs/M7-M8-STATUS.md` |
-> | M8 Ship it | **landed except four requirements**, named below | `docs/M7-M8-STATUS.md` |
-> | M9 The design rebuild | **landed**, every screen photographed | `docs/REBUILD-STATUS.md` |
+> | milestone | status |
+> | --- | --- |
+> | M1 The round trip | **landed** |
+> | M2 See everything | **landed** |
+> | M3 Fix one memory | **landed** |
+> | M4 Remove, honestly | **landed** |
+> | M5 The backlog | **landed** |
+> | M6 Curation transactions | **landed** |
+> | M7 The reconstructed graph | **landed**, and photographed in a browser |
+> | M8 Ship it | **landed except four requirements**, named below |
+> | M9 The design rebuild | **landed**, every screen photographed |
 
 ### M1 — The round trip · no browser, no framework · **landed**
 **0001** (the engine client and the call contract) · **0007** (discovery + the boundary gate only) ·
@@ -474,11 +475,11 @@ found a fifth during M9, in a code comment written that same day.
 
 ---
 
-### M9 — The design rebuild · **landed** · reported in `docs/REBUILD-STATUS.md`
+### M9 — The design rebuild · **landed**
 
 The owner walked a live instance of M1–M8 screen by screen and rejected the design — not the
 mechanisms, not the operations, not the copy honesty, all of which were explicitly agreed. The
-diagnosis is in `ui-design-harvest/OWNER-REVIEW-01.md` and its sharpest line is *"no thinking balance
+diagnosis was blunt, and its sharpest line was *"no thinking balance
 — I wanted to have these functions, so I just put everything together at one place"*. Every screen
 was an inventory of its own capabilities rather than a designed thing with a first, a second and a
 third.
@@ -486,7 +487,8 @@ third.
 Ten approved mockups in `design/` are the specification for what replaced them. The 3,487-line
 hand-written stylesheet is deleted; `src/app/styles.css` is an index over six files in
 `src/app/design/`, every value in them lifted from a mockup, and `src/app/ui` is the one door screens
-compose through. The screens are photographed in `docs/screenshots/rebuild/`.
+compose through. The screens were photographed as they landed; the photographs are taken against a
+real vault and so are not published from this repository.
 
 **One invariant deliberately changed shape, and did not get weaker.** The old rule was "the whole
 HTTP surface records no ranked search". The approved design adds the ranked door back as one explicit
@@ -501,13 +503,13 @@ by exactly one.
 **Two decisions in this milestone are worth carrying forward, because both were made on evidence and
 both look like omissions from the outside:**
 
-- **Path-finding between two names was cut, on evidence.** `ui-design-harvest/GRAPH-AT-SCALE.md` §2
+- **Path-finding between two names was cut, on evidence.** The scaling review behind this milestone
   measures that two random names in this vault share a connected component about 2% of the time, and
   that where a path exists the component is very nearly a tree — so the answer is a unique linear
   chain, which is a breadcrumb rather than a drawing. It is the one task node-link diagrams are known
   to win, and it is degenerate here. It is not scheduled.
 - **The whole-vault canvas was KEPT by owner decision**, against the same research, **as an overview
-  and a diagnostic rather than as a navigation tool.** §2 of that harvest is unambiguous that a
+  and a diagnostic rather than as a navigation tool.** §2 of that review is unambiguous that a
   node-link view fails above 100 nodes and that the entire informational payload of this one is the
   four numbers printed above it. It is drawn behind an explicit *Whole shape* control, it is never
   the default surface, and nothing in the product navigates through it.
@@ -515,7 +517,7 @@ both look like omissions from the outside:**
 *Outstanding, and not to be counted as delivered:* the top-bar navigation is this build's invention
 and appears in no mockup; the curation, merge and removal screens follow the design language and were
 never drawn or approved; the editor's left pane is a raw Markdown textarea where `EditB` draws prose.
-The full list is the "Still weak" section of `docs/REBUILD-STATUS.md`.
+The full list is in [`../LIMITATIONS.md`](../LIMITATIONS.md).
 
 ---
 

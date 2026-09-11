@@ -32,3 +32,8 @@ docs/screenshots/
 # read as a disclosure and turned the gate red over a line in .gitignore. The pattern below ignores
 # exactly the same file and names no namespace.
 design/*-memory-ui.html
+
+# Local working notes from the pre-publication review. They are not documentation, so they are
+# ignored by name and cannot be committed by accident.
+docs/PUBLIC-READINESS.md
+docs/history-audit.md

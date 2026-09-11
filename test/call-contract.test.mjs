@@ -12,7 +12,11 @@
 //   * a client that folds a partial application into "saved" tells the user their batch landed
 //     when part of it did not.
 //
-// The one case not provoked here is named in docs/M1-STATUS.md rather than quietly implied.
+// One case is deliberately absent rather than quietly implied: a SINGLE-memory write that
+// reports a partial application. `writeMemory` raises on it, on the reasoning that a one-item
+// write reporting a partial has contradicted the contract and that must be loud — and no input
+// has been found that makes the engine produce one, so that branch is unexercised. The batch
+// path around it is covered below.
 
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';

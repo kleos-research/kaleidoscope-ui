@@ -469,7 +469,7 @@ export function createRemovalHandlers({ where, cache, vocabulary, snapshots, req
 			// Never one success line and never one failure line. The rows are the report.
 			items,
 			// Said on the door as well as in the copy: no published operation returns a removed memory
-			// to service in the vault it left. See docs/RESTORE-EXPERIMENT.md.
+			// to service in the vault it left. See docs/DECISIONS.md.
 			restore_available: false,
 			cache: cache.status(),
 		});

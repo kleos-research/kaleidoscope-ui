@@ -45,7 +45,7 @@
  * changed.
  *
  * A snapshot is NOT an undo, and no route here offers to restore one — see `snapshots.mjs` and
- * `docs/RESTORE-EXPERIMENT.md`, which is the measurement that decided it.
+ * `docs/DECISIONS.md`, which carries the measurement that decided it.
  */
 
 import { projectOntoContract } from '../shared/contract.mjs';
@@ -602,7 +602,7 @@ export function createWriteHandlers({ where, cache, vocabulary, requestBytes, sn
 	//
 	// THREE READS AND NO WRITE. There is no restore route and there is no delete route: restore
 	// because no published door can return a memory to service in the vault it left (see
-	// docs/RESTORE-EXPERIMENT.md), and delete because retention is the only thing that removes a
+	// docs/DECISIONS.md), and delete because retention is the only thing that removes a
 	// snapshot — a store the user can empty by hand is a safety net with a hole in it exactly where
 	// somebody was in a hurry.
 

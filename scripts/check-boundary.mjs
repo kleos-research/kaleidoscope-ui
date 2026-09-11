@@ -243,6 +243,7 @@ for (const cls of classes) {
 const pathRules = rules.filter((r) => r.scope === 'path');
 const contentRules = rules.filter((r) => r.scope === 'content');
 const hits = [];
+const skipped = [];
 let scanned = 0;
 
 for (const file of publishableFiles()) {
@@ -261,7 +262,16 @@ for (const file of publishableFiles()) {
   }
 
   const buffer = readFileSync(join(ROOT, file));
-  if (buffer.includes(0)) continue; // not text; a text scanner has nothing to say about it
+  // A NUL byte means this is not text, and a text scanner has nothing to say about it. That is
+  // true of a font and false of anything a person wrote: a source file can carry a raw NUL in a
+  // string literal, and one that did was skipped here for its whole life while the summary line
+  // went on saying "clean". So the skip is REPORTED rather than taken silently — a control that
+  // quietly declines to read a file is indistinguishable from one that read it and found nothing.
+  // Write it as a unicode escape in source rather than as the byte, and the file is scanned.
+  if (buffer.includes(0)) {
+    skipped.push(file);
+    continue;
+  }
   scanned += 1;
 
   const lines = buffer.toString('utf8').split('\n');
@@ -293,4 +303,9 @@ if (hits.length > 0) {
 say(`boundary: clean — ${scanned} text files, ${rules.length} rules derived from ${BOUNDARY_DOC}.`);
 if (reviewOnly.length > 0) {
   say(`No mechanical rule covers: ${reviewOnly.join(', ')}. A clean check is not a clean review.`);
+}
+// Named, not counted. A file this gate could not read is the one place a leak would sit unseen,
+// and "clean" above is a statement about the files it DID read. The list is normally the fonts.
+if (skipped.length > 0) {
+  say(`Not read (not text, so no content rule ran): ${skipped.join(', ')}.`);
 }

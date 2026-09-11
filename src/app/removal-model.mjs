@@ -85,7 +85,8 @@ export const WHAT_REMOVAL_DOES_MANY =
 /**
  * What the product says about getting a memory back, and it says it because it was MEASURED.
  *
- * `docs/RESTORE-EXPERIMENT.md` tried the import door from every direction against a removed memory
+ * `docs/DECISIONS.md` records the run: the import door was tried from every direction against a
+ * removed memory
  * and found it closed four ways. `test/restore.test.mjs` asserts all four, so the day the engine
  * changes this the suite goes red — and a red test is what would authorise changing this sentence,
  * rather than the sentence being softened first and a mechanism looked for afterwards.

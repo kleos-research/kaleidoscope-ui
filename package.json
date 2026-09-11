@@ -5,6 +5,7 @@
   "private": false,
   "type": "module",
   "license": "Apache-2.0",
+  "author": "Kleos Research",
   "description": "A local, single-user browser for one Kaleidoscope memory vault. An open-source client for a separately installed engine.",
   "homepage": "https://github.com/kleos-research/kaleidoscope-ui#readme",
   "repository": {
@@ -16,7 +17,10 @@
   },
   "keywords": [
     "kaleidoscope",
+    "kscope",
     "memory",
+    "agent-memory",
+    "vault",
     "local-first",
     "cli"
   ],
@@ -29,6 +33,7 @@
     "src/engine",
     "src/server",
     "src/shared",
+    "src/app/fonts/LICENSE-OFL.txt",
     "README.md",
     "LICENSE",
     "NOTICE",

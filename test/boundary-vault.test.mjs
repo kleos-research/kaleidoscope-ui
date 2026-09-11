@@ -80,7 +80,7 @@ const ALLOWED = [
 	['kscope schema', 'a published command, quoted as the way to read the contract'],
 	['kscope schema remember', 'the same command with its argument'],
 	['kscope 0.0.5', 'the engine version these milestones were run against'],
-	['memory_import', 'a published operation name, named by the restore experiment'],
+	['memory_import', 'a published operation name, named where restore is described'],
 	['the ontology', "the engine's published operation, and the word for what it returns"],
 	['the curation backlog', "this product's own name for a screen, invented in PRD 0006"],
 	['a release build', 'ordinary English about building this package'],
@@ -92,7 +92,7 @@ const ALLOWED = [
 	// naming the field the answer arrives in. It is in the vault because agents wrote memories about
 	// building this engine, not because anything was copied out of one.
 	['selected_hits', "the field name the engine's ranked door returns its served memories in"],
-	// Flagged for human review in docs/M7-M8-STATUS.md rather than allowed silently. It names a block
+	// Flagged here for human review rather than allowed silently. It names a block
 	// in the record the export door returns, which docs/BOUNDARY.md permits a client to describe —
 	// but it sits close enough to the engine's own decisions to be a judgement rather than a rule,
 	// and a judgement is exactly what "a clean check is not a clean review" reserves for a person.

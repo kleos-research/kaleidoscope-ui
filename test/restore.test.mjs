@@ -7,8 +7,8 @@
 // regression — it is the falsification arriving, and it is what licenses the product to say there
 // is an undo. Until then the copy stands: there is no un-remove.
 //
-// The answer, so nobody has to run it to find out: NO. `docs/RESTORE-EXPERIMENT.md` has the
-// write-up; the assertions below are the mechanism.
+// The answer, so nobody has to run it to find out: NO. `docs/DECISIONS.md` has the finding and
+// the control behind it; the assertions below are the mechanism.
 //
 // -------------------------------------------------------------------------------------------
 // WHY THIS FILE CREATES VAULTS INSTEAD OF CLONING ONE
@@ -126,7 +126,8 @@ function refused(root, operation, requestText, where) {
 		assert.fail(
 			`${where} was expected to be REFUSED and it applied.\n\n` +
 				`That is the falsification PRD 0004 R9 asks for, and it is welcome — but it is a copy ` +
-				`change, not a test to relax. Re-run the experiment in docs/RESTORE-EXPERIMENT.md, ` +
+				`change, not a test to relax. Re-run every door in docs/DECISIONS.md against a ` +
+				`throwaway vault, ` +
 				`and if a removed memory really can be returned to service then the removal flow may ` +
 				`say so, this assertion becomes the assertion that it can, and src/server/snapshots.mjs ` +
 				`grows the restore route it deliberately does not have.\n\n` +

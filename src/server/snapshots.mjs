@@ -6,7 +6,7 @@
  * ---------------------------------------------------------------------------------------------
  *
  * **A snapshot is not an undo, and nothing in this module restores one.** That is a measured
- * finding, not caution: `docs/RESTORE-EXPERIMENT.md` records the run, and `test/restore.test.mjs`
+ * finding, not caution: `docs/DECISIONS.md` records the run, and `test/restore.test.mjs`
  * asserts it on every suite, so the day the engine changes it, the suite says so.
  *
  * Four doors were tried against a memory that had been removed, and all four are closed:
@@ -195,7 +195,7 @@ export function vaultKey({ root, workspace_id } = {}) {
 		);
 	}
 	return createHash('sha256')
-		.update(`${root ?? ''} ${workspace_id ?? ''}`)
+		.update(`${root ?? ''}\u0000${workspace_id ?? ''}`)
 		.digest('hex')
 		.slice(0, 16);
 }
@@ -241,7 +241,7 @@ export function applyRetention(headers, bounds = RETENTION) {
 	for (const header of newestFirst) {
 		// A create has no memory to key on. Each one is its own group, so a run of creates never
 		// evicts the other creates' records under a bound that was written about one memory.
-		const key = header.memory_id ?? ` create:${header.snapshot_id}`;
+		const key = header.memory_id ?? `\u0000create:${header.snapshot_id}`;
 		const count = (seen.get(key) ?? 0) + 1;
 		seen.set(key, count);
 		if (count > perMemory) {
@@ -469,12 +469,12 @@ export function createSnapshotStore({
 				engine_version: engineVersion,
 				vault: { workspace_id: vault?.workspace_id ?? null },
 				// Written INTO the file, so a snapshot copied out of this store still says what it
-				// is and what it is not. See docs/RESTORE-EXPERIMENT.md.
+				// is and what it is not. See docs/DECISIONS.md.
 				restorable: false,
 				note:
 					'This is a copy, not an undo. No published operation returns a removed or ' +
 					'overwritten memory to service in the vault it came from; see ' +
-					'docs/RESTORE-EXPERIMENT.md. Keep this file, read it, or hand it to a person.',
+					'docs/DECISIONS.md. Keep this file, read it, or hand it to a person.',
 			};
 
 			try {
@@ -528,7 +528,7 @@ export function createSnapshotStore({
 				restore_note:
 					'These are copies. Removal and overwriting are one-way: no published operation ' +
 					'returns a memory to service in the vault it left. A snapshot can be read and ' +
-					'saved to a file — see docs/RESTORE-EXPERIMENT.md.',
+					'saved to a file — see docs/DECISIONS.md.',
 				snapshots: selected,
 			};
 		},

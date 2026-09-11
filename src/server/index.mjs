@@ -464,7 +464,7 @@ export async function startSidecar({
 					directory: snapshots.directory,
 					vault_key: snapshots.vault_key,
 					retention: snapshots.retention,
-					// The finding, on the readings themselves. See docs/RESTORE-EXPERIMENT.md.
+					// The finding, on the readings themselves. See docs/DECISIONS.md.
 					restore_available: false,
 				},
 				app: {
@@ -893,7 +893,7 @@ export async function startSidecar({
 			// snapshot cannot be imported back into the vault it came from — the import door refuses a
 			// per-memory export outright, refuses a whole-workspace export over a vault that already
 			// holds the record, and refuses any destination holding memories the package does not
-			// carry. `docs/RESTORE-EXPERIMENT.md` has the run and the exact refusals, and
+			// carry. `docs/DECISIONS.md` has the run and its control, and
 			// `test/restore.test.mjs` asserts them, so a build that starts permitting a restore turns
 			// the suite red — which is what authorises the copy change, rather than the reverse.
 			//

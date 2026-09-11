@@ -1,6 +1,6 @@
 // The snapshot spine: a local copy of what a memory was, taken before every write.
 //
-// The experiment in `docs/RESTORE-EXPERIMENT.md` (asserted in `test/restore.test.mjs`) says a
+// The finding in `docs/DECISIONS.md` (asserted in `test/restore.test.mjs`) says a
 // snapshot cannot be put back, so this store's value is not undo — it is that the bytes exist at
 // all, somewhere a person can read them and save them, after the vault has stopped serving them.
 // That makes two properties load-bearing, and they are the two most of this file is about:

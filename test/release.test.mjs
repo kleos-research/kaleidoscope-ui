@@ -78,7 +78,16 @@ const MUST_NOT_SHIP = [
 	{ name: 'a test', hit: (path) => /(^|\/)test(s)?\//.test(path) || /\.test\.[cm]?[jt]sx?$/.test(path) },
 	{ name: 'a PRD or any other doc', hit: (path) => path.startsWith('docs/') },
 	{ name: 'a screenshot or any other image', hit: (path) => /\.(png|jpe?g|gif|webp|svg|mp4)$/i.test(path) },
-	{ name: 'browser source already compiled into dist/', hit: (path) => path.startsWith('src/app/') },
+	{
+		name: 'browser source already compiled into dist/',
+		// The exception is a licence text, and it is not a loophole. `dist/` REDISTRIBUTES five
+		// OFL-licensed font binaries, and the OFL requires its text to travel with them — so the
+		// one file under `src/app/` that must ship is the one that makes shipping the rest lawful.
+		// NOTICE names this path, and a NOTICE pointing outside the tarball is worse than none.
+		// Narrowed to a licence text so every .jsx, .mjs and .css under src/app/ still fails here.
+		hit: (path) =>
+			path.startsWith('src/app/') && !/^src\/app\/fonts\/LICENSE-[A-Z0-9-]+\.txt$/.test(path),
+	},
 	{ name: 'a build or tooling configuration', hit: (path) => /^(vite\.config|\.github|scripts|index\.html|package-lock\.json|\.gitignore)/.test(path) },
 	{ name: 'an installed dependency tree', hit: (path) => path.includes('node_modules/') },
 	{ name: 'a packed tarball', hit: (path) => path.endsWith('.tgz') },
