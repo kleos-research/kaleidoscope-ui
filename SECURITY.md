@@ -7,7 +7,8 @@ Please report privately rather than in a public issue.
 Use GitHub's private vulnerability reporting on this repository — **Security → Report a
 vulnerability** — which opens a draft advisory only the maintainers can see.
 
-Email: `<security contact to be filled in by the maintainer>`
+Email **contact@kleosresearch.xyz** with "Security" in the subject line — the same address and
+subject the published [security policy](https://memory.kleosresearch.xyz/docs/legal/security-policy/) names.
 
 Tell us what you did, what happened, and what you expected instead. A proof of concept helps and a
 patch is welcome, but neither is required. You will get an acknowledgement, and we will tell you

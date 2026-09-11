@@ -53,7 +53,7 @@ an appointed representative at an online or offline event.
 Instances of abusive, harassing, or otherwise unacceptable behaviour may be reported to the
 community leaders responsible for enforcement at:
 
-> **`<conduct contact to be filled in by the maintainer>`**
+> **contact@kleosresearch.xyz** — put "Conduct" in the subject line.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
