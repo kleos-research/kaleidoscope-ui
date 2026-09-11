@@ -65,6 +65,20 @@ export const TESTED_CONTRACTS = [
 		engine: 'kscope 0.0.5',
 		tested_on: '2026-09-05',
 	},
+	/*
+	  A third contract under the same version string, and this one changed what a successful call
+	  PRINTS, not only what it accepts: `call search` and `call remember` answer with a text receipt
+	  unless `--json` is on the line, and facts whose endpoints were never declared now commit
+	  instead of being refused one by one. Neither is visible to the tier logic — a changed success
+	  shape is not a refusal — which is why the whole suite, not the parser alone, is what was re-run
+	  against it before this line was added: 361 tests on a clone, with the two behaviours above
+	  asserted as they now are.
+	*/
+	{
+		digest: '8c5ecdbf3016aa67f2dc29cc0bb07443960a043fa9dbc137c8a6d4e899ab633d',
+		engine: 'kscope 0.0.5',
+		tested_on: '2026-09-11',
+	},
 ];
 
 /**

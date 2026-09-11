@@ -1258,52 +1258,54 @@ test('a partial success reaches the caller as a partial success', async (t) => {
 		assert.notEqual(write.version_id, loaded.version_id, 'the partial save did not move the version');
 	});
 
-	await t.test('it names the fact it refused, and the surface that caused it', () => {
+	// THE ENGINE CHANGED HERE, AND THE ASSERTIONS FOLLOW IT.
+	//
+	// Three subtests used to assert that a fact naming an undeclared thing was refused on its own
+	// while the rest of the memory committed, and that the response named it. The engine that was
+	// tested on 2026-09-11 does not do that any more: both facts commit, whole. Measured directly —
+	// `call --json remember` with one declared and one undeclared endpoint returned
+	// canonical_effect "committed" and the read-back held both statements. The vault this app was
+	// built against had undeclared endpoints on the large majority of its facts all along, so the
+	// per-fact refusal was the odd one out, not the norm.
+	//
+	// What must still hold is the part that protects the user: a write that committed is never
+	// reported as anything less, and the app never INVENTS a refusal the engine did not make.
+	await t.test('nothing is reported refused, because nothing was', () => {
 		const refused = write.refused_facts ?? [];
-		assert.ok(
-			refused.length > 0,
-			`The response named nothing it declined to store, but one of the two facts submitted ` +
-				`names something this memory does not declare. A save that reports success having ` +
-				`stored fewer facts than it was sent is the failure this assertion exists for; the ` +
-				`response said:\n${write.text.slice(0, 500)}`,
-		);
-		assert.ok(
-			write.text.includes(SURFACES.stranger),
-			`The response reports a refusal and does not name "${SURFACES.stranger}", the undeclared ` +
-				`surface that caused it. The banner has to show the user WHICH fact was dropped and ` +
-				`WHY, and it matches rows by surface string — the index a refusal carries does not ` +
-				`correspond to the position of the fact in the payload that was sent, so an editor ` +
-				`that highlights by index points confidently at an innocent row.`,
+		assert.equal(
+			refused.length,
+			0,
+			`The engine committed every fact and the response still names ${refused.length} as refused. ` +
+				`A refusal the engine did not make is the app lying in the other direction; the response said:\n` +
+				write.text.slice(0, 600),
 		);
 	});
 
-	await t.test('the good fact landed and the refused one did not', async () => {
-		const after = await loadForEdit(sidecar, fixture.memory_id);
-		const goodStatement = `${good.subject} | ${good.predicate} | ${good.object}`;
-		const doomedStatement = `${doomed.subject} | ${doomed.predicate} | ${doomed.object}`;
-		assert.ok(after.statements.has(goodStatement), `the good fact did not commit: ${goodStatement}`);
+	// Read back through the same door the editor loads through, once, and assert on what is THERE.
+	// A count taken off the response could pass by the field being absent; a count taken off the
+	// stored record cannot.
+	const after = await loadForEdit(sidecar, fixture.memory_id);
+	const statementOf = (fact) => `${fact.subject} | ${fact.predicate} | ${fact.object}`;
+
+	await t.test('both facts landed, including the one naming an undeclared thing', () => {
+		const goodStatement = statementOf(good);
+		const strangerStatement = statementOf(doomed);
+		assert.ok(after.statements.has(goodStatement), `the declared fact did not commit: ${goodStatement}`);
 		assert.ok(
-			!after.statements.has(doomedStatement),
-			`the fact naming an undeclared thing was stored after all: ${doomedStatement}`,
+			after.statements.has(strangerStatement),
+			`the fact naming an undeclared thing was dropped after all: ${strangerStatement}. If the ` +
+				`engine has gone back to refusing these per fact, this test and the two beside it are the ` +
+				`ones to change — do not weaken them to pass.`,
 		);
+	});
+
+	await t.test('no silent shortfall: every submitted fact is in the stored record', () => {
+		const missing = submitted.map(statementOf).filter((st) => !after.statements.has(st));
 		assert.deepEqual(
-			sorted(after.names),
-			sorted(loaded.names),
-			'the partial write changed which things the memory declares',
-		);
-	});
-
-	await t.test('the shortfall is detectable without reading the refusal key at all', async () => {
-		// Independent of `refused_facts`, and deliberately so: that key is omitted entirely when
-		// nothing was refused, so a guard built on it can only fire when it is present. A guard that
-		// fails open is worse than no guard, because it reports a clean result at the moment it has
-		// stopped working.
-		const after = await loadForEdit(sidecar, fixture.memory_id);
-		assert.ok(
-			after.statements.size < submitted.length,
-			`${submitted.length} facts were submitted and ${after.statements.size} are stored, so ` +
-				`this test is not looking at a partial write at all and every assertion above passed ` +
-				`for the wrong reason.`,
+			missing,
+			[],
+			`sent ${submitted.length} facts, and these are not in the stored record: ${missing.join(' / ')}. ` +
+				`A shortfall with nothing reported refused is the silent loss this check exists to catch.`,
 		);
 	});
 });
