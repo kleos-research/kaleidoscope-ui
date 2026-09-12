@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { EngineNotFoundError } from '../src/engine/errors.mjs';
+import { EngineNotFoundError, VaultNotFoundError } from '../src/engine/errors.mjs';
 import { launchBlockers, preflight } from '../src/engine/preflight.mjs';
 import { readVaultOfferings } from '../src/engine/vaults.mjs';
 import { startSidecar } from '../src/server/index.mjs';
@@ -136,13 +136,21 @@ async function main() {
   if (options.help) return process.stdout.write(USAGE);
   if (options.version) return process.stdout.write(`${version()}\n`);
 
-  // THE ONE FAILURE THAT IS NOT A FULL STOP.
+  // THE TWO FAILURES THAT ARE NOT A FULL STOP, AND THEY ARE THE TWO FIRST RUNS.
   //
-  // Everything else this launcher takes a reading of is a condition on a machine that already has
-  // the engine. A missing engine is different in kind: the person who typed `npx` is walking to a
-  // browser, and a terminal cannot show them a copy button or re-check without being typed again.
-  // So the search's own refusal is printed here AND carried into the server, which binds anyway and
-  // serves the setup screen. Nothing about the copy changes; only the channel does.
+  // Everything else this launcher takes a reading of is a condition on a machine that is already
+  // set up, and stopping is the right answer for those. These two are different in kind: neither is
+  // a fault, both are what a person who has just installed this and typed one word actually hits,
+  // and the remedy for each is a command they will run in a terminal they have already walked away
+  // from. So the refusal is printed here AND carried into the server, which binds anyway and serves
+  // the setup screen, where there can be a copy button and a `Check again` that does not need the
+  // terminal at all. Nothing about the copy changes; only the channel does.
+  //
+  //   no engine   the program is not on this machine anywhere the search reached
+  //   no vault    the engine is here and answering, and this directory holds no memories
+  //
+  // The second is the one that reads worst when it is left to fall through: it surfaces as the
+  // engine declining an operation the user never asked for, which looks like this app is broken.
   //
   // `--preflight` and `--json` are excluded on purpose. Both ask for readings and stop; there are
   // no readings, so they fail as they always did rather than printing a table of nothing.
@@ -152,7 +160,9 @@ async function main() {
     readings = await preflight({ explicit: options.enginePath });
   } catch (error) {
     const setupScreen =
-      error instanceof EngineNotFoundError && !options.preflightOnly && !options.json;
+      (error instanceof EngineNotFoundError || error instanceof VaultNotFoundError) &&
+      !options.preflightOnly &&
+      !options.json;
     if (!setupScreen) throw error;
     engineError = error;
   }
@@ -199,10 +209,20 @@ async function main() {
    * A failure to read them is not a failure to launch. The picker degrades to the vault this launch
    * opened, which is the one thing the app was asked for.
    */
-  let vaultOfferings = null;
-  if (readings) {
-    vaultOfferings = await readVaultOfferings({ enginePath: readings.engine.path }).catch(() => null);
-  }
+  //
+  // ASKED ON THE NO-VAULT PATH TOO, and that is the whole recovery for it. A directory with no
+  // vault in it is not a machine with no vaults on it: the engine may hold profiles, and there may
+  // be one outside any project. Each of those three readings is allowed to refuse on its own, so
+  // the one that just refused costs the others nothing — and someone who ran `npx` in the wrong
+  // folder is told where the vault they meant is, rather than being left to guess.
+  //
+  // Which vault is never chosen for them. The engine refuses to open a root it was merely pointed
+  // at, and an app that picked one on their behalf would be making exactly the guess the engine
+  // declines to make.
+  const offeringsEngine = readings?.engine?.path ?? engineError?.enginePath ?? null;
+  let vaultOfferings = offeringsEngine
+    ? await readVaultOfferings({ enginePath: offeringsEngine }).catch(() => null)
+    : null;
 
   /**
    * THE ENGINE ARRIVED AFTER THE SOCKET DID.
@@ -325,7 +345,7 @@ async function main() {
   // because this terminal is the one place it legitimately exists outside the tab.
   const built = await sidecar.assets.available();
 
-  // NO ENGINE: the same URL, and the refusal in both channels.
+  // NOT SET UP YET: the same URL, and the refusal in both channels.
   //
   // The engine client's own message is printed first, whole, because a person who is still looking
   // at this terminal deserves the sentence that fixes the machine without opening anything. The URL
@@ -336,7 +356,9 @@ async function main() {
     process.stdout.write(
       [
         '',
-        '  Kaleidoscope — the memory engine is not here yet',
+        engineError instanceof VaultNotFoundError
+          ? '  Kaleidoscope — there is no vault in this directory yet'
+          : '  Kaleidoscope — the memory engine is not here yet',
         '',
         `  ${sidecar.launchUrl}`,
         '',

@@ -12,7 +12,12 @@
 import { createHash } from 'node:crypto';
 
 import { call, run } from './call.mjs';
-import { EngineUnlicensedError, PROGRAM } from './errors.mjs';
+import {
+	EngineRefusedError,
+	EngineUnlicensedError,
+	PROGRAM,
+	VaultNotFoundError,
+} from './errors.mjs';
 import { locateEngine } from './locate.mjs';
 
 /**
@@ -156,6 +161,48 @@ function mustJson(reading, command) {
 }
 
 /**
+ * Did the readings that address a vault fail because there is no vault at the resolved root?
+ *
+ * ASKED STRUCTURALLY, NEVER BY READING ENGLISH OUT OF A MESSAGE. Every reading in the batch below is
+ * one of two kinds: those that describe the BUILD — `--version`, `model`, `gate`,
+ * `public-contract`, `schema` — and those that address a VAULT — `where`, `call ontology`. A
+ * machine whose build readings all answer and whose vault readings all refuse has a working engine
+ * pointed at a directory that is not a vault. That shape is the evidence; the wording of the
+ * refusal is not, and a client that grepped it for "is not a vault" would start reporting a broken
+ * install the first time the engine rephrased a sentence.
+ *
+ * `where --root-only` is the confirming reading and it is the reason this can be answered at all:
+ * it is the one command that answers in BOTH states, reporting the root the engine resolved and how
+ * it arrived there without requiring anything to be at that root. Its answer is what the screen
+ * shows — so the path the user is told about is the engine's own, and this app never becomes a
+ * second resolver that names a path on a machine where the engine resolves something else.
+ *
+ * @returns {Promise<VaultNotFoundError|null>} null when the evidence does not fit, so the caller
+ *   raises the failure it already had rather than a friendlier one that might be wrong.
+ */
+async function vaultAbsence({ engine, where, build }) {
+	if (build.some((reading) => reading.exitCode !== 0)) return null;
+
+	const address = await run(['where', '--root-only'], where).catch(() => null);
+	if (!address || address.exitCode !== 0) return null;
+
+	let resolved;
+	try {
+		resolved = JSON.parse(address.stdout);
+	} catch {
+		return null;
+	}
+	if (!resolved?.root) return null;
+
+	return new VaultNotFoundError({
+		root: resolved.root,
+		source: resolved.source ?? null,
+		project: resolved.project ?? null,
+		enginePath: engine.path,
+	});
+}
+
+/**
  * Take every reading, in one batch.
  *
  * @param {object} [options]
@@ -188,10 +235,36 @@ export async function preflight({ explicit, root, timeoutMs } = {}) {
 			// BUILD carries and where a key would be read from; it reads no key and returns no
 			// verdict, so a client that trusts it has confirmed the lock exists, not that it opens.
 			call('ontology', { mode: 'read' }, where).catch((error) => {
-				if (error instanceof EngineUnlicensedError) return error;
+				// Two of the ways this can end are conditions on the machine rather than faults, and
+				// both are classified below, where the rest of the readings are in hand: a shut
+				// licence gate, and a resolved root that is not a vault. Everything else propagates.
+				if (error instanceof EngineUnlicensedError || error instanceof EngineRefusedError) {
+					return error;
+				}
 				throw error;
 			}),
 		]);
+
+	/**
+	 * THE VAULT-ADDRESSED READINGS, CLASSIFIED BEFORE ANYTHING ELSE IS RAISED.
+	 *
+	 * First, because the messages below are written for someone whose vault opened. On a directory
+	 * that holds no vault it is `where` that fails, and `mustJson` would report it as a command that
+	 * exited 2 — true, developer-facing, and the wrong sentence for the commonest thing that happens
+	 * to a person who has just installed this and typed one word.
+	 */
+	const unlicensed = vocabulary instanceof EngineUnlicensedError;
+	const vaultRefused = !unlicensed && vocabulary instanceof EngineRefusedError;
+	if (vaultRefused || address.exitCode !== 0) {
+		const absent = await vaultAbsence({
+			engine,
+			where,
+			build: [version, gate, model, contract, index, writeContract],
+		});
+		if (absent) throw absent;
+		// The evidence did not fit, so the original failure stands rather than a kinder guess.
+		if (vaultRefused) throw vocabulary;
+	}
 
 	// The three readings that are prose rather than JSON still have to have arrived. `--version`
 	// failing silently leaves an empty version string in the header; `schema remember` failing
@@ -205,7 +278,6 @@ export async function preflight({ explicit, root, timeoutMs } = {}) {
 		mustSucceed(reading, command);
 	}
 
-	const unlicensed = vocabulary instanceof EngineUnlicensedError;
 	const parsed = parseWriteContract(writeContract.stdout);
 	const seed = mustJson(contract, 'public-contract');
 	const digest = createHash('sha256').update(writeContract.stdoutBytes).digest('hex');

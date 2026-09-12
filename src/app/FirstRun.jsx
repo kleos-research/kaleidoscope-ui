@@ -4,21 +4,35 @@ import { recheckEngine } from './api.mjs';
 import { Button, DetailRow, DetailRows, Icon, InlineBusy, Input } from './ui/index.mjs';
 
 /**
- * THE FIRST-RUN SCREEN: the app, running, with no engine behind it.
+ * THE FIRST-RUN SCREEN: the app, running, with nothing behind it yet.
  *
- * It exists because the CHANNEL was wrong, not because the words were. A missing engine used to be
- * a terminal refusal — the copy was already good, and it is reused here rather than rewritten — but
+ * It exists because the CHANNEL was wrong, not because the words were. Both first runs used to be
+ * terminal refusals — the copy was already good, and it is reused here rather than rewritten — but
  * a terminal cannot show a copy button and cannot re-check without being typed again. Someone who
  * ran `npx` is walking to a browser, so the browser is where the remedy has to be.
  *
- * ONE STORY: Kaleidoscope needs the engine, here is the command, here is where to say it already
- * exists, and here is the button that looks again. Everything that is evidence rather than message
- * — the whole search trail — is one closed row carrying its own count.
+ * TWO THINGS CAN BE MISSING, AND THEY ARE NOT THE SAME SCREEN:
+ *
+ *   no engine   the program that reads vaults is not on this machine. One command installs it,
+ *               and a path field covers an install somewhere this search could not reach.
+ *   no vault    the engine is here and answering, and this directory holds no memories. Nothing
+ *               is missing from the machine, so an install command would be a wrong instruction
+ *               and a path field would answer a question nobody asked. What helps is the command
+ *               that makes one, and knowing where the vaults this machine DOES have are.
+ *
+ * ONE STORY EITHER WAY: here is what is missing, here is the command, here is the button that
+ * looks again. Everything that is evidence rather than message — the search trail — is one closed
+ * row carrying its own count.
  *
  * IT RE-CHECKS IN PLACE. `Check again` is not a reload: a reload would lose the launch token, which
  * this page read once from the fragment and erased, and the person would be sent back to the
  * terminal they have already left. The server re-runs the search in the process that is already
  * bound, and `onReady` walks straight into the app on the same socket with the same credential.
+ *
+ * IT NEVER CREATES A VAULT. The engine refuses to create one it was merely pointed at, because
+ * addressing a vault and creating one are different acts and a resolver that quietly created would
+ * swallow the typo that would have made you look. A button here would undo that decision from the
+ * outside, so the command is shown and the act stays with the person.
  */
 export function FirstRun({ status, onReady }) {
 	const [engine, setEngine] = useState(status);
@@ -55,6 +69,11 @@ export function FirstRun({ status, onReady }) {
 	// whole. This is the one branch that has found something and still cannot go on.
 	const blockers = engine?.present ? (engine.launch_blockers ?? []) : [];
 
+	// The engine is installed and this folder holds no memories. It is the one absence that is not
+	// a fault, and it gets written copy rather than the engine's verbatim refusal: the refusal is
+	// about an operation this person never asked for, and reads like something broke.
+	const noVault = engine?.kind === 'no-vault';
+
 	// `named-unusable` and `readings-failed` both already carry a complete written explanation, and
 	// for the first of them the explanation is the POINT: a named path is authoritative, so the
 	// search stopped there rather than running some other program. Printing it verbatim and adding
@@ -69,13 +88,16 @@ export function FirstRun({ status, onReady }) {
 	const title =
 		blockers.length > 0
 			? 'The engine is here, and this machine cannot use it yet.'
-			: engine?.kind === 'named-unusable'
-				? 'Kaleidoscope stopped at the path you named.'
-				: engine?.kind === 'readings-failed'
-					? 'Kaleidoscope found the engine and could not take its readings.'
-					: "Kaleidoscope needs the memory engine, and it isn't here yet.";
+			: noVault
+				? 'There are no memories in this folder yet.'
+				: engine?.kind === 'named-unusable'
+					? 'Kaleidoscope stopped at the path you named.'
+					: engine?.kind === 'readings-failed'
+						? 'Kaleidoscope found the engine and could not take its readings.'
+						: "Kaleidoscope needs the memory engine, and it isn't here yet.";
 
 	const looked = engine?.looked ?? [];
+	const elsewhere = engine?.elsewhere ?? [];
 
 	return (
 		<main className="firstrun">
@@ -85,6 +107,12 @@ export function FirstRun({ status, onReady }) {
 
 				{verbatim ? (
 					<pre className="firstrun-verbatim">{verbatim}</pre>
+				) : noVault ? (
+					<p className="firstrun-lede">
+						Your agent keeps what it learns in a <em>vault</em>, one per project, in a folder
+						inside that project. <span className="identifier">{engine?.program}</span> is
+						installed and working — it just looked here and found nothing:
+					</p>
 				) : (
 					<p className="firstrun-lede">
 						This app is the browser half of Kaleidoscope. The half that reads and writes your
@@ -93,12 +121,62 @@ export function FirstRun({ status, onReady }) {
 					</p>
 				)}
 
-				{engine?.install_command ? (
+				{/*
+				  THE PATH THE ENGINE RESOLVED, IN ITS OWN WORDS. Shown because the commonest cause of
+				  this screen is being one directory away from the right one, and a person cannot see
+				  that from a sentence saying "no vault here". It is the engine's answer, not a path
+				  this app joined together, so it is the path that would actually be opened.
+				*/}
+				{noVault && engine?.vault?.root ? (
+					<p className="firstrun-resolved">
+						<code className="identifier">{engine.vault.root}</code>
+					</p>
+				) : null}
+
+				{noVault ? (
+					<div className="firstrun-step">
+						<h2 className="firstrun-step-title">Start remembering this project</h2>
+						<CopyLine text={engine?.init_command} />
+						<p className="firstrun-note">
+							Run that in the folder you want remembered, then press <strong>Check again</strong>.
+							It makes the vault and tells the coding agents on this machine about it. This app
+							never creates one itself.
+						</p>
+					</div>
+				) : engine?.install_command ? (
 					<div className="firstrun-step">
 						<h2 className="firstrun-step-title">
 							{engine.kind === 'nothing-found' ? 'Install it' : 'Not installed at all?'}
 						</h2>
 						<CopyLine text={engine.install_command} />
+					</div>
+				) : null}
+
+				{/*
+				  WHERE THE MEMORIES ACTUALLY ARE, when the engine reported any. Named as directories
+				  to start from rather than offered as buttons: the route that changes vault belongs
+				  to an app that has one open, and someone who is in the wrong folder is better served
+				  by learning which folder was right than by this screen quietly opening one for them.
+				*/}
+				{noVault && elsewhere.length > 0 ? (
+					<div className="firstrun-step">
+						<h2 className="firstrun-step-title">
+							{elsewhere.length === 1
+								? 'You already have one somewhere else'
+								: `You already have ${elsewhere.length} somewhere else`}
+						</h2>
+						<p className="firstrun-note">
+							Stop this with Ctrl-C, change into one of those directories, and start this app
+							again from there. Do not run the command above in them — they are already vaults.
+						</p>
+						<ul className="firstrun-places">
+							{elsewhere.map((vault) => (
+								<li key={vault.root} className="firstrun-place">
+									<span className="identifier">{vault.root}</span>
+									{vault.name ? <span className="firstrun-reason">{vault.name}</span> : null}
+								</li>
+							))}
+						</ul>
 					</div>
 				) : null}
 
@@ -108,10 +186,19 @@ export function FirstRun({ status, onReady }) {
 					</Button>
 					{busy ? <InlineBusy>Looking…</InlineBusy> : null}
 					{!busy && engine && !engine.present && engine.rechecked ? (
-						<span className="firstrun-still">Still not there.</span>
+						<span className="firstrun-still">
+							{noVault ? 'Still nothing here.' : 'Still not there.'}
+						</span>
 					) : null}
 				</div>
 
+				{/*
+				  THE PATH FIELD LOOKS FOR AN ENGINE, and on the no-vault screen the engine is the one
+				  thing that was found. `can_set_path` is the server's say-so rather than a second
+				  reading of `kind` here, so the page cannot come to disagree with the process that
+				  would have to honour what was typed.
+				*/}
+				{engine?.can_set_path === false && !engine?.present ? null : (
 				<div className="firstrun-step">
 					<h2 className="firstrun-step-title">
 						{engine?.kind === 'named-unusable'
@@ -150,6 +237,7 @@ export function FirstRun({ status, onReady }) {
 						<span className="identifier">{engine?.flag} &lt;path&gt;</span>.
 					</p>
 				</div>
+				)}
 
 				{/*
 				  THE EVIDENCE, CLOSED. A person told only "not found" cannot tell a search that

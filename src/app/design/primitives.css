@@ -5199,6 +5199,23 @@
 }
 
 /*
+ * The path the engine resolved and found nothing at. Set apart from the sentence above it because
+ * it is the one thing on the screen a person reads character by character: the commonest cause of
+ * this screen is being one directory away from the right one, and that is visible in the path or
+ * nowhere.
+ */
+.firstrun-resolved {
+	margin: 0;
+	padding: var(--space-8) var(--space-9);
+	background: var(--raised);
+	border: var(--border) solid var(--line);
+	border-radius: var(--radius-control);
+	font-size: var(--text-ui);
+	line-height: var(--leading-ui);
+	overflow-wrap: anywhere;
+}
+
+/*
  * The engine client's own words, whole and unwrapped. `pre` because those messages are written as
  * lines and the line breaks carry the shape of them; re-flowing the text would be this screen
  * rewriting copy it deliberately does not own.

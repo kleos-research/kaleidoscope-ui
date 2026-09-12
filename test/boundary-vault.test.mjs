@@ -79,6 +79,7 @@ const ALLOWED = [
 	['write contract', "the engine's published contract, named in every document that describes a write"],
 	['kscope schema', 'a published command, quoted as the way to read the contract'],
 	['kscope schema remember', 'the same command with its argument'],
+	['kscope call remember', 'a published command, named in PRD 0001 as the door a write goes through'],
 	['kscope 0.0.5', 'the engine version these milestones were run against'],
 	['memory_import', 'a published operation name, named where restore is described'],
 	['the ontology', "the engine's published operation, and the word for what it returns"],

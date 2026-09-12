@@ -39,8 +39,11 @@ import {
 	describePlace,
 	ENGINE_ENV_VAR,
 	EngineNotFoundError,
+	INIT_COMMAND,
 	INSTALL_COMMAND,
 	PROGRAM,
+	VAULT_ENV_VAR,
+	VaultNotFoundError,
 } from '../engine/errors.mjs';
 import { launchBlockers, preflight } from '../engine/preflight.mjs';
 import { buildOffer } from '../engine/vaults.mjs';
@@ -1006,22 +1009,65 @@ export async function startSidecar({
 	 * What it does is take the trail apart into rows, because a terminal renders evidence as a
 	 * block of text and a screen renders it as a section somebody can leave closed.
 	 *
-	 * The third kind is not the resolver's: `readings-failed` is a program that WAS found and
-	 * something else about this machine — an unresolvable vault, a `schema` that would not print —
-	 * stopped the readings. Its message is the engine's own, verbatim, for the same reason.
+	 * `no-vault` is the OTHER first run, and the only kind here where nothing is missing from the
+	 * machine. The engine is installed and answering; the directory the app was started in holds no
+	 * memories. It is kept distinct from every other kind because its remedy shares nothing with
+	 * theirs — an install command would be wrong, an engine path field would be beside the point,
+	 * and what helps instead is the command that makes a vault and the paths of the ones that exist.
+	 *
+	 * The last kind is not the resolver's: `readings-failed` is a program that WAS found and
+	 * something else about this machine — a `schema` that would not print — stopped the readings.
+	 * Its message is the engine's own, verbatim, for the same reason.
 	 */
+	/**
+	 * Every vault the engine reported, reduced to a name and the directory to start from.
+	 *
+	 * `buildOffer` is the same reducer the equipped app's picker runs, so the two cannot come to
+	 * disagree about what exists. Its keys are dropped here on purpose — a key is the token the
+	 * switch route resolves, and there is no switch route on this screen.
+	 */
+	function elsewhereVaults() {
+		if (!vaultOfferings) return [];
+		try {
+			return buildOffer(vaultOfferings, null)
+				.offers.filter((offer) => offer.root)
+				.map((offer) => ({ name: offer.name, root: offer.root }));
+		} catch {
+			// The picker is the help, not the message. A reducer that threw leaves the screen with
+			// the command that always works, which is the one thing it must never be without.
+			return [];
+		}
+	}
+
 	function absence(error, named = null) {
 		const notFound = error instanceof EngineNotFoundError;
+		const noVault = error instanceof VaultNotFoundError;
 		const stopped = notFound && error.kind === 'named-unusable';
 		return {
 			present: false,
 			program: PROGRAM,
-			kind: notFound ? error.kind : 'readings-failed',
+			kind: notFound ? error.kind : noVault ? 'no-vault' : 'readings-failed',
 			// Verbatim. The screen shows it whole for `named-unusable`, where it is the entire
 			// story and the remedy is not "go and look somewhere else".
 			message: error.message,
-			install_command: INSTALL_COMMAND,
-			environment_variable: ENGINE_ENV_VAR,
+			// WITHHELD ON `no-vault`. The engine is installed; an install command on that screen
+			// would send someone to re-install a program that just answered six questions, and the
+			// one command that helps is the other one.
+			install_command: noVault ? null : INSTALL_COMMAND,
+			init_command: noVault ? INIT_COMMAND : null,
+			// The engine's own answer to `where --root-only`, never a path this app assembled: the
+			// root it resolved, how it arrived there, and the directory that root belongs to.
+			vault: noVault ? { root: error.root, source: error.source, project: error.project } : null,
+			// THE VAULTS THIS MACHINE DOES HAVE, NAMED BUT NOT OFFERED.
+			//
+			// A directory with no vault in it is not a machine with no vaults on it, and somebody who
+			// ran this in the wrong folder should be told where the right one is rather than be left
+			// to guess. They are named as DIRECTORIES TO START FROM, not as things to click: the
+			// route that changes vault lives inside an equipped app, and one hoisted out to here
+			// would be a page with no vault open asking this process to open an arbitrary root.
+			// Naming them costs nothing and re-uses the reading the launcher already took.
+			elsewhere: noVault ? elsewhereVaults() : [],
+			environment_variable: noVault ? VAULT_ENV_VAR : ENGINE_ENV_VAR,
 			flag: `--${PROGRAM}`,
 			named: stopped
 				? { path: error.path, named_by: error.namedBy, reason: error.reason }
@@ -1036,7 +1082,9 @@ export async function startSidecar({
 				where: describePlace(place),
 				reason: place.reason ?? null,
 			})),
-			can_set_path: true,
+			// A path field looks for an ENGINE, and on `no-vault` the engine is the one thing that
+			// was found. Offering it there would answer a question nobody asked.
+			can_set_path: !noVault,
 			launch_blockers: [],
 		};
 	}

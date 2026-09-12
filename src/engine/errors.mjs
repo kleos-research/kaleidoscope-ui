@@ -19,6 +19,19 @@ export const INSTALL_COMMAND = 'npm install -g @kleos-research/kaleidoscope';
 /** The environment variable that names an engine authoritatively. */
 export const ENGINE_ENV_VAR = 'KALEIDOSCOPE_ENGINE';
 
+/**
+ * The one command that brings a vault into existence, and the only one this app ever shows for it.
+ *
+ * Shown, never run. The engine refuses to create a vault it was merely pointed at — addressing one
+ * and creating one are different acts, and a resolver that quietly created would swallow the typo
+ * that would have made you look. A button here that created one would undo that decision from the
+ * outside, so this app prints the command and leaves the act with the person.
+ */
+export const INIT_COMMAND = `${PROGRAM} init`;
+
+/** The environment variable that names the vault, read by the engine and never by this app. */
+export const VAULT_ENV_VAR = 'KSCOPE_ROOT';
+
 /** How many PATH directories the not-found message spells out before it starts counting. */
 const PATH_ENTRIES_SHOWN = 4;
 
@@ -122,6 +135,61 @@ export class EngineNotFoundError extends EngineError {
 		this.namedBy = namedBy ?? null;
 		this.reason = reason ?? null;
 		this.installCommand = INSTALL_COMMAND;
+	}
+}
+
+/**
+ * The engine is here and working, and the directory it resolved holds no vault.
+ *
+ * SEPARATE FROM A REFUSAL ON PURPOSE. It arrives as one — the engine declines every vault-addressed
+ * call with exit 2 — but a refusal is a request to fix, and there is no request to fix here. The
+ * person typed one word in a directory, and the remedy is a different directory or one command.
+ * Folded into `EngineRefusedError` it reaches the user as "the engine refused ontology and printed
+ * no refusal envelope", which reads like this app broke.
+ *
+ * Everything it carries is the engine's own answer to `where --root-only`, which is the one command
+ * that answers whether or not a vault is there. This app never assembles a vault path from a working
+ * directory: that would be a second resolver, and it would name a path on a machine where the engine
+ * resolves something else.
+ */
+export class VaultNotFoundError extends EngineError {
+	/**
+	 * @param {object} detail
+	 * @param {string} detail.root        the root the engine resolved
+	 * @param {string} [detail.source]    how the engine arrived at it, in its own words
+	 * @param {string} [detail.project]   the directory that root belongs to
+	 * @param {string} [detail.enginePath]
+	 * @param {string} [detail.reason]    what the engine said, verbatim
+	 */
+	constructor({ root, source, project, enginePath, reason = '' } = {}) {
+		super(
+			[
+				`There is no Kaleidoscope vault here yet.`,
+				``,
+				`${PROGRAM} is installed${enginePath ? ` at ${enginePath}` : ''} and answering. It`,
+				`resolved this directory to:`,
+				``,
+				`    ${root}`,
+				``,
+				`and nothing is there. A vault is where your agent's memories are kept, and`,
+				`it is made once, in the project you want remembered:`,
+				``,
+				`    ${INIT_COMMAND}`,
+				``,
+				`If you already have one somewhere else, start this app from that project's`,
+				`directory instead — or set ${VAULT_ENV_VAR} to its path.`,
+				``,
+				`Nothing was read, written or changed. This app only reads and edits a vault`,
+				`that already exists; it never creates one.`,
+			].join('\n'),
+		);
+		this.outcome = 'no-vault';
+		this.root = root ?? null;
+		this.source = source ?? null;
+		this.project = project ?? null;
+		this.enginePath = enginePath ?? null;
+		this.reason = reason;
+		this.initCommand = INIT_COMMAND;
 	}
 }
 
