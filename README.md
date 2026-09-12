@@ -12,9 +12,6 @@ Nothing leaves your computer.
 
 ## Run it
 
-<!-- The next line is true only until 0.0.1 is on npm. Delete it on publish day, and keep the npx command below it. -->
-Not on npm yet — until it is, clone this repository and run `npm install && npm run build && node bin/cli.mjs`.
-
 ```
 npx @kleos-research/kaleidoscope-ui
 ```
