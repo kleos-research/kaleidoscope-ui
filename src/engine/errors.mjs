@@ -159,9 +159,14 @@ export class VaultNotFoundError extends EngineError {
 	 * @param {string} [detail.source]    how the engine arrived at it, in its own words
 	 * @param {string} [detail.project]   the directory that root belongs to
 	 * @param {string} [detail.enginePath]
-	 * @param {string} [detail.reason]    what the engine said, verbatim
+	 *
+	 * There is deliberately no `reason`. The engine's refusal text is the thing this class exists to
+	 * NOT show: it is about a call the person never made, and printing it is what made the old
+	 * message read like a fault. Everything here comes from `where --root-only` instead. A field
+	 * documented as carrying the engine's words and never populated is worse than its absence — the
+	 * next reader plumbs it through and puts the sentence back on the screen.
 	 */
-	constructor({ root, source, project, enginePath, reason = '' } = {}) {
+	constructor({ root, source, project, enginePath } = {}) {
 		super(
 			[
 				`There is no Kaleidoscope vault here yet.`,
@@ -188,7 +193,6 @@ export class VaultNotFoundError extends EngineError {
 		this.source = source ?? null;
 		this.project = project ?? null;
 		this.enginePath = enginePath ?? null;
-		this.reason = reason;
 		this.initCommand = INIT_COMMAND;
 	}
 }

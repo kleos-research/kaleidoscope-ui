@@ -33,8 +33,9 @@ answer looks wrong, you've just found the memory to correct.
 **Fix a memory.** Change the wording, correct a fact, or narrow where it applies. A copy is kept
 before every change.
 
-**Remove one.** Hides it from your agent. The text stays in your vault folder — the app says so
-plainly rather than promising more than it can do.
+**Remove one.** Hides it from your agent. The text stays in your vault folder, and a copy is kept
+outside it — see the warning below. The app says both plainly rather than promising more than it
+can do.
 
 **See what your memories talk about.** The names and ideas that come up across your memories, and
 which ones look like the same thing spelled two ways.
@@ -96,6 +97,13 @@ copy of a memory before changing it.
 **Can I undo a deletion?** No — and the app says so before you delete. Removing hides a memory from
 your agent for good.
 
+**I want to delete a memory because it contains a secret.** Read this one. Before every change,
+including a removal, the app keeps a copy of the memory — and it keeps it *outside* your vault, in
+your operating system's application-data folder. Deleting the vault does not reach it. So an
+ordinary Remove is the wrong tool for a leaked password or key: use the app's **What removal cannot
+do** screen, which removes the memory *without* keeping a copy, and then rotate the secret. The app
+prints where the copies are kept when it starts.
+
 **Is it safe to try?** Yes. Browsing and reading change nothing. **Ask** is the one exception: it
 uses the same door your agent does, so each question you ask is recorded in the vault — including
 the words you typed.
@@ -104,18 +112,17 @@ the words you typed.
 
 ## Licence
 
-Apache-2.0. [`LICENSE`](LICENSE) is the full text; [`NOTICE`](NOTICE) carries the attributions,
-including files adapted from other Apache-2.0 projects, each with a per-file note saying what
-changed.
+Apache-2.0. [`LICENSE`](LICENSE) is the full text; [`NOTICE`](NOTICE) carries the attributions.
 
 That licence covers this package's own source. It does not cover the `kscope` memory engine, which
 you install separately: it is closed source, is not part of this repository, is not shipped inside
 this package, and is not licensed by this repository at all — separate terms apply to it.
 
 The published package declares **no runtime dependencies**, so installing it installs nothing else.
-The browser application in `dist/` is compiled from a handful of MIT-licensed libraries; their
-notices are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), generated from what the build
-actually bundled rather than written by hand.
+The browser application in `dist/` is compiled from a small set of permissively licensed libraries
+(MIT, and one under 0BSD); their notices are in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), generated from what the build actually bundled
+rather than written by hand.
 
 ---
 

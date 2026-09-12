@@ -35,7 +35,15 @@
 // saying so rather than skipping.
 
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -218,5 +226,70 @@ test('the server binds anyway and describes the state without asking where the e
 	} finally {
 		await sidecar?.close().catch(() => {});
 		rmSync(here, { recursive: true, force: true });
+	}
+});
+
+test('the engine named with --kscope survives Check again on the no-vault screen', async () => {
+	// THE FLAG HAS TO OUTLIVE THE LAUNCH. `Check again` re-runs the search inside the process that
+	// is already bound, and a launcher that did not hand the named path over leaves that search
+	// unnamed. On a machine whose engine is reachable ONLY through `--kscope` — not on PATH, no
+	// environment variable — the re-check then comes back empty and the screen flips from "there is
+	// no vault here" to "Kaleidoscope is not installed", with an install command, about an engine
+	// that answered every reading a moment earlier.
+	//
+	// Asserted by COUNTING INVOCATIONS of the named engine rather than by reading the screen: on a
+	// developer machine the engine is also on PATH, so the unnamed search finds it anyway and the
+	// screen looks identical either way. The wrapper is the only thing that can tell the two apart.
+	const dir = mkdtempSync(join(tmpdir(), 'ui-no-vault-named-'));
+	const log = join(dir, 'invocations');
+	const wrapper = join(dir, 'kscope');
+	writeFileSync(wrapper, `#!/bin/sh\necho invoked >> ${JSON.stringify(log)}\nexec ${JSON.stringify(engine.path)} "$@"\n`);
+	chmodSync(wrapper, 0o755);
+	writeFileSync(log, '');
+
+	const here = emptyDirectory('named');
+	let sidecar = null;
+	try {
+		const error = await inDirectory(here, () =>
+			preflight({ explicit: wrapper }).then(
+				() => null,
+				(failure) => failure,
+			),
+		);
+		assert.ok(error instanceof VaultNotFoundError, 'Could not arrange the no-vault state.');
+
+		sidecar = await startSidecar({
+			engineError: error,
+			enginePath: wrapper,
+			port: 0,
+			appVersion: 'test',
+		});
+		writeFileSync(log, '');
+
+		const origin = `http://127.0.0.1:${sidecar.port}`;
+		const response = await fetch(`${origin}/api/engine/recheck`, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${sidecar.token}`,
+				'content-type': 'application/json',
+				origin,
+				'sec-fetch-site': 'same-origin',
+				'sec-fetch-mode': 'cors',
+			},
+			body: JSON.stringify({ engine_path: '' }),
+		});
+		assert.equal(response.status, 200);
+
+		const invocations = readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length;
+		assert.ok(
+			invocations > 0,
+			'`Check again` re-ran the search without the engine the user named with --kscope. On a ' +
+				'machine where that flag is the only way to reach the engine, the screen now reports ' +
+				'it as not installed.',
+		);
+	} finally {
+		await sidecar?.close().catch(() => {});
+		rmSync(here, { recursive: true, force: true });
+		rmSync(dir, { recursive: true, force: true });
 	}
 });

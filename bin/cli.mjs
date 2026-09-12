@@ -264,6 +264,15 @@ async function main() {
       port,
       token,
       appVersion: version(),
+      // THE PATH THE USER NAMED, CARRIED INTO THE SERVER.
+      //
+      // Without it `Check again` re-runs the search unnamed, and on a machine whose engine is
+      // reachable ONLY through `--kscope` — not on PATH, no environment variable — the re-check
+      // comes back empty and the screen flips from "there is no vault here" to "Kaleidoscope is
+      // not installed", with an install command, about an engine that answered every reading a
+      // moment earlier. The flag is authoritative at launch; it has to stay authoritative for the
+      // re-check that the launch's own screen offers.
+      enginePath: options.enginePath,
       vaultOfferings,
       vaultSwitchFailure,
       // Always, even on a launch that found no engine. That launch cannot switch anything yet —
